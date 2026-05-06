@@ -10,7 +10,7 @@ gameCanvas.fillRect(100, 100,gameCanvasElement.width, gameCanvasElement.height);
 const towers = [];
 const attackUnit = new Unit({x: path[0].x, y: path[0].y});
 
-const initaliseTowers = () => {
+const initialiseTowers = () => {
 	for(let location of towerLocations) {
 		towers.push(new Tower(location))
 	};
@@ -55,7 +55,7 @@ const animate = () => {
 	
 const backgroundImage = new Image();
 backgroundImage.onload = () => {
-	initaliseTowers();
+	initialiseTowers();
 	animate();
 }
 backgroundImage.src = "./img/calista-map.png";

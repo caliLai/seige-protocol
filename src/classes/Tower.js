@@ -1,19 +1,10 @@
-class Tower {
-	position;
+class Tower extends Sprite {
 	width = 50;
 	height = 50;
 	health = 100;
 
-	constructor(position = {x:0, y:0}){
-		this.position = position;
-	}
-
-// getters
-	get centre() {
-		return {
-			x: this.position.x + (this.width / 2),
-			y: this.position.y + (this.height / 2)
-		}
+	constructor(position){
+		super(position);
 	}
 	
 	render(){

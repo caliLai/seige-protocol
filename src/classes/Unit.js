@@ -1,8 +1,7 @@
 // todo: should different types of units inherit from this class?
 // also we should probably make an interface. But also this is javascript
 // so maybe it doesn't really matter
-class Unit {
-	position;
+class Unit extends Sprite{
 	width = 50;
 	height = 50;
 	pathIndex = 0;
@@ -10,16 +9,8 @@ class Unit {
 	attackStrength = 0.4;
 	target; // typeof Tower
 	
-	constructor(position = {x: 0, y:0}) {
-		this.position = position;
-	}
-
-// getters
-	get centre() {
-		return {
-			x: this.position.x + (this.width / 2),
-			y: this.position.y + (this.height / 2)
-		}
+	constructor(position) {
+		super(position)
 	}
 
 // setters

@@ -3,6 +3,13 @@
 	<head>
 	</head>
 	<body>
+		<div id="unitSelectionScreen">
+			Select your unit type:
+			<input type="radio" id="unitSelectionType1" name="unitSelection" value="unit" />
+			<label for="unitSelectionType1">Unit</label>
+			<br>
+			<button onclick="startGame()">start</button>
+		</div>
 		<canvas id="gameCanvas"></canvas>
 		<script src="./src/data/path.js"></script>
 		<script src="./src/data/towerlocations.js"></script>

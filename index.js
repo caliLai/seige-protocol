@@ -8,12 +8,13 @@ gameCanvas.fillStyle = 'black';
 gameCanvas.fillRect(100, 100,gameCanvasElement.width, gameCanvasElement.height);
 
 const towers = [];
-const attackUnit = new Unit({x: path[0].x, y: path[0].y});
+let attackUnit = null;
 
 const initialiseTowers = () => {
 	for(let location of towerLocations) {
 		towers.push(new Tower(location))
 	};
+	towers.forEach(tower => tower.render());
 }
 
 const animate = () => {
@@ -52,10 +53,27 @@ const animate = () => {
 	attackUnit.updateFrame();
 	towers.forEach(tower => tower.updateFrame());
 }
-	
+
+const startGame = () => {
+	let selectedUnitType = document.querySelector('input[name="unitSelection"]:checked')?.value;
+	let pathStartPosition = { x: path[0].x, y: path[0].y };
+	// todo: create a factory somewhere else?
+	switch (selectedUnitType) {
+		case "unit":
+			attackUnit = new Unit(pathStartPosition);
+			break;
+		default:
+			throw new Error("Invalid unit type");
+	}
+	// hide unit selection screen?
+	//document.getElementById("unitSelectionScreen").style.display = "none";
+
+	animate();
+}
+
 const backgroundImage = new Image();
 backgroundImage.onload = () => {
+	gameCanvas.drawImage(backgroundImage, 0, 0);
 	initialiseTowers();
-	animate();
 }
 backgroundImage.src = "./img/calista-map.png";

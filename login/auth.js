@@ -117,7 +117,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   try {
     await signInWithEmailAndPassword(auth, emailInput.value, passInput.value);
     showAlert('✓ WELCOME BACK! THE GATES ARE OPEN!', 'success');
-    smoothNavigate('/game/start-screen.html');
+    smoothNavigate('/start-screen/start-screen.html');
   } catch (err) {
     showAlert(friendlyError(err.code));
     setLoading(loginBtn, btnText, btnLoading, false);
@@ -130,7 +130,7 @@ document.getElementById('googleBtn').addEventListener('click', async () => {
   try {
     const c = await signInWithPopup(auth, provider);
     showAlert('✓ WELCOME, ' + c.user.displayName.toUpperCase() + '!', 'success');
-    smoothNavigate('/game/start-screen.html');
+    smoothNavigate('/start-screen/start-screen.html');
   } catch (err) {
     if (err.code !== 'auth/popup-closed-by-user') showAlert(friendlyError(err.code));
   }

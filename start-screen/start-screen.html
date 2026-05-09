@@ -122,38 +122,128 @@
       position: relative;
     }
 
-    /* ── BRICK LOADING SCREEN ──
-       Wall starts fully built (covers the page), then bricks fall away
-       individually with staggered delays to reveal the start-screen below. */
-    #brickLoader {
+    /* ── CASTLE DOOR LOADER ──
+       Two heavy wooden doors fill the screen on first paint, then swing
+       outward in 3D to reveal the start-screen menu behind. The loader
+       background is transparent so the moment the doors begin to open the
+       start-screen is already visible through the gap — no dark backdrop
+       between door and menu. */
+    #doorLoader {
       position: fixed;
       inset: 0;
       z-index: 9999;
-      /* Solid wall color BEFORE js runs — prevents the menu from flashing
-         visible during the brief gap between first paint and module-script
-         execution. JS clears this to transparent after bricks are added so
-         the menu shows through as bricks fall. */
-      background: #4a4a4a;
-      display: grid;
-      grid-template-columns: repeat(24, 1fr);
-      grid-template-rows: repeat(14, 1fr);
-      gap: 0;
+      perspective: 2400px;
       pointer-events: none;
+      background: transparent;
+      transition: opacity 0.3s ease;
     }
-    .brick {
-      background: linear-gradient(135deg, #6a6a6a 0%, #4a4a4a 50%, #2e2e2e 100%);
-      border-right: 1px solid #1a1a1a;
-      border-bottom: 1px solid #1a1a1a;
-      box-shadow: inset 1px 1px 0 rgba(255,255,255,0.05), inset -1px -1px 0 rgba(0,0,0,0.4);
-      opacity: 1;
-      transform: translateY(0) scale(1);
-      animation: brickFall 0.5s cubic-bezier(0.55, 0.05, 0.7, 0.25) forwards;
+    #doorLoader.gone { opacity: 0; pointer-events: none; }
+
+    .door {
+      position: absolute;
+      top: 0;
+      width: 50.5%;
+      height: 100%;
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
+      background:
+        /* deep shadow at edges for depth */
+        radial-gradient(ellipse 80% 50% at 50% 50%, transparent 40%, rgba(0,0,0,0.45) 100%),
+        /* vertical plank seams (5 planks per door) */
+        repeating-linear-gradient(90deg,
+          transparent 0,
+          transparent calc(20% - 2px),
+          rgba(0,0,0,0.65) calc(20% - 2px),
+          rgba(0,0,0,0.65) 20%),
+        /* horizontal grain stripes */
+        repeating-linear-gradient(0deg,
+          transparent 0,
+          transparent 6px,
+          rgba(0,0,0,0.05) 6px,
+          rgba(0,0,0,0.05) 7px),
+        /* base wood gradient */
+        linear-gradient(180deg, #4a3520 0%, #3a2614 50%, #1f1209 100%);
+      box-shadow: inset 0 0 100px rgba(0,0,0,0.85);
     }
-    @keyframes brickFall {
-      0%   { opacity: 1; transform: translateY(0)    scale(1)    rotate(0deg); }
-      60%  { opacity: 1; transform: translateY(18px) scale(0.95) rotate(2deg); }
-      100% { opacity: 0; transform: translateY(48px) scale(0.7)  rotate(6deg); }
+
+    .door-left {
+      left: 0;
+      transform-origin: left center;
+      animation: openLeftDoor 1.8s cubic-bezier(0.55, 0.04, 0.45, 1.0) forwards;
     }
+    .door-right {
+      right: 0;
+      transform-origin: right center;
+      animation: openRightDoor 1.8s cubic-bezier(0.55, 0.04, 0.45, 1.0) forwards;
+    }
+
+    /* Subtle "creak" — door pushes back briefly before swinging open.
+       Doors fade out in the final 25% so they dissolve straight into the
+       start-screen instead of lingering at extreme angles. */
+    @keyframes openLeftDoor {
+      0%   { transform: rotateY(0deg);    opacity: 1; }
+      6%   { transform: rotateY(1.5deg);  opacity: 1; }
+      75%  {                              opacity: 1; }
+      100% { transform: rotateY(-115deg); opacity: 0; }
+    }
+    @keyframes openRightDoor {
+      0%   { transform: rotateY(0deg);    opacity: 1; }
+      6%   { transform: rotateY(-1.5deg); opacity: 1; }
+      75%  {                              opacity: 1; }
+      100% { transform: rotateY(115deg);  opacity: 0; }
+    }
+
+    /* Iron strap bands across each door, with riveted dots */
+    .door-strap {
+      position: absolute;
+      left: -2px;
+      right: -2px;
+      height: 22px;
+      background:
+        radial-gradient(circle at 16px 50%,  #5a5a5a 3px, transparent 4px),
+        radial-gradient(circle at 56px 50%,  #5a5a5a 3px, transparent 4px),
+        radial-gradient(circle at calc(100% - 16px) 50%, #5a5a5a 3px, transparent 4px),
+        radial-gradient(circle at calc(100% - 56px) 50%, #5a5a5a 3px, transparent 4px),
+        linear-gradient(180deg, #3a3a3a 0%, #1a1a1a 50%, #2a2a2a 100%);
+      border-top: 2px solid #050505;
+      border-bottom: 2px solid #050505;
+      box-shadow: inset 0 0 12px rgba(0,0,0,0.7);
+    }
+    .door-strap.s-top { top: 14%; }
+    .door-strap.s-mid { top: 47%; }
+    .door-strap.s-bot { top: 80%; }
+
+    /* Big iron ring handle on the inner edge of each door */
+    .door-handle {
+      position: absolute;
+      top: 50%;
+      width: 64px;
+      height: 64px;
+      border: 7px solid #555;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.7) 100%);
+      transform: translateY(-50%);
+      box-shadow:
+        0 0 0 2px #050505,
+        inset 0 4px 8px rgba(0,0,0,0.6),
+        4px 4px 0 rgba(0,0,0,0.5);
+    }
+    .door-handle::before {
+      /* mounting plate stub above the ring */
+      content: '';
+      position: absolute;
+      top: -26px;
+      left: 50%;
+      width: 18px;
+      height: 26px;
+      background: linear-gradient(180deg, #555 0%, #2a2a2a 100%);
+      border: 2px solid #050505;
+      transform: translateX(-50%);
+    }
+    .door-left .door-handle  { right: 38px; }
+    .door-right .door-handle { left: 38px; }
+
+    /* Loader caption that fades out as doors begin to open */
     .loader-text {
       position: absolute;
       bottom: 40px;
@@ -161,15 +251,15 @@
       right: 0;
       text-align: center;
       font-family: 'Press Start 2P', monospace;
-      color: #d6d6d6;
+      color: #c49a12;
       font-size: 10px;
       letter-spacing: 0.3em;
       text-shadow: 2px 2px 0 #000;
-      animation: loaderTextFade 1.0s ease forwards;
+      animation: loaderTextFade 0.8s ease forwards;
       z-index: 1;
     }
     @keyframes loaderTextFade {
-      0%, 60% { opacity: 1; }
+      0%, 30% { opacity: 1; }
       100%    { opacity: 0; }
     }
 
@@ -283,9 +373,21 @@
 </head>
 <body>
 
-  <!-- ═══ BRICK LOADER ═══ -->
-  <div id="brickLoader" aria-hidden="true">
-    <div class="loader-text">▌ ENTERING THE WARROOM ▐</div>
+  <!-- ═══ CASTLE DOOR LOADER ═══ -->
+  <div id="doorLoader" aria-hidden="true">
+    <div class="door door-left">
+      <div class="door-strap s-top"></div>
+      <div class="door-strap s-mid"></div>
+      <div class="door-strap s-bot"></div>
+      <div class="door-handle"></div>
+    </div>
+    <div class="door door-right">
+      <div class="door-strap s-top"></div>
+      <div class="door-strap s-mid"></div>
+      <div class="door-strap s-bot"></div>
+      <div class="door-handle"></div>
+    </div>
+    <div class="loader-text">▌ THE GATES OPEN ▐</div>
   </div>
 
   <div class="game-frame lobby-bg">
@@ -389,6 +491,6 @@
   </div>
 
   <script src="/login/title-shimmer.js"></script>
-  <script type="module" src="/game/start-screen.js"></script>
+  <script type="module" src="/start-screen/start-screen.js"></script>
 </body>
 </html>

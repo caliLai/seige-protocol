@@ -22,41 +22,15 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
 // ── DOM REFS ──
-const brickLoader = document.getElementById('brickLoader');
+const doorLoader = document.getElementById('doorLoader');
 const userNameEl = document.getElementById('userName');
 const alertEl = document.getElementById('alertBanner');
 
-// ── BRICK LOADER ANIMATION ──
-// The grey wall starts fully covering the page (initial state from CSS).
-// Each brick gets a staggered delay, then falls away individually. Top rows
-// fall first, with a slight column jitter so it feels organic, not a
-// mechanical sweep.
-const buildBrickLoader = () => {
-  const cols = 24, rows = 14;
-  const total = cols * rows;
-  const frag = document.createDocumentFragment();
-  for (let i = 0; i < total; i++) {
-    const brick = document.createElement('div');
-    brick.className = 'brick';
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    // Top rows fall earliest; columns add a small wave; jitter scatters it.
-    const baseDelay = (row * 0.045) + (col * 0.012);
-    const jitter = Math.random() * 0.12;
-    brick.style.animationDelay = (baseDelay + jitter) + 's';
-    frag.appendChild(brick);
-  }
-  brickLoader.appendChild(frag);
-};
-
-buildBrickLoader();
-// Bricks now fully tile the loader area, so the solid covering background
-// from CSS is no longer needed — clear it so the menu shows through as
-// bricks fall away.
-brickLoader.style.background = 'transparent';
-// Last brick finishes ~ rows*0.045 + cols*0.012 + 0.12 + 0.5s animation ≈ 1.5s.
-// Hide the loader element entirely once everything has fallen.
-setTimeout(() => { brickLoader.style.display = 'none'; }, 1500);
+// ── CASTLE DOOR LOADER ──
+// The doors are present in the HTML on first paint and animate themselves
+// open via CSS. Once the 1.8s swing finishes, hide the loader element so
+// the menu becomes interactive again.
+setTimeout(() => { doorLoader.classList.add('gone'); }, 2000);
 
 // ── AUTH GATE ──
 // If user is not signed in, kick them back to login.

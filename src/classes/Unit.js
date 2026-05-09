@@ -1,64 +1,67 @@
 // todo: should different types of units inherit from this class?
 // also we should probably make an interface. But also this is javascript
 // so maybe it doesn't really matter
-class Unit extends Sprite{
-	width = 50;
-	height = 50;
-	pathIndex = 0;
-	attackRadius = 100;
-	attackStrength = 0.4;
-	target; // typeof Tower
-	
-	constructor(position) {
-		super(position)
-	}
+class Unit extends Sprite {
+    width = 50;
+    height = 50;
+    pathIndex = 0;
 
-// setters
-	set target(target) {
-		this.target = target;
-	}
+    attackRadius = 100;
+    attackStrength = 0.5;
 
-// methods
+    _target = null;
 
-	render() {
-		gameCanvas.fillStyle = 'red';
-		gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
-	}
+    constructor(position) {
+        super(position);
+    }
 
-	attack() {
-		if(!this.target) return;
-		this.target.health -= this.attackStrength;
-		console.log(`attacking target, target health: ${this.target.health}`);
-	}
+    set target(newTarget) {
+        this._target = newTarget;
+    }
 
-	calculateAndUpdatePathMovement() {
-		// calculate distance to next pathpoint
-		const pathPoint = path[this.pathIndex];
-		const distanceY = pathPoint.y - this.centre.y;
-		const distanceX = pathPoint.x - this.centre.x;
-		const angle = Math.atan2(distanceY, distanceX);
+    get target() {
+        return this._target;
+    }
 
-		// update position (for rendering)
-		this.position.x += Math.cos(angle);
-		this.position.y += Math.sin(angle);
-		
-		// update index for current position in path
-		if(Math.round(this.centre.x) === Math.round(pathPoint.x)
-			&& Math.round(this.centre.y) === Math.round(pathPoint.y)
-			&& this.pathIndex < path.length - 1
-		) {
-			this.pathIndex++;
-		}
-	}
+    render() {
+        gameCanvas.fillStyle = 'red';
+        gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
+    }
 
-	updateFrame() {
-		this.render();
+    attack() {
+        if (!this.target) return;
 
-		if(this.target){
-			this.attack();
-		} else {
-			this.calculateAndUpdatePathMovement();
-		}
+        this.target.takeDamage(this.attackStrength);
+    }
 
-	}
+    calculateAndUpdatePathMovement() {
+        const pathPoint = path[this.pathIndex];
+
+        if (!pathPoint) return;
+
+        const dx = pathPoint.x - this.centre.x;
+        const dy = pathPoint.y - this.centre.y;
+
+        const distance = Math.hypot(dx, dy);
+
+        if (distance < 2 && this.pathIndex < path.length - 1) {
+            this.pathIndex++;
+            return;
+        }
+
+        const angle = Math.atan2(dy, dx);
+
+        this.position.x += Math.cos(angle);
+        this.position.y += Math.sin(angle);
+    }
+
+    updateFrame() {
+        this.render();
+
+        if (this.target) {
+            this.attack();
+        } else {
+            this.calculateAndUpdatePathMovement();
+        }
+    }
 }

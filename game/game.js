@@ -20,17 +20,16 @@ const addGold = (amount) => {
 // INIT TOWERS
 const initialiseTowers = () => {
     towers.length = 0;
-
     for (let location of towerLocations) {
         towers.push(new Tower(location));
     }
 };
 
-// SHOW END SCREEN (HTML UI)
+// SHOW END SCREEN (your feature)
 const showEndScreen = () => {
     document.getElementById("goldEarned").innerText = "Gold Earned: " + playerGold;
     document.getElementById("towersDestroyed").innerText = "Towers Destroyed: " + towersDestroyedCount;
-    document.getElementById("unitsLost").innerText = "Units Lost: 0"; // FIXED
+    document.getElementById("unitsLost").innerText = "Units Lost: 0";
 
     document.getElementById("endScreen").style.display = "flex";
 };
@@ -48,18 +47,6 @@ const checkWinCondition = () => {
     }
 };
 
-// DRAW TOP UI
-const drawUI = () => {
-    gameCanvas.fillStyle = "black";
-    gameCanvas.fillRect(0, 0, gameCanvasElement.width, 50);
-
-    gameCanvas.fillStyle = "white";
-    gameCanvas.font = "20px Arial";
-    gameCanvas.fillText("Gold: " + playerGold, 20, 30);
-
-    gameCanvas.fillText("Siege Protocol", 450, 30);
-};
-
 // MAIN LOOP
 const animate = () => {
     animationId = requestAnimationFrame(animate);
@@ -67,43 +54,44 @@ const animate = () => {
     gameCanvas.clearRect(0, 0, gameCanvasElement.width, gameCanvasElement.height);
     gameCanvas.drawImage(backgroundImage, 0, 0);
 
-    if (attackUnit && !gameFinished) {
-        const tower = towers[0];
+    // THEIR TARGETING LOGIC
+    const tower = towers[0];
 
-        if (tower) {
-            const dx = tower.centre.x - attackUnit.centre.x;
-            const dy = tower.centre.y - attackUnit.centre.y;
-            const distance = Math.hypot(dx, dy);
+    if (tower && attackUnit && !gameFinished) {
+        const dx = Math.abs(tower.centre.x - attackUnit.centre.x);
+        const dy = Math.abs(tower.centre.y - attackUnit.centre.y);
+        const distance = Math.hypot(dx, dy);
 
-            if (!tower.isDead && distance <= attackUnit.attackRadius) {
-                attackUnit.target = tower;
+        if (tower.health > 0 && distance <= attackUnit.attackRadius) {
+            attackUnit.target = tower;
 
-                gameCanvas.beginPath();
-                gameCanvas.moveTo(attackUnit.centre.x, attackUnit.centre.y);
-                gameCanvas.lineTo(tower.centre.x, tower.centre.y);
-                gameCanvas.stroke();
-            } else {
-                if (tower.isDead) {
-                    towers.shift();
-                    towersDestroyedCount++;
-                    addGold(80);
+            gameCanvas.beginPath();
+            gameCanvas.moveTo(attackUnit.centre.x, attackUnit.centre.y);
+            gameCanvas.lineTo(tower.centre.x, tower.centre.y);
+            gameCanvas.stroke();
+        } else {
+            if (tower.health <= 0) {
+                towers.shift();
 
-                    checkWinCondition();
-                }
+                // YOUR SYSTEM ADDED HERE
+                towersDestroyedCount++;
+                addGold(80);
 
-                attackUnit.target = null;
+                checkWinCondition();
             }
-        }
 
+            attackUnit.target = null;
+        }
+    }
+
+    if (attackUnit) {
         attackUnit.updateFrame();
     }
 
     towers.forEach(tower => tower.updateFrame());
-
-    drawUI();
 };
 
-// START GAME
+// START GAME (keep yours – theirs didn’t have UI selection)
 const startGame = () => {
     let selectedUnitType = document.querySelector('input[name="unitSelection"]:checked')?.value;
 
@@ -123,15 +111,15 @@ const startGame = () => {
     animate();
 };
 
-// NEXT WAVE BUTTON
+// NEXT WAVE BUTTON (your feature)
 const nextWave = () => {
     location.reload();
 };
 
-// LOAD MAP
+// LOAD MAP (use THEIR correct path)
 const backgroundImage = new Image();
 backgroundImage.onload = () => {
     initialiseTowers();
     gameCanvas.drawImage(backgroundImage, 0, 0);
 };
-backgroundImage.src = "./img/calista-map.png";
+backgroundImage.src = "../assets/maps/calista-map.png";

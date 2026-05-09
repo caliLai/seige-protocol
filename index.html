@@ -58,14 +58,12 @@
 
     <canvas id="gameCanvas"></canvas>
 
-    <!-- END SCREEN -->
     <div id="endScreen">
         <div class="panel">
             <h1>Wave Complete!</h1>
             <p id="goldEarned">Gold Earned: 0</p>
             <p id="towersDestroyed">Towers Destroyed: 0</p>
             <p id="unitsLost">Units Lost: 0</p>
-
             <button onclick="nextWave()">Next Wave</button>
         </div>
     </div>
@@ -75,7 +73,9 @@
     <script src="./src/classes/Sprite.js"></script>
     <script src="./src/classes/Unit.js"></script>
     <script src="./src/classes/Tower.js"></script>
-    <script src="./index.js"></script>
+
+    <!-- IMPORTANT LINE -->
+    <script src="./game/game.js"></script>
 
 </body>
 </html>

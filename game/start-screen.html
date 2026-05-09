@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Siege Protocol — The Warroom</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/login/login_styles.css" />
+  <style>
+    /* ════════════════════════════════════════
+       LOBBY THEME — warmer wood-paneled interior
+       ════════════════════════════════════════ */
+
+    /* Pixel-art medieval wooden plank wall — vertical boards with knots,
+       grain, and iron nails. Each tile is 80×160 px and fully pixelated. */
+    .lobby-bg {
+      background-color: #3a2818;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='160' viewBox='0 0 80 160' shape-rendering='crispEdges'><rect width='80' height='160' fill='%234a3520'/><rect x='0' y='2' width='80' height='2' fill='%235c4326'/><rect x='0' y='28' width='80' height='1' fill='%233a2614'/><rect x='0' y='54' width='80' height='1' fill='%235c4326'/><rect x='0' y='84' width='80' height='1' fill='%233a2614'/><rect x='0' y='112' width='80' height='1' fill='%235c4326'/><rect x='0' y='140' width='80' height='1' fill='%233a2614'/><rect x='78' y='0' width='2' height='160' fill='%23160c06'/><rect x='0' y='0' width='2' height='160' fill='%231f1208'/><rect x='0' y='158' width='80' height='2' fill='%23160c06'/><rect x='0' y='0' width='80' height='2' fill='%23241509'/><rect x='22' y='66' width='10' height='10' fill='%232a1810'/><rect x='24' y='68' width='6' height='6' fill='%231a0a04'/><rect x='25' y='69' width='2' height='2' fill='%23000'/><rect x='52' y='118' width='8' height='8' fill='%232a1810'/><rect x='54' y='120' width='4' height='4' fill='%231a0a04'/><rect x='6' y='6' width='4' height='4' fill='%23857665'/><rect x='7' y='7' width='2' height='2' fill='%23a89880'/><rect x='70' y='6' width='4' height='4' fill='%23857665'/><rect x='71' y='7' width='2' height='2' fill='%23a89880'/><rect x='6' y='148' width='4' height='4' fill='%23857665'/><rect x='7' y='149' width='2' height='2' fill='%23a89880'/><rect x='70' y='148' width='4' height='4' fill='%23857665'/><rect x='71' y='149' width='2' height='2' fill='%23a89880'/><rect x='12' y='40' width='1' height='1' fill='%233a2614'/><rect x='40' y='96' width='1' height='1' fill='%233a2614'/><rect x='62' y='130' width='1' height='1' fill='%235c4326'/></svg>");
+      background-size: 80px 160px;
+      background-repeat: repeat;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .lobby-bg::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(0,0,0,0.22) 0%, transparent 18%, transparent 82%, rgba(0,0,0,0.32) 100%);
+    }
+    .lobby-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse 55% 40% at 50% 100%, rgba(245,160,40,0.12) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 65% at 50% 50%, transparent 45%, rgba(0,0,0,0.55) 100%);
+    }
+
+    /* Hanging crimson banner behind the menu card */
+    .lobby-banner {
+      position: absolute;
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 220px;
+      height: 380px;
+      background:
+        linear-gradient(180deg, #6b1a1a 0%, #4a1010 60%, #2a0808 100%);
+      border: 3px solid #1a0606;
+      box-shadow: inset 0 0 0 2px rgba(245,197,24,0.18), 0 0 24px rgba(0,0,0,0.6);
+      z-index: 4;
+      pointer-events: none;
+    }
+    .lobby-banner::before {
+      content: '⚔';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Press Start 2P', monospace;
+      font-size: 64px;
+      color: #c49a12;
+      text-shadow: 3px 3px 0 #2a0808, 0 0 20px rgba(245,197,24,0.4);
+      opacity: 0.55;
+    }
+    .lobby-banner::after {
+      content: '';
+      position: absolute;
+      bottom: -16px;
+      left: -10px;
+      right: -10px;
+      height: 18px;
+      background:
+        linear-gradient(90deg,
+          #4a1010 0%, #4a1010 8%, transparent 8%,
+          transparent 16%, #4a1010 16%, #4a1010 24%, transparent 24%,
+          transparent 32%, #4a1010 32%, #4a1010 40%, transparent 40%,
+          transparent 48%, #4a1010 48%, #4a1010 56%, transparent 56%,
+          transparent 64%, #4a1010 64%, #4a1010 72%, transparent 72%,
+          transparent 80%, #4a1010 80%, #4a1010 88%, transparent 88%,
+          transparent 100%);
+    }
+
+    /* ── MENU CARD (leather/parchment lobby plaque) ── */
+    .menu-card-wrapper { width: 420px; position: relative; z-index: 10; }
+
+    .menu-card {
+      background:
+        linear-gradient(180deg, #4a3220 0%, #2e1d10 100%);
+      border: 4px solid #1a0f08;
+      box-shadow:
+        6px 6px 0 #1a0f08,
+        inset 0 0 0 2px rgba(245,197,24,0.20),
+        inset 0 0 60px rgba(0,0,0,0.4);
+      position: relative;
+    }
+    .menu-card-inner-border {
+      position: absolute;
+      inset: 8px;
+      border: 2px solid rgba(245,197,24,0.28);
+      pointer-events: none;
+    }
+    .menu-card-corner {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      background: #c49a12;
+      border: 2px solid #1a0f08;
+      z-index: 2;
+    }
+    .menu-card-corner.tl { top: -4px; left: -4px; }
+    .menu-card-corner.tr { top: -4px; right: -4px; }
+    .menu-card-corner.bl { bottom: -4px; left: -4px; }
+    .menu-card-corner.br { bottom: -4px; right: -4px; }
+
+    .menu-card-content {
+      padding: 24px 32px 28px;
+      position: relative;
+    }
+
+    /* ── BRICK LOADING SCREEN ──
+       Wall starts fully built (covers the page), then bricks fall away
+       individually with staggered delays to reveal the start-screen below. */
+    #brickLoader {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      /* Solid wall color BEFORE js runs — prevents the menu from flashing
+         visible during the brief gap between first paint and module-script
+         execution. JS clears this to transparent after bricks are added so
+         the menu shows through as bricks fall. */
+      background: #4a4a4a;
+      display: grid;
+      grid-template-columns: repeat(24, 1fr);
+      grid-template-rows: repeat(14, 1fr);
+      gap: 0;
+      pointer-events: none;
+    }
+    .brick {
+      background: linear-gradient(135deg, #6a6a6a 0%, #4a4a4a 50%, #2e2e2e 100%);
+      border-right: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+      box-shadow: inset 1px 1px 0 rgba(255,255,255,0.05), inset -1px -1px 0 rgba(0,0,0,0.4);
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      animation: brickFall 0.5s cubic-bezier(0.55, 0.05, 0.7, 0.25) forwards;
+    }
+    @keyframes brickFall {
+      0%   { opacity: 1; transform: translateY(0)    scale(1)    rotate(0deg); }
+      60%  { opacity: 1; transform: translateY(18px) scale(0.95) rotate(2deg); }
+      100% { opacity: 0; transform: translateY(48px) scale(0.7)  rotate(6deg); }
+    }
+    .loader-text {
+      position: absolute;
+      bottom: 40px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: 'Press Start 2P', monospace;
+      color: #d6d6d6;
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-shadow: 2px 2px 0 #000;
+      animation: loaderTextFade 1.0s ease forwards;
+      z-index: 1;
+    }
+    @keyframes loaderTextFade {
+      0%, 60% { opacity: 1; }
+      100%    { opacity: 0; }
+    }
+
+    /* ── MENU LAYOUT ── */
+    .menu-card-wrapper { width: 420px; }
+
+    .menu-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      animation: fadein 0.5s 0.2s ease both;
+    }
+
+    .menu-btn {
+      width: 100%;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      padding: 12px 10px;
+      border: 4px solid #1a0f08;
+      cursor: pointer;
+      text-shadow: 1px 1px 0 rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #d6b378;
+      background: linear-gradient(180deg, #3a2818 0%, #241509 100%);
+      box-shadow: 4px 4px 0 #110805, inset 0 0 0 1px rgba(245,197,24,0.10);
+      transition: color 0.12s ease, text-shadow 0.12s ease;
+    }
+
+    /* Selected = persistently highlighted (gold), same look as gold hover.
+       The first button has this on load; hovering another moves it. */
+    .menu-btn:hover,
+    .menu-btn.selected {
+      background: linear-gradient(180deg, #ffd84a 0%, #f5c518 100%);
+      color: #1a0f08;
+      text-shadow: 1px 1px 0 rgba(0,0,0,0.15);
+      box-shadow: 4px 4px 0 #7a600c, 0 0 18px 4px rgba(245,197,24,0.45);
+    }
+    /* Indicator arrow on the currently selected button */
+    .menu-btn.selected::before {
+      content: '▶';
+      margin-right: 6px;
+      color: #1a0f08;
+    }
+
+    /* ── PER-BUTTON FLASH COLORS (active when hovered or selected) ── */
+    #newGameBtn:hover,      #newGameBtn.selected      { animation: flashWhite  0.65s ease-in-out infinite alternate; }
+    #continueBtn:hover,     #continueBtn.selected     { animation: flashCyan   0.65s ease-in-out infinite alternate; }
+    #rosterBtn:hover,       #rosterBtn.selected       { animation: flashGreen  0.65s ease-in-out infinite alternate; }
+    #achievementsBtn:hover, #achievementsBtn.selected { animation: flashPurple 0.65s ease-in-out infinite alternate; }
+    #settingsBtn:hover,     #settingsBtn.selected     { animation: flashBlue   0.65s ease-in-out infinite alternate; }
+    #creditsBtn:hover,      #creditsBtn.selected      { animation: flashOrange 0.65s ease-in-out infinite alternate; }
+    #logoutBtn:hover,       #logoutBtn.selected       { animation: flashRed    0.55s ease-in-out infinite alternate; }
+
+    @keyframes flashWhite  { from { color: #1a0f08; text-shadow: 1px 1px 0 rgba(0,0,0,0.15); } to { color: #ffffff; text-shadow: 0 0 8px #fff,    1px 1px 0 rgba(0,0,0,0.4); } }
+    @keyframes flashCyan   { from { color: #1a0f08; text-shadow: 1px 1px 0 rgba(0,0,0,0.15); } to { color: #4ff0ff; text-shadow: 0 0 8px #4ff0ff, 1px 1px 0 rgba(0,0,0,0.4); } }
+    @keyframes flashGreen  { from { color: #1a0f08; text-shadow: 1px 1px 0 rgba(0,0,0,0.15); } to { color: #6dff6a; text-shadow: 0 0 8px #6dff6a, 1px 1px 0 rgba(0,0,0,0.4); } }
+    @keyframes flashPurple { from { color: #1a0f08; text-shadow: 1px 1px 0 rgba(0,0,0,0.15); } to { color: #d97aff; text-shadow: 0 0 8px #d97aff, 1px 1px 0 rgba(0,0,0,0.4); } }
+    @keyframes flashBlue   { from { color: #1a0f08; text-shadow: 1px 1px 0 rgba(0,0,0,0.15); } to { color: #6db8ff; text-shadow: 0 0 8px #6db8ff, 1px 1px 0 rgba(0,0,0,0.4); } }
+    @keyframes flashOrange { from { color: #1a0f08; text-shadow: 1px 1px 0 rgba(0,0,0,0.15); } to { color: #ff9a4d; text-shadow: 0 0 8px #ff9a4d, 1px 1px 0 rgba(0,0,0,0.4); } }
+    @keyframes flashRed    { from { color: #ffeac0; text-shadow: 1px 1px 0 rgba(0,0,0,0.4);  } to { color: #ff5040; text-shadow: 0 0 10px #ff5040, 1px 1px 0 rgba(0,0,0,0.5); } }
+
+    /* Abandon Keep — red at rest AND on hover/selected (never gold). */
+    .menu-btn-danger {
+      color: #f0d9a0;
+      background: linear-gradient(180deg, #6b2a26 0%, #4a1010 100%);
+      border-color: #2a0a08;
+      box-shadow: 4px 4px 0 #2a0a08, inset 0 0 0 1px rgba(180,40,40,0.25);
+    }
+    .menu-btn-danger:hover,
+    .menu-btn-danger.selected {
+      background: linear-gradient(180deg, #b03a30 0%, #6b1a1a 100%) !important;
+      color: #ffeac0 !important;
+      text-shadow: 1px 1px 0 rgba(0,0,0,0.4) !important;
+      box-shadow: 4px 4px 0 #2a0a08, 0 0 18px 4px rgba(232,93,42,0.55) !important;
+    }
+    .menu-btn-danger.selected::before {
+      color: #ffeac0;
+    }
+
+    /* ── USER BAR ── */
+    .user-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 6px;
+      color: #8c7040;
+      letter-spacing: 0.15em;
+      margin-bottom: 14px;
+      animation: fadein 0.5s 0.15s ease both;
+    }
+    .user-bar .user-name { color: #f5c518; }
+
+    /* ── VERSION TAG ── */
+    .version-tag {
+      position: absolute;
+      bottom: 12px;
+      right: 16px;
+      font-family: 'Press Start 2P', monospace;
+      color: #4a4035;
+      font-size: 6px;
+      letter-spacing: 0.2em;
+      z-index: 30;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══ BRICK LOADER ═══ -->
+  <div id="brickLoader" aria-hidden="true">
+    <div class="loader-text">▌ ENTERING THE WARROOM ▐</div>
+  </div>
+
+  <div class="game-frame lobby-bg">
+    <div class="scanlines-overlay"></div>
+    <div class="lobby-banner" aria-hidden="true"></div>
+
+    <!-- ═══ TORCHES ═══ -->
+    <div class="torch torch-left" aria-hidden="true">
+      <div class="torch-glow"></div>
+      <div class="fire fire-left">
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div>
+        <div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div>
+        <div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div>
+        <div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div>
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:transparent"></div>
+      </div>
+      <div class="torch-pole"></div>
+      <svg class="torch-bracket" width="30" height="16" viewBox="0 0 30 16"><rect x="8" y="0" width="14" height="6" fill="#4a4035" stroke="#000" stroke-width="2"/><rect x="4" y="6" width="22" height="4" fill="#3a3228" stroke="#000" stroke-width="2"/></svg>
+    </div>
+    <div class="torch torch-right" aria-hidden="true">
+      <div class="torch-glow torch-glow-delayed"></div>
+      <div class="fire fire-right">
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div>
+        <div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div>
+        <div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div>
+        <div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div>
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:transparent"></div>
+      </div>
+      <div class="torch-pole"></div>
+      <svg class="torch-bracket" width="30" height="16" viewBox="0 0 30 16"><rect x="8" y="0" width="14" height="6" fill="#4a4035" stroke="#000" stroke-width="2"/><rect x="4" y="6" width="22" height="4" fill="#3a3228" stroke="#000" stroke-width="2"/></svg>
+    </div>
+
+    <!-- ═══ STONE ARCH ═══ -->
+    <div class="stone-arch" aria-hidden="true">
+      <svg width="520" height="580" viewBox="0 0 520 580" fill="none">
+        <rect x="0" y="30" width="40" height="550" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="480" y="30" width="40" height="550" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="0" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="40" y="10" width="20" height="20" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="70" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="420" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="460" y="10" width="20" height="20" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="490" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="38" y="30" width="2" height="550" fill="#7a600c" opacity="0.5"/>
+        <rect x="480" y="30" width="2" height="550" fill="#7a600c" opacity="0.5"/>
+      </svg>
+    </div>
+
+    <!-- ═══ MENU CARD ═══ -->
+    <div class="menu-card-wrapper">
+      <div class="menu-card">
+        <div class="menu-card-inner-border"></div>
+        <div class="menu-card-corner tl"></div>
+        <div class="menu-card-corner tr"></div>
+        <div class="menu-card-corner bl"></div>
+        <div class="menu-card-corner br"></div>
+
+        <div class="menu-card-content">
+
+          <div class="title-block">
+            <div id="titleLine1" class="title-line"></div>
+            <div id="titleLine2" class="title-line"></div>
+            <div class="subtitle">— THE WARROOM —</div>
+          </div>
+
+          <div class="divider">
+            <div class="dash-line"></div>
+            <span class="divider-icon">⚔</span>
+            <div class="dash-line"></div>
+          </div>
+
+          <div class="user-bar">
+            HAILED AS: <span id="userName" class="user-name">…</span>
+          </div>
+
+          <div id="alertBanner" class="alert-banner" role="alert" aria-live="polite"></div>
+
+          <div class="menu-buttons">
+            <button id="newGameBtn" class="px-btn menu-btn selected">⚔ NEW CAMPAIGN</button>
+            <button id="continueBtn" class="px-btn menu-btn">CONTINUE QUEST</button>
+            <button id="rosterBtn" class="px-btn menu-btn">⚜ UNIT ROSTER</button>
+            <button id="achievementsBtn" class="px-btn menu-btn">★ HALL OF DEEDS</button>
+            <button id="settingsBtn" class="px-btn menu-btn">⚙ ROYAL DECREES</button>
+            <button id="creditsBtn" class="px-btn menu-btn">📜 SCRIBES &amp; SCROLLS</button>
+            <button id="logoutBtn" class="px-btn menu-btn menu-btn-danger">⏻ ABANDON KEEP</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="floor">
+      <div class="floor-line floor-line-top"></div>
+      <div class="floor-line floor-line-bottom"></div>
+    </div>
+    <div class="frame-edge frame-edge-top"></div>
+    <div class="frame-edge frame-edge-left"></div>
+    <div class="frame-edge frame-edge-right"></div>
+
+    <div class="version-tag">v0.1.0 ALPHA</div>
+  </div>
+
+  <script src="/login/title-shimmer.js"></script>
+  <script type="module" src="/game/start-screen.js"></script>
+</body>
+</html>

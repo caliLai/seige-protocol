@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<style>
+			@view-transition { navigation: auto; }
+			::view-transition-old(root),
+			::view-transition-new(root) {
+				animation-duration: 0.4s;
+				animation-timing-function: ease;
+			}
+			/* Fallback fade-in for browsers without view transitions */
+			body {
+				animation: gameFadeIn 0.35s ease both;
+				margin: 0;
+				background: #1a1510;
+			}
+			@keyframes gameFadeIn {
+				from { opacity: 0; }
+				to   { opacity: 1; }
+			}
+		</style>
+	</head>
+	<body>
+		<div id="unitSelectionScreen">
+			Select your unit type:
+			<input type="radio" id="unitSelectionType1" name="unitSelection" value="unit" />
+			<label for="unitSelectionType1">Unit</label>
+			<br>
+			<button onclick="startGame()">start</button>
+		</div>
+		<canvas id="gameCanvas"></canvas>
+		<script src="../src/data/path.js"></script>
+		<script src="../src/data/towerLocations.js"></script>
+		<script src="../src/classes/Sprite.js"></script>
+		<script src="../src/classes/Unit.js"></script>
+		<script src="../src/classes/Tower.js"></script>
+		<script src="./game.js"></script>
+	</body>
+</html>

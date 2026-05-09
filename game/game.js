@@ -51,7 +51,7 @@ const checkWinCondition = () => {
 const animate = () => {
     animationId = requestAnimationFrame(animate);
 
-    // Removed clearRect per review (background redraw handles clearing)
+    // background redraw clears previous frame
     gameCanvas.drawImage(backgroundImage, 0, 0);
 
     const tower = towers[0];
@@ -109,7 +109,7 @@ const startGame = () => {
     animate();
 };
 
-// NEXT WAVE BUTTON
+// NEXT WAVE
 const nextWave = () => {
     location.reload();
 };

@@ -2,18 +2,20 @@
 <html>
 <head>
     <style>
+        /* ===== Base Layout ===== */
         body {
             margin: 0;
             font-family: Arial;
         }
 
-        #unitSelectionScreen {
-            padding: 10px;
-        }
-
         canvas {
             display: block;
             margin: 0 auto;
+        }
+
+        /* ===== Screens ===== */
+        #unitSelectionScreen {
+            padding: 10px;
         }
 
         #endScreen {
@@ -23,12 +25,13 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0, 0, 0, 0.7);
 
             justify-content: center;
             align-items: center;
         }
 
+        /* ===== UI Components ===== */
         .panel {
             background: white;
             padding: 40px;
@@ -43,11 +46,14 @@
             border: none;
             cursor: pointer;
         }
+
+        /* TODO: move styles into separate CSS file */
     </style>
 </head>
 
 <body>
 
+    <!-- ===== Unit Selection ===== -->
     <div id="unitSelectionScreen">
         Select your unit type:
         <input type="radio" name="unitSelection" value="unit" checked />
@@ -56,8 +62,10 @@
         <button onclick="startGame()">start</button>
     </div>
 
+    <!-- ===== Game Canvas ===== -->
     <canvas id="gameCanvas"></canvas>
 
+    <!-- ===== End Screen UI ===== -->
     <div id="endScreen">
         <div class="panel">
             <h1>Wave Complete!</h1>
@@ -68,13 +76,12 @@
         </div>
     </div>
 
+    <!-- ===== Game Scripts ===== -->
     <script src="./src/data/path.js"></script>
     <script src="./src/data/towerlocations.js"></script>
     <script src="./src/classes/Sprite.js"></script>
     <script src="./src/classes/Unit.js"></script>
     <script src="./src/classes/Tower.js"></script>
-
-    <!-- IMPORTANT LINE -->
     <script src="./game/game.js"></script>
 
 </body>

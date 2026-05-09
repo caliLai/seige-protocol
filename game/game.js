@@ -25,7 +25,7 @@ const initialiseTowers = () => {
     }
 };
 
-// SHOW END SCREEN (your feature)
+// SHOW END SCREEN
 const showEndScreen = () => {
     document.getElementById("goldEarned").innerText = "Gold Earned: " + playerGold;
     document.getElementById("towersDestroyed").innerText = "Towers Destroyed: " + towersDestroyedCount;
@@ -51,10 +51,9 @@ const checkWinCondition = () => {
 const animate = () => {
     animationId = requestAnimationFrame(animate);
 
-    gameCanvas.clearRect(0, 0, gameCanvasElement.width, gameCanvasElement.height);
+    // Removed clearRect per review (background redraw handles clearing)
     gameCanvas.drawImage(backgroundImage, 0, 0);
 
-    // THEIR TARGETING LOGIC
     const tower = towers[0];
 
     if (tower && attackUnit && !gameFinished) {
@@ -73,7 +72,6 @@ const animate = () => {
             if (tower.health <= 0) {
                 towers.shift();
 
-                // YOUR SYSTEM ADDED HERE
                 towersDestroyedCount++;
                 addGold(80);
 
@@ -91,7 +89,7 @@ const animate = () => {
     towers.forEach(tower => tower.updateFrame());
 };
 
-// START GAME (keep yours – theirs didn’t have UI selection)
+// START GAME
 const startGame = () => {
     let selectedUnitType = document.querySelector('input[name="unitSelection"]:checked')?.value;
 
@@ -111,12 +109,12 @@ const startGame = () => {
     animate();
 };
 
-// NEXT WAVE BUTTON (your feature)
+// NEXT WAVE BUTTON
 const nextWave = () => {
     location.reload();
 };
 
-// LOAD MAP (use THEIR correct path)
+// LOAD MAP
 const backgroundImage = new Image();
 backgroundImage.onload = () => {
     initialiseTowers();

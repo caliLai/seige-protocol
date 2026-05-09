@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Siege Protocol — Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/login/login_styles.css" />
+</head>
+<body>
+
+  <div class="game-frame stone-bg">
+    <div class="scanlines-overlay"></div>
+
+    <!-- ═══ TORCHES ═══ -->
+    <div class="torch torch-left" aria-hidden="true">
+      <div class="torch-glow"></div>
+      <div class="fire fire-left">
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div>
+        <div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div>
+        <div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div>
+        <div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div>
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:transparent"></div>
+      </div>
+      <div class="torch-pole"></div>
+      <svg class="torch-bracket" width="30" height="16" viewBox="0 0 30 16"><rect x="8" y="0" width="14" height="6" fill="#4a4035" stroke="#000" stroke-width="2"/><rect x="4" y="6" width="22" height="4" fill="#3a3228" stroke="#000" stroke-width="2"/></svg>
+    </div>
+    <div class="torch torch-right" aria-hidden="true">
+      <div class="torch-glow torch-glow-delayed"></div>
+      <div class="fire fire-right">
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div>
+        <div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div>
+        <div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div>
+        <div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div>
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:transparent"></div>
+      </div>
+      <div class="torch-pole"></div>
+      <svg class="torch-bracket" width="30" height="16" viewBox="0 0 30 16"><rect x="8" y="0" width="14" height="6" fill="#4a4035" stroke="#000" stroke-width="2"/><rect x="4" y="6" width="22" height="4" fill="#3a3228" stroke="#000" stroke-width="2"/></svg>
+    </div>
+
+    <!-- ═══ ANIMATED CHARACTERS ═══ -->
+    <div class="characters-container">
+
+      <!-- Left group — Facing Right -->
+      <div class="character-group">
+        <div class="sprite-idle sprite-orc" style="background-image:url('/assets/Armored Orc/Armored Orc/Armored Orc-Idle.png');"></div>
+        <div class="sprite-idle sprite-skeleton-greatsword" style="background-image:url('/assets/Greatsword Skeleton/Greatsword Skeleton/Greatsword Skeleton-Idle.png');"></div>
+        <div class="sprite-idle sprite-knight" style="background-image:url('/assets/Knight Templar/Knight Templar/Knight Templar-Idle.png');"></div>
+      </div>
+
+      <!-- Right group — Facing Left -->
+      <div class="character-group">
+        <div class="sprite-idle sprite-swordsman" style="background-image:url('/assets/Swordsman/Swordsman/Swordsman-Idle.png');"></div>
+        <div class="sprite-idle sprite-slime" style="background-image:url('/assets/Slime/Slime/Slime-Idle.png');"></div>
+        <div class="sprite-idle sprite-archer" style="background-image:url('/assets/Skeleton Archer/Skeleton Archer/Skeleton Archer-Idle.png');"></div>
+      </div>
+
+    </div>
+
+    <!-- ═══ STONE ARCH FRAME ═══ -->
+    <div class="stone-arch" aria-hidden="true">
+      <svg width="520" height="580" viewBox="0 0 520 580" fill="none">
+        <rect x="0" y="30" width="40" height="550" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="480" y="30" width="40" height="550" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="0" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="40" y="10" width="20" height="20" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="70" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="420" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="460" y="10" width="20" height="20" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="490" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="38" y="30" width="2" height="550" fill="#7a600c" opacity="0.5"/>
+        <rect x="480" y="30" width="2" height="550" fill="#7a600c" opacity="0.5"/>
+      </svg>
+    </div>
+
+    <!-- ═══ LOGIN CARD ═══ -->
+    <div class="login-card-wrapper">
+      <div class="login-card">
+        <div class="login-card-inner-border"></div>
+
+        <div class="login-card-content">
+
+          <!-- SHIMMER TITLE -->
+          <div class="title-block">
+            <div id="titleLine1" class="title-line"></div>
+            <div id="titleLine2" class="title-line"></div>
+            <div id="subtitle" class="subtitle">— ENTER THE KEEP —</div>
+          </div>
+
+          <!-- Divider -->
+          <div class="divider">
+            <div class="dash-line"></div>
+            <span class="divider-icon">⚔</span>
+            <div class="dash-line"></div>
+          </div>
+
+          <!-- Alert -->
+          <div id="alertBanner" class="alert-banner" role="alert" aria-live="polite"></div>
+
+          <!-- ═══ LOGIN VIEW ═══ -->
+          <div id="loginView" class="auth-view">
+            <form id="loginForm" novalidate class="login-form">
+              <div class="form-field">
+                <label for="email" class="form-label">▶ THY NAME</label>
+                <input type="email" id="email" name="email" placeholder="knight@realm.com" autocomplete="email" required class="form-input" />
+                <p id="emailError" class="form-error">✗ INVALID NAME, IMPOSTOR!</p>
+              </div>
+              <div class="form-field">
+                <label for="password" class="form-label">▶ THY CIPHER</label>
+                <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required class="form-input" />
+                <p id="passwordError" class="form-error">✗ CIPHER TOO WEAK! (6+ CHARS)</p>
+              </div>
+              <div class="forgot-link-wrapper">
+                <a href="#" id="forgotLink" class="link-hover forgot-link">LOST THY CIPHER? →</a>
+              </div>
+              <button type="submit" id="loginBtn" class="px-btn btn-main login-btn">
+                <span id="btnText">⚔ BREACH THE GATES ⚔</span>
+                <span id="btnLoading" class="btn-loading">█ BREACHING… █</span>
+              </button>
+            </form>
+
+            <div class="or-divider">
+              <div class="or-line"></div>
+              <span class="or-text">OR</span>
+              <div class="or-line"></div>
+            </div>
+
+            <button id="googleBtn" type="button" class="px-btn btn-secondary google-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" class="google-icon">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              GOOGLE HERALD
+            </button>
+
+            <p class="register-text">
+              NEW TO THE REALM?<br/>
+              <a href="#" id="registerLink" class="link-hover register-link">PLEDGE ALLEGIANCE →</a>
+            </p>
+          </div>
+
+          <!-- ═══ REGISTER VIEW ═══ -->
+          <div id="registerView" class="auth-view hidden">
+            <form id="registerForm" novalidate class="login-form">
+              <div class="form-field">
+                <label for="regEmail" class="form-label">▶ THY NAME</label>
+                <input type="email" id="regEmail" name="regEmail" placeholder="knight@realm.com" autocomplete="email" required class="form-input" />
+                <p id="regEmailError" class="form-error">✗ INVALID NAME, IMPOSTOR!</p>
+              </div>
+              <div class="form-field">
+                <label for="regPassword" class="form-label">▶ THY CIPHER</label>
+                <input type="password" id="regPassword" name="regPassword" placeholder="••••••••" autocomplete="new-password" required class="form-input" />
+                <p id="regPasswordError" class="form-error">✗ CIPHER TOO WEAK! (6+ CHARS)</p>
+              </div>
+              <div class="form-field">
+                <label for="confirmPassword" class="form-label">▶ REPEAT THY CIPHER</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" placeholder="••••••••" autocomplete="new-password" required class="form-input" />
+                <p id="confirmError" class="form-error">✗ CIPHERS DO NOT MATCH!</p>
+              </div>
+              <button type="submit" id="registerBtn" class="px-btn btn-main login-btn">
+                <span id="regBtnText">⚔ TAKE THE OATH ⚔</span>
+                <span id="regBtnLoading" class="btn-loading">█ INSCRIBING… █</span>
+              </button>
+            </form>
+
+            <p class="register-text">
+              ALREADY SWORN IN?<br/>
+              <a href="#" id="backToLoginLink" class="link-hover register-link">RETURN TO THE GATES →</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floor and frame edges -->
+    <div class="floor">
+      <div class="floor-line floor-line-top"></div>
+      <div class="floor-line floor-line-bottom"></div>
+    </div>
+    <div class="frame-edge frame-edge-top"></div>
+    <div class="frame-edge frame-edge-left"></div>
+    <div class="frame-edge frame-edge-right"></div>
+  </div>
+
+  <script src="/login/title-shimmer.js"></script>
+  <script type="module" src="/login/auth.js"></script>
+</body>
+</html>

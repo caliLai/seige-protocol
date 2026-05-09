@@ -1,0 +1,17 @@
+{
+  "hosting": {
+    "site": "siege-protocol-7082",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/login/login.html"
+      }
+    ]
+  }
+}

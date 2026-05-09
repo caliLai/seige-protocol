@@ -53,19 +53,28 @@
 
 <body>
 
-    <!-- ===== Unit Selection ===== -->
+    <!-- ===== Top UI + Unit Selection ===== -->
     <div id="unitSelectionScreen">
-        Select your unit type:
-        <input type="radio" name="unitSelection" value="unit" checked />
-        <label>Unit</label>
-        <br>
-        <button onclick="startGame()">start</button>
+        <div style="display:flex; justify-content: space-between; align-items:center;">
+            <div>
+                Select your unit type:
+                <input type="radio" name="unitSelection" value="unit" checked />
+                <label>Unit</label>
+                <br>
+                <button onclick="startGame()">start</button>
+            </div>
+
+            <!-- Gold Display -->
+            <div id="goldDisplay" style="font-weight:bold; font-size:18px;">
+                Gold: 0
+            </div>
+        </div>
     </div>
 
     <!-- ===== Game Canvas ===== -->
     <canvas id="gameCanvas"></canvas>
 
-    <!-- ===== End Screen UI ===== -->
+    <!-- ===== End Screen ===== -->
     <div id="endScreen">
         <div class="panel">
             <h1>Wave Complete!</h1>
@@ -76,7 +85,7 @@
         </div>
     </div>
 
-    <!-- ===== Game Scripts ===== -->
+    <!-- ===== Scripts ===== -->
     <script src="./src/data/path.js"></script>
     <script src="./src/data/towerlocations.js"></script>
     <script src="./src/classes/Sprite.js"></script>

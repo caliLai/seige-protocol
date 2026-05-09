@@ -129,7 +129,11 @@
       position: fixed;
       inset: 0;
       z-index: 9999;
-      background: transparent;
+      /* Solid wall color BEFORE js runs — prevents the menu from flashing
+         visible during the brief gap between first paint and module-script
+         execution. JS clears this to transparent after bricks are added so
+         the menu shows through as bricks fall. */
+      background: #4a4a4a;
       display: grid;
       grid-template-columns: repeat(24, 1fr);
       grid-template-rows: repeat(14, 1fr);

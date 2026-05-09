@@ -50,6 +50,10 @@ const buildBrickLoader = () => {
 };
 
 buildBrickLoader();
+// Bricks now fully tile the loader area, so the solid covering background
+// from CSS is no longer needed — clear it so the menu shows through as
+// bricks fall away.
+brickLoader.style.background = 'transparent';
 // Last brick finishes ~ rows*0.045 + cols*0.012 + 0.12 + 0.5s animation ≈ 1.5s.
 // Hide the loader element entirely once everything has fallen.
 setTimeout(() => { brickLoader.style.display = 'none'; }, 1500);

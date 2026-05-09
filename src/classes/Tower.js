@@ -13,11 +13,11 @@ class Tower extends Sprite {
     }
 
     render() {
-        // DRAW TOWER
-        gameCanvas.fillStyle = 'blue';
+        // Draw tower
+        gameCanvas.fillStyle = "blue";
         gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
 
-        // DRAW HP BAR (above tower)
+        // Draw HP bar above tower
         this.drawHealthBar();
     }
 
@@ -28,20 +28,21 @@ class Tower extends Sprite {
         const x = this.position.x;
         const y = this.position.y - 10;
 
-        // background (missing HP)
-        gameCanvas.fillStyle = 'red';
+        // Background (missing HP)
+        gameCanvas.fillStyle = "red";
         gameCanvas.fillRect(x, y, barWidth, barHeight);
 
-        // current HP
         const healthPercent = this.health / this.maxHealth;
 
+        // HP color based on percentage
         if (healthPercent > 0.6) {
-			gameCanvas.fillStyle = 'limegreen';
-		} else if (healthPercent > 0.3) {
-			gameCanvas.fillStyle = 'yellow';
-		} else {
-			gameCanvas.fillStyle = 'red';
-		}
+            gameCanvas.fillStyle = "limegreen";
+        } else if (healthPercent > 0.3) {
+            gameCanvas.fillStyle = "yellow";
+        } else {
+            gameCanvas.fillStyle = "red";
+        }
+
         gameCanvas.fillRect(
             x,
             y,
@@ -49,8 +50,8 @@ class Tower extends Sprite {
             barHeight
         );
 
-        // border (optional but nice)
-        gameCanvas.strokeStyle = 'black';
+        // Border
+        gameCanvas.strokeStyle = "black";
         gameCanvas.strokeRect(x, y, barWidth, barHeight);
     }
 
@@ -59,7 +60,7 @@ class Tower extends Sprite {
 
         this.health -= amount;
 
-        // clamp health
+        // Clamp health
         if (this.health < 0) {
             this.health = 0;
         }

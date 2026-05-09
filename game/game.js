@@ -18,7 +18,7 @@ let towersDestroyedCount = 0;
 // GOLD SYSTEM
 const addGold = (amount) => {
     playerGold += amount;
-    drawUI(); // only update UI when value changes
+    drawUI();
 };
 
 // INIT TOWERS
@@ -66,7 +66,7 @@ const checkWinCondition = () => {
 const animate = () => {
     animationId = requestAnimationFrame(animate);
 
-    // draw map BELOW UI area
+    // draw map BELOW UI bar
     gameCanvas.drawImage(backgroundImage, 0, UI_HEIGHT);
 
     const tower = towers[0];
@@ -104,7 +104,7 @@ const animate = () => {
     towers.forEach(tower => tower.updateFrame());
 };
 
-// START GAME
+// START GAME (with switch restored)
 const startGame = () => {
     let selectedUnitType = document.querySelector('input[name="unitSelection"]:checked')?.value;
 
@@ -119,9 +119,16 @@ const startGame = () => {
 
     const pathStart = { x: path[0].x, y: path[0].y + UI_HEIGHT };
 
-    attackUnit = new Unit(pathStart);
+    // todo: create a factory somewhere else?
+    switch (selectedUnitType) {
+        case "unit":
+            attackUnit = new Unit(pathStart);
+            break;
+        default:
+            throw new Error("Invalid unit type");
+    }
 
-    drawUI(); // draw once at start
+    drawUI();
     animate();
 };
 
@@ -134,6 +141,6 @@ const nextWave = () => {
 const backgroundImage = new Image();
 backgroundImage.onload = () => {
     initialiseTowers();
-    drawUI(); // draw UI once when loaded
+    drawUI();
 };
 backgroundImage.src = "../assets/maps/calista-map.png";

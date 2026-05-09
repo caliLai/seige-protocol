@@ -36,11 +36,11 @@ class Tower extends Sprite {
         const healthPercent = this.health / this.maxHealth;
 
         if (healthPercent > 0.6) {
-    	gameCanvas.fillStyle = 'limegreen';
+			gameCanvas.fillStyle = 'limegreen';
 		} else if (healthPercent > 0.3) {
-    		gameCanvas.fillStyle = 'yellow';
+			gameCanvas.fillStyle = 'yellow';
 		} else {
-    	    gameCanvas.fillStyle = 'red';
+			gameCanvas.fillStyle = 'red';
 		}
         gameCanvas.fillRect(
             x,

@@ -10,6 +10,7 @@ let attackUnit = null;
 let playerGold = 0;
 let animationId = null;
 let gameFinished = false;
+let towersDestroyedCount = 0;
 
 // GOLD SYSTEM
 const addGold = (amount) => {
@@ -25,59 +26,38 @@ const initialiseTowers = () => {
     }
 };
 
+// SHOW END SCREEN (HTML UI)
+const showEndScreen = () => {
+    document.getElementById("goldEarned").innerText = "Gold Earned: " + playerGold;
+    document.getElementById("towersDestroyed").innerText = "Towers Destroyed: " + towersDestroyedCount;
+    document.getElementById("unitsLost").innerText = "Units Lost: 0"; // FIXED
+
+    document.getElementById("endScreen").style.display = "flex";
+};
+
 // WIN CONDITION
 const checkWinCondition = () => {
     if (towers.length === 0 && !gameFinished) {
         gameFinished = true;
 
-        addGold(100); // bonus
+        addGold(100);
 
         cancelAnimationFrame(animationId);
+
+        showEndScreen();
     }
 };
 
-// DRAW TOP UI BAR
+// DRAW TOP UI
 const drawUI = () => {
-    // top black bar
     gameCanvas.fillStyle = "black";
     gameCanvas.fillRect(0, 0, gameCanvasElement.width, 50);
 
-    // gold text
     gameCanvas.fillStyle = "white";
     gameCanvas.font = "20px Arial";
     gameCanvas.fillText("Gold: " + playerGold, 20, 30);
 
-    // game title
-    gameCanvas.fillText("Siege Protocol", 400, 30);
-};
-
-// DRAW END SCREEN
-const drawEndScreen = () => {
-    if (!gameFinished) return;
-
-    // dark overlay
-    gameCanvas.fillStyle = "rgba(0,0,0,0.7)";
-    gameCanvas.fillRect(0, 0, gameCanvasElement.width, gameCanvasElement.height);
-
-    // panel
-    gameCanvas.fillStyle = "white";
-    gameCanvas.fillRect(300, 150, 500, 300);
-
-    gameCanvas.fillStyle = "black";
-    gameCanvas.font = "24px Arial";
-    gameCanvas.fillText("Wave Complete!", 430, 200);
-
-    gameCanvas.font = "18px Arial";
-    gameCanvas.fillText("Gold Earned: " + playerGold, 400, 250);
-    gameCanvas.fillText("Towers Destroyed: ✅", 400, 280);
-    gameCanvas.fillText("Units Lost: 0", 400, 310);
-
-    // button
-    gameCanvas.fillStyle = "black";
-    gameCanvas.fillRect(450, 360, 200, 50);
-
-    gameCanvas.fillStyle = "white";
-    gameCanvas.fillText("Next Wave", 480, 392);
+    gameCanvas.fillText("Siege Protocol", 450, 30);
 };
 
 // MAIN LOOP
@@ -105,6 +85,9 @@ const animate = () => {
             } else {
                 if (tower.isDead) {
                     towers.shift();
+                    towersDestroyedCount++;
+                    addGold(80);
+
                     checkWinCondition();
                 }
 
@@ -117,11 +100,7 @@ const animate = () => {
 
     towers.forEach(tower => tower.updateFrame());
 
-    // UI ALWAYS ON TOP
     drawUI();
-
-    // END SCREEN OVERLAY
-    drawEndScreen();
 };
 
 // START GAME
@@ -134,6 +113,7 @@ const startGame = () => {
     }
 
     playerGold = 0;
+    towersDestroyedCount = 0;
     gameFinished = false;
 
     const pathStart = { x: path[0].x, y: path[0].y };
@@ -141,6 +121,11 @@ const startGame = () => {
     attackUnit = new Unit(pathStart);
 
     animate();
+};
+
+// NEXT WAVE BUTTON
+const nextWave = () => {
+    location.reload();
 };
 
 // LOAD MAP

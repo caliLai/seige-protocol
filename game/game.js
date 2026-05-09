@@ -1,8 +1,11 @@
 const gameCanvasElement = document.getElementById('gameCanvas');
 const gameCanvas = gameCanvasElement.getContext('2d');
 
+// increase canvas height by 50px for UI bar
 gameCanvasElement.width = 1120;
-gameCanvasElement.height = 640;
+gameCanvasElement.height = 690;
+
+const UI_HEIGHT = 50;
 
 const towers = [];
 let attackUnit = null;
@@ -15,6 +18,7 @@ let towersDestroyedCount = 0;
 // GOLD SYSTEM
 const addGold = (amount) => {
     playerGold += amount;
+    drawUI(); // only update UI when value changes
 };
 
 // INIT TOWERS
@@ -23,6 +27,18 @@ const initialiseTowers = () => {
     for (let location of towerLocations) {
         towers.push(new Tower(location));
     }
+};
+
+// DRAW UI (top bar)
+const drawUI = () => {
+    gameCanvas.fillStyle = "black";
+    gameCanvas.fillRect(0, 0, gameCanvasElement.width, UI_HEIGHT);
+
+    gameCanvas.fillStyle = "white";
+    gameCanvas.font = "20px Arial";
+    gameCanvas.fillText("Gold: " + playerGold, 20, 30);
+
+    gameCanvas.fillText("Siege Protocol", 450, 30);
 };
 
 // SHOW END SCREEN
@@ -42,7 +58,6 @@ const checkWinCondition = () => {
         addGold(100);
 
         cancelAnimationFrame(animationId);
-
         showEndScreen();
     }
 };
@@ -51,8 +66,8 @@ const checkWinCondition = () => {
 const animate = () => {
     animationId = requestAnimationFrame(animate);
 
-    // background redraw clears previous frame
-    gameCanvas.drawImage(backgroundImage, 0, 0);
+    // draw map BELOW UI area
+    gameCanvas.drawImage(backgroundImage, 0, UI_HEIGHT);
 
     const tower = towers[0];
 
@@ -102,10 +117,11 @@ const startGame = () => {
     towersDestroyedCount = 0;
     gameFinished = false;
 
-    const pathStart = { x: path[0].x, y: path[0].y };
+    const pathStart = { x: path[0].x, y: path[0].y + UI_HEIGHT };
 
     attackUnit = new Unit(pathStart);
 
+    drawUI(); // draw once at start
     animate();
 };
 
@@ -118,6 +134,6 @@ const nextWave = () => {
 const backgroundImage = new Image();
 backgroundImage.onload = () => {
     initialiseTowers();
-    gameCanvas.drawImage(backgroundImage, 0, 0);
+    drawUI(); // draw UI once when loaded
 };
 backgroundImage.src = "../assets/maps/calista-map.png";

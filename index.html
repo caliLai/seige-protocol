@@ -2,33 +2,18 @@
 <html>
 <head>
     <style>
-        @view-transition { navigation: auto; }
-
-        ::view-transition-old(root),
-        ::view-transition-new(root) {
-            animation-duration: 0.4s;
-            animation-timing-function: ease;
-        }
-
-        /* ✅ FIX: background is WHITE now */
+        /* ===== Base Layout ===== */
         body {
             margin: 0;
-            background: white;
-            animation: gameFadeIn 0.35s ease both;
             font-family: Arial;
         }
 
-        @keyframes gameFadeIn {
-            from { opacity: 0; }
-            to   { opacity: 1; }
-        }
-
-        /* ✅ Keep canvas centered but with spacing */
         canvas {
             display: block;
-            margin: 20px auto;
+            margin: 0 auto;
         }
 
+        /* ===== Screens ===== */
         #unitSelectionScreen {
             padding: 10px;
         }
@@ -46,6 +31,7 @@
             align-items: center;
         }
 
+        /* ===== UI Components ===== */
         .panel {
             background: white;
             padding: 40px;
@@ -60,12 +46,14 @@
             border: none;
             cursor: pointer;
         }
+
+        /* TODO: move styles into separate CSS file */
     </style>
 </head>
 
 <body>
 
-    <!-- Top UI -->
+    <!-- ===== Top UI + Unit Selection ===== -->
     <div id="unitSelectionScreen">
         <div style="display:flex; justify-content: space-between; align-items:center;">
             <div>
@@ -76,16 +64,17 @@
                 <button onclick="startGame()">start</button>
             </div>
 
+            <!-- Gold Display -->
             <div id="goldDisplay" style="font-weight:bold; font-size:18px;">
                 Gold: 0
             </div>
         </div>
     </div>
 
-    <!-- Game -->
+    <!-- ===== Game Canvas ===== -->
     <canvas id="gameCanvas"></canvas>
 
-    <!-- End Screen -->
+    <!-- ===== End Screen ===== -->
     <div id="endScreen">
         <div class="panel">
             <h1>Wave Complete!</h1>
@@ -96,13 +85,13 @@
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="../src/data/path.js"></script>
-    <script src="../src/data/towerLocations.js"></script>
-    <script src="../src/classes/Sprite.js"></script>
-    <script src="../src/classes/Unit.js"></script>
-    <script src="../src/classes/Tower.js"></script>
-    <script src="./game.js"></script>
+    <!-- ===== Scripts ===== -->
+    <script src="./src/data/path.js"></script>
+    <script src="./src/data/towerlocations.js"></script>
+    <script src="./src/classes/Sprite.js"></script>
+    <script src="./src/classes/Unit.js"></script>
+    <script src="./src/classes/Tower.js"></script>
+    <script src="./game/game.js"></script>
 
 </body>
 </html>

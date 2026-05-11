@@ -7,7 +7,13 @@ class Unit extends Sprite {
     pathIndex = 0;
 
     attackRadius = 100;
-    attackStrength = 0.5;
+    attackStrength = 8;
+    attackCooldownMs = 250; //how often a unit fires
+    lastAttackAt = 0;
+
+    projectileSpeed = 4;
+    projectileSize = 8;
+    projectiles = [];
 
     _target = null;
 
@@ -31,7 +37,52 @@ class Unit extends Sprite {
     attack() {
         if (!this.target) return;
 
-        this.target.takeDamage(this.attackStrength);
+        const now = performance.now();
+        if (now - this.lastAttackAt < this.attackCooldownMs) return;
+
+        this.lastAttackAt = now;
+
+        const from = {
+            x: this.centre.x - this.projectileSize / 2,
+            y: this.centre.y - this.projectileSize / 2,
+        };
+        const to = this.target.centre;
+        const angle = Math.atan2(to.y - this.centre.y, to.x - this.centre.x);
+
+        this.projectiles.push({
+            x: from.x,
+            y: from.y,
+            vx: Math.cos(angle) * this.projectileSpeed,
+            vy: Math.sin(angle) * this.projectileSpeed,
+            damage: this.attackStrength,
+            target: this.target,
+        });
+    }
+
+    updateProjectiles() {
+        this.projectiles = this.projectiles.filter((projectile) => {
+            projectile.x += projectile.vx;
+            projectile.y += projectile.vy;
+
+            gameCanvas.fillStyle = '#ff2b2b';
+            gameCanvas.fillRect(projectile.x, projectile.y, this.projectileSize, this.projectileSize);
+
+            const target = projectile.target;
+            if (!target || target.isDead) return false;
+
+            const projectileCenterX = projectile.x + this.projectileSize / 2;
+            const projectileCenterY = projectile.y + this.projectileSize / 2;
+            const dx = target.centre.x - projectileCenterX;
+            const dy = target.centre.y - projectileCenterY;
+            const distance = Math.hypot(dx, dy);
+
+            if (distance <= this.projectileSize + 4) {
+                target.takeDamage(projectile.damage);
+                return false;
+            }
+
+            return true;
+        });
     }
 
     calculateAndUpdatePathMovement() {
@@ -63,5 +114,7 @@ class Unit extends Sprite {
         } else {
             this.calculateAndUpdatePathMovement();
         }
+
+        this.updateProjectiles();
     }
 }

@@ -29,7 +29,7 @@ class Tower extends Sprite {
         const y = this.position.y - 10;
 
         // Background (missing HP)
-        gameCanvas.fillStyle = "red";
+        gameCanvas.fillStyle = "#3a3a3a";
         gameCanvas.fillRect(x, y, barWidth, barHeight);
 
         const healthPercent = this.health / this.maxHealth;
@@ -40,7 +40,7 @@ class Tower extends Sprite {
         } else if (healthPercent > 0.3) {
             gameCanvas.fillStyle = "yellow";
         } else {
-            gameCanvas.fillStyle = "red";
+            gameCanvas.fillStyle = "#ff3b30";
         }
 
         gameCanvas.fillRect(

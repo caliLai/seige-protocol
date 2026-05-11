@@ -12,6 +12,7 @@ let playerGold = 0;
 let animationId = null;
 let gameFinished = false;
 let towersDestroyedCount = 0;
+let mapLoaded = false;
 
 // GOLD SYSTEM → updates HTML instead of canvas
 const addGold = (amount) => {
@@ -56,6 +57,8 @@ const checkWinCondition = () => {
 const animate = () => {
     animationId = requestAnimationFrame(animate);
 
+    if (!mapLoaded) return;
+
     // ✅ normal rendering — no offset now
     gameCanvas.drawImage(backgroundImage, 0, 0);
 
@@ -96,6 +99,11 @@ const animate = () => {
 
 // START GAME (with switch preserved)
 const startGame = () => {
+    if (!mapLoaded) {
+        alert("Map is still loading. Try again in a moment.");
+        return;
+    }
+
     let selectedUnitType = document.querySelector('input[name="unitSelection"]:checked')?.value;
 
     if (!selectedUnitType) {
@@ -132,6 +140,11 @@ const nextWave = () => {
 // LOAD MAP
 const backgroundImage = new Image();
 backgroundImage.onload = () => {
+    mapLoaded = true;
     initialiseTowers();
+
+    // Draw the map and towers once on load so the scene is visible pre-start.
+    gameCanvas.drawImage(backgroundImage, 0, 0);
+    towers.forEach(tower => tower.updateFrame());
 };
 backgroundImage.src = "../assets/maps/calista-map.png";

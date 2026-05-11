@@ -14,7 +14,7 @@ class Knight extends Unit {
 
     moveSpeedPxPerSecond = 48;
 
-    attackRadius = 72;
+    attackRadius = 80;
     attackStrength = 18;
     attackCooldownMs = 1000 / 1.1;
 

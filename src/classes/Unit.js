@@ -5,6 +5,7 @@ class Unit extends Sprite {
     width = 50;
     height = 50;
     pathIndex = 0;
+    moveSpeedPxPerSecond = 60;
 
     attackRadius = 100;
     attackStrength = 8;
@@ -102,8 +103,9 @@ class Unit extends Sprite {
 
         const angle = Math.atan2(dy, dx);
 
-        this.position.x += Math.cos(angle);
-        this.position.y += Math.sin(angle);
+        const frameStep = this.moveSpeedPxPerSecond / 60;
+        this.position.x += Math.cos(angle) * frameStep;
+        this.position.y += Math.sin(angle) * frameStep;
     }
 
     updateFrame() {

@@ -71,11 +71,6 @@ const animate = () => {
 
         if (tower.health > 0 && distance <= attackUnit.attackRadius) {
             attackUnit.target = tower;
-
-            gameCanvas.beginPath();
-            gameCanvas.moveTo(attackUnit.centre.x, attackUnit.centre.y);
-            gameCanvas.lineTo(tower.centre.x, tower.centre.y);
-            gameCanvas.stroke();
         } else {
             if (tower.health <= 0) {
                 towers.shift();
@@ -122,6 +117,12 @@ const startGame = () => {
 
     // todo: create a factory somewhere else?
     switch (selectedUnitType) {
+        case "archer":
+            attackUnit = new Archer(pathStart);
+            break;
+        case "knight":
+            attackUnit = new Knight(pathStart);
+            break;
         case "unit":
             attackUnit = new Unit(pathStart);
             break;

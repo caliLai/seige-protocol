@@ -302,7 +302,6 @@
 
 /* ── PER-BUTTON FLASH COLORS (active when hovered or selected) ── */
 #newGameBtn:hover,      #newGameBtn.selected      { animation: flashWhite  0.65s ease-in-out infinite alternate; }
-#continueBtn:hover,     #continueBtn.selected     { animation: flashCyan   0.65s ease-in-out infinite alternate; }
 #rosterBtn:hover,       #rosterBtn.selected       { animation: flashGreen  0.65s ease-in-out infinite alternate; }
 #achievementsBtn:hover, #achievementsBtn.selected { animation: flashPurple 0.65s ease-in-out infinite alternate; }
 #settingsBtn:hover,     #settingsBtn.selected     { animation: flashBlue   0.65s ease-in-out infinite alternate; }
@@ -350,6 +349,151 @@
 }
 .user-bar .user-name { color: #f5c518; }
 
+/* Clickable username + pencil edit affordance */
+.user-name-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  margin: 0;
+  cursor: pointer;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  letter-spacing: 0.15em;
+  color: inherit;
+  transition: text-shadow 0.15s ease, color 0.15s ease;
+}
+.user-name-btn:hover .user-name {
+  color: #fff7aa;
+  text-shadow: 0 0 6px rgba(245, 197, 24, 0.6);
+}
+.user-name-btn:hover .user-name-pencil {
+  color: #fff7aa;
+  opacity: 1;
+}
+.user-name-pencil {
+  color: #8c7040;
+  opacity: 0.65;
+  image-rendering: pixelated;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+/* ── TREASURY PLAQUE (hanging wooden sign, top-right) ── */
+.treasury-plaque {
+  position: absolute;
+  top: 38px;
+  right: 22px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 10px 14px;
+  font-family: 'Press Start 2P', monospace;
+
+  /* Mortared stone block face — chiseled rectangles with weathered shading */
+  background-color: #4a4035;
+  background-image:
+    repeating-linear-gradient(0deg,
+      transparent 0,
+      transparent 16px,
+      rgba(0, 0, 0, 0.55) 16px,
+      rgba(0, 0, 0, 0.55) 18px),
+    repeating-linear-gradient(90deg,
+      transparent 0,
+      transparent 28px,
+      rgba(0, 0, 0, 0.5) 28px,
+      rgba(0, 0, 0, 0.5) 30px),
+    radial-gradient(ellipse 24px 12px at 14px 8px,  #5a4f42 0%, transparent 100%),
+    radial-gradient(ellipse 20px 10px at 44px 22px, #3e352b 0%, transparent 100%),
+    radial-gradient(ellipse 22px 12px at 70px 12px, #564b3f 0%, transparent 100%),
+    radial-gradient(ellipse 24px 12px at 28px 30px, #423831 0%, transparent 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='1' height='1' x='0' y='0' fill='%23000' opacity='0.07'/%3E%3Crect width='1' height='1' x='2' y='2' fill='%23fff' opacity='0.04'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #5a4d3f 0%, #423831 55%, #2a241c 100%);
+
+  border: 3px solid #1a1510;
+  box-shadow:
+    4px 4px 0 #0a0604,
+    inset 0 0 0 1px rgba(245, 197, 24, 0.18),
+    inset 0 0 18px rgba(0, 0, 0, 0.55);
+  transform-origin: top center;
+  animation:
+    treasury-drop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.15s both,
+    treasury-sway 4.5s ease-in-out 0.9s infinite;
+}
+
+@keyframes treasury-drop {
+  0%   { transform: translateY(-40px) rotate(-2deg); opacity: 0; }
+  60%  { transform: translateY(4px)   rotate(1.5deg); opacity: 1; }
+  100% { transform: translateY(0)     rotate(0deg);   opacity: 1; }
+}
+@keyframes treasury-sway {
+  0%, 100% { transform: rotate(-0.6deg); }
+  50%      { transform: rotate(0.6deg); }
+}
+
+/* Iron chains anchoring the plaque to the frame above */
+.treasury-chain {
+  position: absolute;
+  top: -14px;
+  width: 4px;
+  height: 14px;
+  background:
+    repeating-linear-gradient(0deg,
+      #2a2a2a 0,
+      #2a2a2a 2px,
+      #4a4a4a 2px,
+      #4a4a4a 3px,
+      #1a1a1a 3px,
+      #1a1a1a 4px);
+  border-left: 1px solid #050505;
+  border-right: 1px solid #050505;
+}
+.treasury-chain-left  { left: 14px; }
+.treasury-chain-right { right: 14px; }
+
+/* Brass rivets in each corner */
+.treasury-rivet {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: radial-gradient(circle, #f5c518 0%, #a87f10 60%, #4a3500 100%);
+  border: 1px solid #1a0f08;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 200, 0.4);
+}
+.treasury-rivet-tl { top: 3px;    left: 3px; }
+.treasury-rivet-tr { top: 3px;    right: 3px; }
+.treasury-rivet-bl { bottom: 3px; left: 3px; }
+.treasury-rivet-br { bottom: 3px; right: 3px; }
+
+.treasury-coin {
+  image-rendering: pixelated;
+  flex-shrink: 0;
+  animation: coin-spin 3s ease-in-out infinite;
+  filter: drop-shadow(1px 1px 0 #1a0f08);
+}
+.treasury-label {
+  color: #f5c518;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-shadow: 1px 1px 0 #000, 0 0 6px rgba(245, 197, 24, 0.35);
+}
+.treasury-amount {
+  color: #ffd84a;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-shadow: 1px 1px 0 #000, 0 0 8px rgba(245, 197, 24, 0.45);
+  min-width: 24px;
+  text-align: left;
+}
+
+@keyframes coin-spin {
+  0%, 100% { transform: scaleX(1); }
+  50%      { transform: scaleX(0.2); }
+}
+
 /* ── VERSION TAG ── */
 .version-tag {
   position: absolute;
@@ -360,4 +504,187 @@
   font-size: 6px;
   letter-spacing: 0.2em;
   z-index: 30;
+}
+
+/* ════════════════════════════════════════
+   USERNAME PROMPT — stony grey overlay for new users
+   ════════════════════════════════════════ */
+.username-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.78);
+  animation: usernameFadeIn 0.45s ease both;
+}
+.username-overlay.hidden {
+  display: none;
+}
+
+@keyframes usernameFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.username-card {
+  position: relative;
+  width: 460px;
+  background-color: #6b6660;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 38px, #4a453f 38px, #4a453f 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 78px, #4a453f 78px, #4a453f 80px),
+    radial-gradient(ellipse 60px 30px at 40px 20px, #7c7770 0%, transparent 100%),
+    radial-gradient(ellipse 50px 25px at 120px 60px, #6e6962 0%, transparent 100%),
+    radial-gradient(ellipse 55px 28px at 200px 100px, #807a73 0%, transparent 100%),
+    radial-gradient(ellipse 60px 30px at 80px 140px, #716c65 0%, transparent 100%),
+    radial-gradient(ellipse 50px 25px at 300px 20px, #837d76 0%, transparent 100%),
+    radial-gradient(ellipse 70px 35px at 160px 180px, #5e5953 0%, transparent 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='1' height='1' x='0' y='0' fill='%23000' opacity='0.08'/%3E%3Crect width='1' height='1' x='2' y='2' fill='%23fff' opacity='0.04'/%3E%3C/svg%3E");
+  border: 4px solid #1a1510;
+  box-shadow:
+    6px 6px 0 #000,
+    inset 0 0 0 2px rgba(220, 220, 220, 0.10),
+    inset 0 0 60px rgba(0, 0, 0, 0.45);
+  animation: usernameSlideIn 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.1) both;
+}
+
+@keyframes usernameSlideIn {
+  from { transform: translateY(-20px) scale(0.92); opacity: 0; }
+  to   { transform: translateY(0)     scale(1);    opacity: 1; }
+}
+
+.username-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, transparent 20%, rgba(0,0,0,0.08) 20.5%, transparent 21%),
+    linear-gradient(45deg,  transparent 60%, rgba(0,0,0,0.06) 60.5%, transparent 61%),
+    linear-gradient(160deg, transparent 40%, rgba(0,0,0,0.05) 40.3%, transparent 40.6%);
+}
+
+.username-card-inner-border {
+  position: absolute;
+  inset: 8px;
+  border: 2px solid rgba(220, 220, 220, 0.18);
+  pointer-events: none;
+}
+
+.username-card-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #8a8580;
+  border: 2px solid #1a1510;
+  z-index: 2;
+}
+.username-card-corner.tl { top: -4px;    left: -4px; }
+.username-card-corner.tr { top: -4px;    right: -4px; }
+.username-card-corner.bl { bottom: -4px; left: -4px; }
+.username-card-corner.br { bottom: -4px; right: -4px; }
+
+.username-card-content {
+  position: relative;
+  padding: 28px 32px 30px;
+  z-index: 1;
+}
+
+.username-title {
+  text-align: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 14px;
+  color: #e6e2db;
+  letter-spacing: 0.14em;
+  text-shadow: 2px 2px 0 #000, 3px 3px 0 #2a2620;
+  margin-bottom: 8px;
+}
+
+.username-subtitle {
+  text-align: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #a8a39c;
+  letter-spacing: 0.25em;
+  margin-bottom: 4px;
+}
+
+.username-divider {
+  margin: 14px 0 16px;
+}
+
+.username-label {
+  display: block;
+  font-family: 'Press Start 2P', monospace;
+  color: #d4cfc7;
+  font-size: 7px;
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+}
+
+.username-input {
+  width: 100%;
+  background: #2c2a27;
+  color: #e6e2db;
+  border: 3px solid #4a4540;
+  padding: 10px 12px;
+  box-shadow: 3px 3px 0 #000;
+  display: block;
+  font-family: 'Press Start 2P', monospace !important;
+  font-size: 9px !important;
+  line-height: 2 !important;
+  letter-spacing: 0.08em;
+  caret-color: #d4cfc7;
+}
+.username-input::placeholder {
+  color: #6b6660;
+  opacity: 0.55;
+}
+.username-input:focus {
+  outline: none;
+  border-color: #a8a39c;
+  box-shadow: 0 0 0 3px rgba(220, 220, 220, 0.22) !important;
+}
+
+.username-error {
+  display: none;
+  font-family: 'Press Start 2P', monospace;
+  color: #e85d2a;
+  font-size: 6px;
+  margin-top: 8px;
+  line-height: 1.8;
+  letter-spacing: 0.06em;
+}
+
+.username-submit-btn {
+  width: 100%;
+  margin-top: 16px;
+  font-family: 'Press Start 2P', monospace;
+  color: #1a1510;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  padding: 13px;
+  background: linear-gradient(180deg, #c4bfb6 0%, #8a8580 100%);
+  border: 4px solid #1a1510;
+  box-shadow: 4px 4px 0 #2a2620;
+  text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+.username-submit-btn:hover {
+  background: linear-gradient(180deg, #d4cfc7 0%, #9c978f 100%) !important;
+  color: #000 !important;
+  box-shadow: 4px 4px 0 #2a2620, 0 0 18px 4px rgba(220, 220, 220, 0.35) !important;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.6), 1px 1px 0 rgba(0, 0, 0, 0.25) !important;
+}
+.username-submit-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.username-loading {
+  display: none;
+  animation: blink 1s step-end infinite;
 }

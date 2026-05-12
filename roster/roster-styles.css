@@ -1,0 +1,359 @@
+/* ════════════════════════════════════════
+   UNIT ROSTER — grid of unlockable warriors
+   ════════════════════════════════════════ */
+
+.roster-wrapper {
+  position: relative;
+  z-index: 10;
+  width: 920px;
+  max-height: 540px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: roster-fadein 0.45s ease both;
+}
+
+@keyframes roster-fadein {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.roster-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.roster-title-block {
+  text-align: center;
+}
+
+.roster-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 18px;
+  letter-spacing: 0.18em;
+  color: #f5c518;
+  text-shadow: 2px 2px 0 #000, 3px 3px 0 #5a4408;
+}
+
+.roster-subtitle {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #8c7040;
+  letter-spacing: 0.25em;
+  margin-top: 6px;
+}
+
+.roster-header-spacer { /* keeps title centered */ }
+
+/* ── BACK BUTTON ── */
+.roster-back-btn {
+  justify-self: start;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  padding: 10px 14px;
+  color: #d6b378;
+  background: linear-gradient(180deg, #3a2818 0%, #241509 100%);
+  border: 4px solid #1a0f08;
+  box-shadow: 4px 4px 0 #110805, inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+  transition: color 0.12s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.roster-back-btn:hover {
+  background: linear-gradient(180deg, #5a3a20 0%, #3a2410 100%);
+  color: #ffd84a;
+  box-shadow: 4px 4px 0 #110805, 0 0 14px 3px rgba(245, 197, 24, 0.3);
+  text-shadow: 0 0 6px rgba(245, 197, 24, 0.6), 1px 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* ── GRID ── */
+.roster-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  padding: 14px;
+  background: linear-gradient(180deg, #2a1d10 0%, #1a1208 100%);
+  border: 4px solid #1a0f08;
+  box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.14), 4px 4px 0 #0a0604;
+  overflow-y: auto;
+  max-height: 460px;
+}
+
+/* Scrollbar styling */
+.roster-grid::-webkit-scrollbar { width: 10px; }
+.roster-grid::-webkit-scrollbar-track {
+  background: #1a0f08;
+  border: 1px solid #000;
+}
+.roster-grid::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #7a600c, #4a3500);
+  border: 1px solid #000;
+}
+
+/* ── UNIT CARD ── */
+.unit-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  height: 132px;
+  background: linear-gradient(180deg, #3a3228 0%, #1f1a14 100%);
+  border: 3px solid #1a1510;
+  box-shadow: 3px 3px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+  font-family: 'Press Start 2P', monospace;
+  cursor: default;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.unit-sprite-stage {
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* The animated sprite element */
+.unit-sprite {
+  width: 100px;
+  height: 100px;
+  image-rendering: pixelated;
+  background-size: 600px 100px;
+  animation: idle-anim 0.8s steps(6) infinite;
+  transform-origin: center;
+}
+
+.unit-name {
+  font-size: 6px;
+  letter-spacing: 0.12em;
+  color: #f0d9a0;
+  text-align: center;
+  line-height: 1.4;
+  padding: 0 2px;
+  text-shadow: 1px 1px 0 #000;
+}
+
+/* ── UNLOCKED STATE ── */
+.unit-card.unlocked .unit-sprite { filter: drop-shadow(0 0 4px rgba(245, 197, 24, 0.25)); }
+
+.unit-card.unlocked::before {
+  content: '★';
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  font-size: 8px;
+  color: #f5c518;
+  text-shadow: 1px 1px 0 #000;
+}
+
+/* ── LOCKED STATE ── */
+.unit-card.locked {
+  cursor: pointer;
+}
+.unit-card.locked .unit-sprite {
+  filter: grayscale(1) brightness(0.45) contrast(0.9);
+  opacity: 0.7;
+}
+.unit-card.locked .unit-name {
+  color: #6e6760;
+}
+.unit-card.locked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(20, 18, 14, 0.3) 0%, rgba(20, 18, 14, 0.55) 100%);
+}
+.unit-card.locked:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.28);
+}
+.unit-card.locked:hover .unit-sprite {
+  filter: grayscale(0.5) brightness(0.75);
+  opacity: 0.9;
+}
+
+/* Lock badge with the cost */
+.unit-lock-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 5px;
+  background: rgba(20, 14, 8, 0.85);
+  border: 1px solid #1a0f08;
+  font-size: 6px;
+  letter-spacing: 0.1em;
+  color: #f5c518;
+  z-index: 2;
+  text-shadow: 1px 1px 0 #000;
+}
+.unit-lock-badge svg {
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+/* ── ALERT BANNER (overrides shared style for positioning) ── */
+.roster-alert {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 320px;
+  z-index: 50;
+  background: #7a600c;
+  color: #f0d9a0;
+}
+
+/* ── BODY OVERRIDE — center column for roster header ── */
+body { display: block; }
+.game-frame { margin: 0 auto; }
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hide the lobby banner — too busy behind the wide grid */
+.lobby-banner { display: none; }
+
+/* ════════════════════════════════════════
+   UNIT HOVER TOOLTIP
+   ════════════════════════════════════════ */
+.unit-tooltip {
+  position: fixed;
+  z-index: 9000;
+  width: 256px;
+  padding: 14px 16px 16px;
+  font-family: 'Press Start 2P', monospace;
+  pointer-events: none;
+  color: #f0d9a0;
+
+  /* Stone block face — same texture as the treasury plaque */
+  background-color: #4a4035;
+  background-image:
+    repeating-linear-gradient(0deg,
+      transparent 0,
+      transparent 16px,
+      rgba(0, 0, 0, 0.55) 16px,
+      rgba(0, 0, 0, 0.55) 18px),
+    repeating-linear-gradient(90deg,
+      transparent 0,
+      transparent 32px,
+      rgba(0, 0, 0, 0.5) 32px,
+      rgba(0, 0, 0, 0.5) 34px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='1' height='1' x='0' y='0' fill='%23000' opacity='0.07'/%3E%3Crect width='1' height='1' x='2' y='2' fill='%23fff' opacity='0.04'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #5a4d3f 0%, #423831 55%, #2a241c 100%);
+
+  border: 3px solid #1a1510;
+  box-shadow:
+    4px 4px 0 #0a0604,
+    inset 0 0 0 1px rgba(245, 197, 24, 0.18),
+    inset 0 0 24px rgba(0, 0, 0, 0.55);
+  animation: tt-pop 0.12s ease both;
+}
+.unit-tooltip.hidden { display: none; }
+
+@keyframes tt-pop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.tt-corner {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #c49a12;
+  border: 2px solid #1a0f08;
+}
+.tt-corner-tl { top: -4px;    left: -4px; }
+.tt-corner-tr { top: -4px;    right: -4px; }
+.tt-corner-bl { bottom: -4px; left: -4px; }
+.tt-corner-br { bottom: -4px; right: -4px; }
+
+.tt-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.tt-attack-stage {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  background: linear-gradient(180deg, #1f1a14 0%, #0d0a07 100%);
+  border: 2px solid #1a0f08;
+  box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.18);
+  overflow: hidden;
+}
+
+/* The sprite is positioned at the visual center of the stage. roster.js
+   sets width / height / background / transform inline once it has measured
+   the actual sheet dimensions — translate(-50%,-50%) combined with the
+   default center transform-origin keeps every frame perfectly centered
+   while scale only changes the displayed size. */
+.tt-attack-sprite {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 4px rgba(245, 100, 30, 0.45));
+}
+
+.tt-name {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #f5c518;
+  line-height: 1.45;
+  text-shadow: 1px 1px 0 #000, 0 0 6px rgba(245, 197, 24, 0.25);
+  text-align: center;
+}
+
+.tt-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 8px 6px;
+  background: rgba(20, 14, 8, 0.55);
+  border: 2px solid #1a0f08;
+}
+
+.tt-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.tt-stat-label {
+  font-size: 6px;
+  letter-spacing: 0.2em;
+  color: #8c7040;
+}
+.tt-stat-val {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-shadow: 1px 1px 0 #000;
+}
+.tt-hp  { color: #6dff6a; }
+.tt-dmg { color: #ff8a4d; }
+.tt-spd { color: #6db8ff; }
+
+.tt-desc {
+  font-size: 6px;
+  line-height: 1.85;
+  letter-spacing: 0.06em;
+  color: #d4cfc7;
+  font-style: italic;
+}

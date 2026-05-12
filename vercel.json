@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/login/login.html", "destination": "/login/login.html" }
+    { "source": "/", "destination": "/login/login.html" }
   ],
   "cleanUrls": true
 }

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Siege Protocol — The Warroom</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/login/login-styles.css" />
+  <link rel="stylesheet" href="/start-screen/start-screen-styles.css" />
+</head>
+<body>
+
+  <!-- ═══ CASTLE DOOR LOADER ═══ -->
+  <div id="doorLoader" aria-hidden="true">
+    <div class="door door-left">
+      <div class="door-strap s-top"></div>
+      <div class="door-strap s-mid"></div>
+      <div class="door-strap s-bot"></div>
+      <div class="door-handle"></div>
+    </div>
+    <div class="door door-right">
+      <div class="door-strap s-top"></div>
+      <div class="door-strap s-mid"></div>
+      <div class="door-strap s-bot"></div>
+      <div class="door-handle"></div>
+    </div>
+    <div class="loader-text">▌ THE GATES OPEN ▐</div>
+  </div>
+
+  <div class="game-frame lobby-bg">
+    <div class="scanlines-overlay"></div>
+    <div class="lobby-banner" aria-hidden="true"></div>
+
+    <!-- ═══ TORCHES ═══ -->
+    <div class="torch torch-left" aria-hidden="true">
+      <div class="torch-glow"></div>
+      <div class="fire fire-left">
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div>
+        <div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div>
+        <div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div>
+        <div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div>
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:transparent"></div>
+      </div>
+      <div class="torch-pole"></div>
+      <svg class="torch-bracket" width="30" height="16" viewBox="0 0 30 16"><rect x="8" y="0" width="14" height="6" fill="#4a4035" stroke="#000" stroke-width="2"/><rect x="4" y="6" width="22" height="4" fill="#3a3228" stroke="#000" stroke-width="2"/></svg>
+    </div>
+    <div class="torch torch-right" aria-hidden="true">
+      <div class="torch-glow torch-glow-delayed"></div>
+      <div class="fire fire-right">
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:transparent"></div>
+        <div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#fff7aa"></div>
+        <div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#f5c518"></div>
+        <div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div><div class="fp" style="background:#e85d2a"></div>
+        <div class="fp" style="background:transparent"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:#c0392b"></div><div class="fp" style="background:transparent"></div>
+      </div>
+      <div class="torch-pole"></div>
+      <svg class="torch-bracket" width="30" height="16" viewBox="0 0 30 16"><rect x="8" y="0" width="14" height="6" fill="#4a4035" stroke="#000" stroke-width="2"/><rect x="4" y="6" width="22" height="4" fill="#3a3228" stroke="#000" stroke-width="2"/></svg>
+    </div>
+
+    <!-- ═══ STONE ARCH ═══ -->
+    <div class="stone-arch" aria-hidden="true">
+      <svg width="520" height="580" viewBox="0 0 520 580" fill="none">
+        <rect x="0" y="30" width="40" height="550" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="480" y="30" width="40" height="550" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="0" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="40" y="10" width="20" height="20" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="70" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="420" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="460" y="10" width="20" height="20" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
+        <rect x="490" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
+        <rect x="38" y="30" width="2" height="550" fill="#7a600c" opacity="0.5"/>
+        <rect x="480" y="30" width="2" height="550" fill="#7a600c" opacity="0.5"/>
+      </svg>
+    </div>
+
+    <!-- ═══ MENU CARD ═══ -->
+    <div class="menu-card-wrapper">
+      <div class="menu-card">
+        <div class="menu-card-inner-border"></div>
+        <div class="menu-card-corner tl"></div>
+        <div class="menu-card-corner tr"></div>
+        <div class="menu-card-corner bl"></div>
+        <div class="menu-card-corner br"></div>
+
+        <div class="menu-card-content">
+
+          <div class="title-block">
+            <div id="titleLine1" class="title-line"></div>
+            <div id="titleLine2" class="title-line"></div>
+            <div class="subtitle">— THE WARROOM —</div>
+          </div>
+
+          <div class="divider">
+            <div class="dash-line"></div>
+            <span class="divider-icon">⚔</span>
+            <div class="dash-line"></div>
+          </div>
+
+          <div class="user-bar">
+            HAILED AS: <span id="userName" class="user-name">…</span>
+          </div>
+
+          <div id="alertBanner" class="alert-banner" role="alert" aria-live="polite"></div>
+
+          <div class="menu-buttons">
+            <button id="newGameBtn" class="px-btn menu-btn selected">⚔ NEW CAMPAIGN</button>
+            <button id="continueBtn" class="px-btn menu-btn">CONTINUE QUEST</button>
+            <button id="rosterBtn" class="px-btn menu-btn">⚜ UNIT ROSTER</button>
+            <button id="achievementsBtn" class="px-btn menu-btn">★ HALL OF DEEDS</button>
+            <button id="settingsBtn" class="px-btn menu-btn">⚙ ROYAL DECREES</button>
+            <button id="creditsBtn" class="px-btn menu-btn">📜 SCRIBES &amp; SCROLLS</button>
+            <button id="logoutBtn" class="px-btn menu-btn menu-btn-danger">⏻ ABANDON KEEP</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="floor">
+      <div class="floor-line floor-line-top"></div>
+      <div class="floor-line floor-line-bottom"></div>
+    </div>
+    <div class="frame-edge frame-edge-top"></div>
+    <div class="frame-edge frame-edge-left"></div>
+    <div class="frame-edge frame-edge-right"></div>
+
+    <div class="version-tag">v0.1.0 ALPHA</div>
+  </div>
+
+  <script src="/login/title-shimmer.js"></script>
+  <script type="module" src="/start-screen/start-screen.js"></script>
+</body>
+</html>

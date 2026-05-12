@@ -232,7 +232,7 @@ document.getElementById('newGameBtn').addEventListener('click', () => {
 });
 
 document.getElementById('rosterBtn').addEventListener('click', () => {
-  showAlert('⚜ THY ROSTER SHALL BE REVEALED IN A FUTURE PATCH.');
+  smoothNavigate('/roster/roster.html');
 });
 
 document.getElementById('achievementsBtn').addEventListener('click', () => {

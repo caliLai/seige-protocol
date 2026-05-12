@@ -31,6 +31,37 @@
     <div class="scanlines-overlay"></div>
     <div class="lobby-banner" aria-hidden="true"></div>
 
+    <!-- ═══ TREASURY PLAQUE (hangs in the top-right corner) ═══ -->
+    <div class="treasury-plaque" aria-label="Treasury">
+      <div class="treasury-chain treasury-chain-left" aria-hidden="true"></div>
+      <div class="treasury-chain treasury-chain-right" aria-hidden="true"></div>
+      <div class="treasury-rivet treasury-rivet-tl" aria-hidden="true"></div>
+      <div class="treasury-rivet treasury-rivet-tr" aria-hidden="true"></div>
+      <div class="treasury-rivet treasury-rivet-bl" aria-hidden="true"></div>
+      <div class="treasury-rivet treasury-rivet-br" aria-hidden="true"></div>
+      <svg class="treasury-coin" width="18" height="18" viewBox="0 0 14 14" aria-hidden="true">
+        <rect x="3" y="1"  width="8" height="1" fill="#7a600c"/>
+        <rect x="2" y="2"  width="1" height="1" fill="#7a600c"/>
+        <rect x="3" y="2"  width="8" height="1" fill="#f5c518"/>
+        <rect x="11" y="2" width="1" height="1" fill="#7a600c"/>
+        <rect x="1" y="3"  width="1" height="8" fill="#7a600c"/>
+        <rect x="2" y="3"  width="10" height="8" fill="#f5c518"/>
+        <rect x="12" y="3" width="1" height="8" fill="#7a600c"/>
+        <rect x="2" y="11" width="1" height="1" fill="#7a600c"/>
+        <rect x="3" y="11" width="8" height="1" fill="#f5c518"/>
+        <rect x="11" y="11" width="1" height="1" fill="#7a600c"/>
+        <rect x="3" y="12" width="8" height="1" fill="#7a600c"/>
+        <rect x="5" y="4"  width="1" height="6" fill="#ffd84a"/>
+        <rect x="6" y="3"  width="2" height="1" fill="#ffd84a"/>
+        <rect x="6" y="10" width="2" height="1" fill="#ffd84a"/>
+        <rect x="8" y="4"  width="1" height="6" fill="#c49a12"/>
+        <rect x="4" y="5"  width="1" height="4" fill="#c49a12"/>
+        <rect x="9" y="5"  width="1" height="4" fill="#c49a12"/>
+      </svg>
+      <span class="treasury-label">GOLD</span>
+      <span id="treasuryAmount" class="treasury-amount">0</span>
+    </div>
+
     <!-- ═══ TORCHES ═══ -->
     <div class="torch torch-left" aria-hidden="true">
       <div class="torch-glow"></div>
@@ -57,22 +88,6 @@
       <svg class="torch-bracket" width="30" height="16" viewBox="0 0 30 16"><rect x="8" y="0" width="14" height="6" fill="#4a4035" stroke="#000" stroke-width="2"/><rect x="4" y="6" width="22" height="4" fill="#3a3228" stroke="#000" stroke-width="2"/></svg>
     </div>
 
-    <!-- ═══ STONE ARCH ═══ -->
-    <div class="stone-arch" aria-hidden="true">
-      <svg width="520" height="580" viewBox="0 0 520 580" fill="none">
-        <rect x="0" y="30" width="40" height="550" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
-        <rect x="480" y="30" width="40" height="550" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
-        <rect x="0" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
-        <rect x="40" y="10" width="20" height="20" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
-        <rect x="70" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
-        <rect x="420" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
-        <rect x="460" y="10" width="20" height="20" fill="#2e2820" stroke="#1a1510" stroke-width="2"/>
-        <rect x="490" y="0" width="30" height="30" fill="#3a3228" stroke="#1a1510" stroke-width="2"/>
-        <rect x="38" y="30" width="2" height="550" fill="#7a600c" opacity="0.5"/>
-        <rect x="480" y="30" width="2" height="550" fill="#7a600c" opacity="0.5"/>
-      </svg>
-    </div>
-
     <!-- ═══ MENU CARD ═══ -->
     <div class="menu-card-wrapper">
       <div class="menu-card">
@@ -97,14 +112,26 @@
           </div>
 
           <div class="user-bar">
-            HAILED AS: <span id="userName" class="user-name">…</span>
+            HAILED AS:
+            <button type="button" id="userNameBtn" class="user-name-btn" title="Change name">
+              <span id="userName" class="user-name">…</span>
+              <svg class="user-name-pencil" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                <rect x="6" y="1" width="2" height="2" fill="currentColor"/>
+                <rect x="5" y="2" width="2" height="2" fill="currentColor"/>
+                <rect x="4" y="3" width="2" height="2" fill="currentColor"/>
+                <rect x="3" y="4" width="2" height="2" fill="currentColor"/>
+                <rect x="2" y="5" width="2" height="2" fill="currentColor"/>
+                <rect x="1" y="6" width="2" height="2" fill="currentColor"/>
+                <rect x="1" y="8" width="2" height="1" fill="currentColor"/>
+              </svg>
+            </button>
           </div>
+
 
           <div id="alertBanner" class="alert-banner" role="alert" aria-live="polite"></div>
 
           <div class="menu-buttons">
-            <button id="newGameBtn" class="px-btn menu-btn selected">⚔ NEW CAMPAIGN</button>
-            <button id="continueBtn" class="px-btn menu-btn">CONTINUE QUEST</button>
+            <button id="newGameBtn" class="px-btn menu-btn selected">⚔ PLAY NOW</button>
             <button id="rosterBtn" class="px-btn menu-btn">⚜ UNIT ROSTER</button>
             <button id="achievementsBtn" class="px-btn menu-btn">★ HALL OF DEEDS</button>
             <button id="settingsBtn" class="px-btn menu-btn">⚙ ROYAL DECREES</button>
@@ -125,6 +152,38 @@
     <div class="frame-edge frame-edge-right"></div>
 
     <div class="version-tag">v0.1.0 ALPHA</div>
+  </div>
+
+  <!-- ═══ USERNAME PROMPT (new users only) ═══ -->
+  <div id="usernamePrompt" class="username-overlay hidden" aria-hidden="true">
+    <div class="username-card">
+      <div class="username-card-inner-border"></div>
+      <div class="username-card-corner tl"></div>
+      <div class="username-card-corner tr"></div>
+      <div class="username-card-corner bl"></div>
+      <div class="username-card-corner br"></div>
+
+      <div class="username-card-content">
+        <div class="username-title">⚜ DECLARE THY NAME ⚜</div>
+        <div class="username-subtitle">— A NAME UNHEARD IN THESE LANDS —</div>
+
+        <div class="divider username-divider">
+          <div class="dash-line"></div>
+          <span class="divider-icon">⚔</span>
+          <div class="dash-line"></div>
+        </div>
+
+        <form id="usernameForm" novalidate>
+          <label for="usernameInput" class="username-label">▶ ENGRAVE THY TITLE</label>
+          <input type="text" id="usernameInput" class="username-input" placeholder="SIR_LANCELOT" maxlength="20" autocomplete="off" spellcheck="false" />
+          <p id="usernameError" class="username-error"></p>
+          <button type="submit" id="usernameSubmit" class="px-btn username-submit-btn">
+            <span id="usernameSubmitText">⚜ CLAIM THIS NAME ⚜</span>
+            <span id="usernameSubmitLoading" class="username-loading">█ SCRIBING… █</span>
+          </button>
+        </form>
+      </div>
+    </div>
   </div>
 
   <script src="/login/title-shimmer.js"></script>

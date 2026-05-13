@@ -234,7 +234,7 @@ document.addEventListener('keydown', (e) => {
 
 // ── ACTION HANDLERS ──
 document.getElementById('newGameBtn').addEventListener('click', () => {
-  smoothNavigate('/game/game.html');
+  smoothNavigate('/lobby/lobby.html');
 });
 
 document.getElementById('rosterBtn').addEventListener('click', () => {

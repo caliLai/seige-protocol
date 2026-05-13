@@ -108,12 +108,20 @@ class Unit extends Sprite {
         this.position.y += Math.sin(angle) * frameStep;
     }
 
+    resetAttackState() {
+        if (typeof this.isAttacking === 'boolean') this.isAttacking = false;
+        if (typeof this.hasReleasedProjectile === 'boolean') this.hasReleasedProjectile = false;
+        if (typeof this.hasAppliedHit === 'boolean') this.hasAppliedHit = false;
+        if (typeof this.currentAttackFrame === 'number') this.currentAttackFrame = 0;
+    }
+
     updateFrame() {
         this.render();
 
         if (this.target) {
             this.attack();
         } else {
+            this.resetAttackState();
             this.calculateAndUpdatePathMovement();
         }
 

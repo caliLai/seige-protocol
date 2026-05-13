@@ -81,10 +81,17 @@ const setTreasury = (points) => {
   treasuryAmount.textContent = (points ?? 0).toLocaleString();
 };
 
+// Matches start-screen.js: use the browser's cross-document View Transitions
+// (Chrome 126+, Safari 18+) for the same smooth handoff used when entering
+// the roster. Fall back to a body fade on older browsers.
 const smoothNavigate = (url) => {
+  if ('startViewTransition' in document) {
+    setTimeout(() => { window.location.href = url; }, 200);
+    return;
+  }
   document.body.style.transition = 'opacity 0.35s ease';
   document.body.style.opacity = '0';
-  setTimeout(() => { window.location.href = url; }, 360);
+  setTimeout(() => { window.location.href = url; }, 400);
 };
 
 // ── AUTH GATE ──
@@ -329,9 +336,15 @@ const attemptUnlock = async (unit, card) => {
 };
 
 // ── BACK NAVIGATION ──
-backBtn.addEventListener('click', () => smoothNavigate('/start-screen/start-screen.html'));
+// Tell the start-screen to skip its castle-door intro on return — the doors
+// are a "first arrival" flourish, not a reusable transition.
+const returnToStartScreen = () => {
+  sessionStorage.setItem('skipDoorAnimation', '1');
+  smoothNavigate('/start-screen/start-screen.html');
+};
+backBtn.addEventListener('click', returnToStartScreen);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') smoothNavigate('/start-screen/start-screen.html');
+  if (e.key === 'Escape') returnToStartScreen();
 });
 
 // ── INIT ──

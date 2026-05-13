@@ -133,6 +133,10 @@
 }
 #doorLoader.gone { opacity: 0; pointer-events: none; }
 
+/* Skip the entire castle-door intro when navigating back from another
+   screen (the inline script in <head> sets this class before paint). */
+.no-door-animation #doorLoader { display: none !important; }
+
 .door {
   position: absolute;
   top: 0;

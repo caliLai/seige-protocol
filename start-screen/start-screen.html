@@ -7,6 +7,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/login/login-styles.css" />
   <link rel="stylesheet" href="/start-screen/start-screen-styles.css" />
+  <script>
+    // Runs synchronously before <body> is parsed so the doors never paint
+    // when navigating back from another in-app screen (e.g. unit roster).
+    if (sessionStorage.getItem('skipDoorAnimation') === '1') {
+      sessionStorage.removeItem('skipDoorAnimation');
+      document.documentElement.classList.add('no-door-animation');
+    }
+  </script>
 </head>
 <body>
 

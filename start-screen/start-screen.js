@@ -25,11 +25,17 @@ let currentUsername = null;
 
 const DOOR_ANIMATION_MS = 2000;
 const USERNAME_RE = /^[A-Za-z0-9_-]{3,20}$/;
+// Inline head script flags returns from in-app screens so we skip the doors.
+const doorsSkipped = document.documentElement.classList.contains('no-door-animation');
 
 // ── CASTLE DOOR LOADER ──
 // Doors live in HTML and animate themselves open via CSS. Hide the loader
-// element after the swing finishes so the menu becomes interactive.
-setTimeout(() => { doorLoader.classList.add('gone'); }, DOOR_ANIMATION_MS);
+// element after the swing finishes so the menu becomes interactive. When
+// returning from another screen the loader is already hidden via CSS — no
+// timer needed.
+if (!doorsSkipped) {
+  setTimeout(() => { doorLoader.classList.add('gone'); }, DOOR_ANIMATION_MS);
+}
 
 // ── AUTH GATE + USERNAME ──
 // Redirect to login if not signed in. Supabase auto-detects OAuth tokens
@@ -161,7 +167,7 @@ if (profile?.username) {
 } else {
   setHailedAs('…');
   setTreasury(0);
-  openUsernamePrompt({ mode: 'create', delayMs: DOOR_ANIMATION_MS + 200 });
+  openUsernamePrompt({ mode: 'create', delayMs: doorsSkipped ? 200 : DOOR_ANIMATION_MS + 200 });
 }
 
 // Listen for sign-out from any tab.

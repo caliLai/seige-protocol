@@ -73,17 +73,19 @@ const loadProfile = async () => {
 };
 
 // ── SIEGES FETCH ──
+// Routed through an RPC (list_sieges) instead of a direct table select to
+// sidestep a PostgREST table-cache miss that some projects hit. The RPC
+// returns the full sieges row set.
 const loadSieges = async () => {
-  const { data, error } = await supabase
-    .from('sieges')
-    .select('id, host_id, host_username, name, map, map_src, difficulty, created_at')
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('list_sieges');
   if (error) {
     console.error('sieges load failed', error);
     sieges = [];
     return;
   }
-  sieges = data || [];
+  sieges = (data || []).sort((a, b) =>
+    new Date(b.created_at) - new Date(a.created_at)
+  );
 };
 
 // ── ROOM LIST ──

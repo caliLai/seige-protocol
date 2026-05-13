@@ -74,6 +74,10 @@ const loadProfile = async () => {
   treasuryAmount.textContent = (currentProfile.points ?? 0).toLocaleString();
 };
 
+// Disable Forge until we know the user's username — host_username is NOT
+// NULL on the table, so we need it before we can insert.
+forgeBtn.disabled = true;
+
 // ── MAP SELECTION ──
 mapOptionsEl.querySelectorAll('.map-option').forEach((opt) => {
   opt.addEventListener('click', () => {
@@ -102,6 +106,31 @@ const defaultName = () => {
   return `${banner}'S ${flavor}`;
 };
 
+// Routed through an RPC (create_siege) — bypasses PostgREST's table-cache
+// path, which on some projects is wedged for freshly-created tables.
+const insertSiegeWithRetry = async (payload, attempts = 4) => {
+  let lastError = null;
+  for (let i = 0; i < attempts; i++) {
+    const { data, error } = await supabase.rpc('create_siege', {
+      p_name:       payload.name,
+      p_map:        payload.map,
+      p_map_src:    payload.map_src,
+      p_difficulty: payload.difficulty,
+    });
+    if (!error) {
+      // RPC returns a set; pull the first row.
+      const row = Array.isArray(data) ? data[0] : data;
+      return { data: row || null, error: null };
+    }
+    lastError = error;
+    const msg = (error.message || '').toLowerCase();
+    const cacheMiss = msg.includes('schema cache') || msg.includes('could not find');
+    if (!cacheMiss) break;
+    await new Promise(r => setTimeout(r, 1200));
+  }
+  return { data: null, error: lastError };
+};
+
 forgeBtn.addEventListener('click', async () => {
   clearError();
   let name = siegeNameInput.value.trim();
@@ -112,22 +141,33 @@ forgeBtn.addEventListener('click', async () => {
   }
 
   setLoading(true);
-  const { data, error } = await supabase
-    .from('sieges')
-    .insert({
-      host_id:       user.id,
-      host_username: currentProfile?.username || 'KNIGHT',
-      name,
-      map:           selectedMap.name,
-      map_src:       selectedMap.src,
-      difficulty:    selectedDifficulty,
-    })
-    .select('id, difficulty')
-    .maybeSingle();
+  const { data, error } = await insertSiegeWithRetry({
+    host_id:       user.id,
+    host_username: currentProfile?.username || 'KNIGHT',
+    name,
+    map:           selectedMap.name,
+    map_src:       selectedMap.src,
+    difficulty:    selectedDifficulty,
+  });
 
   if (error) {
     console.error('siege create failed', error);
-    showError('✗ THE FORGE FAILED. TRY AGAIN.');
+    const raw = error.message || JSON.stringify(error);
+    const msg = raw.toLowerCase();
+    let hint = '';
+    if (msg.includes('could not find the function')) {
+      hint = ' — RUN THE RPC SQL OR RESTART PROJECT';
+    } else if (msg.includes('schema cache')) {
+      hint = ' — RESTART PROJECT (SETTINGS → GENERAL)';
+    } else if (msg.includes('row-level security') || msg.includes('rls')) {
+      hint = ' — CHECK RLS POLICIES';
+    }
+    showError(`✗ ${raw.toUpperCase().slice(0, 120)}${hint}`);
+    setLoading(false);
+    return;
+  }
+  if (!data) {
+    showError('✗ THE FORGE RETURNED NO RECORD. CHECK SUPABASE LOGS.');
     setLoading(false);
     return;
   }
@@ -147,4 +187,5 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── INIT ──
-loadProfile();
+await loadProfile();
+forgeBtn.disabled = false;

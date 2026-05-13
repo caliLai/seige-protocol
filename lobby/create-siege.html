@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Siege Protocol — Forge a Siege</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/login/login-styles.css" />
+  <link rel="stylesheet" href="/start-screen/start-screen-styles.css" />
+  <link rel="stylesheet" href="/lobby/lobby-styles.css" />
+</head>
+<body>
+
+  <div class="game-frame stone-bg lobby-frame">
+    <div class="scanlines-overlay"></div>
+
+    <!-- ═══ TREASURY PLAQUE ═══ -->
+    <div class="treasury-plaque" aria-label="Treasury">
+      <div class="treasury-chain treasury-chain-left" aria-hidden="true"></div>
+      <div class="treasury-chain treasury-chain-right" aria-hidden="true"></div>
+      <div class="treasury-rivet treasury-rivet-tl" aria-hidden="true"></div>
+      <div class="treasury-rivet treasury-rivet-tr" aria-hidden="true"></div>
+      <div class="treasury-rivet treasury-rivet-bl" aria-hidden="true"></div>
+      <div class="treasury-rivet treasury-rivet-br" aria-hidden="true"></div>
+      <svg class="treasury-coin" width="18" height="18" viewBox="0 0 14 14" aria-hidden="true">
+        <rect x="3" y="1"  width="8" height="1" fill="#7a600c"/>
+        <rect x="3" y="2"  width="8" height="1" fill="#f5c518"/>
+        <rect x="2" y="3"  width="10" height="8" fill="#f5c518"/>
+        <rect x="3" y="11" width="8" height="1" fill="#f5c518"/>
+        <rect x="3" y="12" width="8" height="1" fill="#7a600c"/>
+      </svg>
+      <span class="treasury-label">GOLD</span>
+      <span id="treasuryAmount" class="treasury-amount">0</span>
+    </div>
+
+    <!-- ═══ HEADER ═══ -->
+    <div class="lobby-header">
+      <button id="backBtn" type="button" class="px-btn lobby-back-btn">◀ RETURN</button>
+      <div class="lobby-title-block">
+        <div class="lobby-title">✦ FORGE A SIEGE ✦</div>
+        <div class="lobby-subtitle">— LAY THE BATTLEFIELD —</div>
+      </div>
+      <div class="lobby-header-spacer"></div>
+    </div>
+
+    <!-- ═══ BODY ═══ -->
+    <section class="create-pane">
+
+      <!-- MAP CHOICE -->
+      <div class="create-section">
+        <div class="create-label">▶ CHOOSE MAP</div>
+        <div id="mapOptions" class="map-options">
+          <div class="map-option is-selected" data-map-name="CALISTA HIGHLANDS" data-map-src="/assets/maps/calista-map.png">
+            <div class="map-option-frame">
+              <img src="/assets/maps/calista-map.png" alt="Calista Highlands" />
+              <div class="map-overlay map-overlay-tl"></div>
+              <div class="map-overlay map-overlay-tr"></div>
+              <div class="map-overlay map-overlay-bl"></div>
+              <div class="map-overlay map-overlay-br"></div>
+            </div>
+            <div class="map-option-name">CALISTA HIGHLANDS</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DIFFICULTY -->
+      <div class="create-section">
+        <div class="create-label">▶ CHOOSE DIFFICULTY</div>
+        <div id="diffOptions" class="diff-options">
+          <button type="button" class="diff-option is-selected" data-diff="recruit">
+            <span class="diff-option-name">RECRUIT</span>
+            <span class="diff-option-blurb">A FAIR FIGHT FOR FRESH SQUIRES</span>
+          </button>
+          <button type="button" class="diff-option" data-diff="veteran">
+            <span class="diff-option-name">VETERAN</span>
+            <span class="diff-option-blurb">SHARPER STEEL, STERNER FOES</span>
+          </button>
+          <button type="button" class="diff-option" data-diff="elite">
+            <span class="diff-option-name">ELITE</span>
+            <span class="diff-option-blurb">ONLY THE BOLDEST DARE</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- NAME -->
+      <div class="create-section">
+        <div class="create-label">▶ SIEGE NAME</div>
+        <input type="text" id="siegeNameInput" class="create-input" maxlength="40" placeholder="THE BLACK GATE..." autocomplete="off" spellcheck="false" />
+        <div class="create-hint">Leave blank and a name will be forged from thy banner.</div>
+      </div>
+
+      <p id="createError" class="create-error"></p>
+
+      <!-- ACTION BAR -->
+      <div class="create-bar">
+        <button type="button" id="forgeBtn" class="px-btn join-btn create-forge-btn">
+          <span id="forgeText">⚔ FORGE SIEGE ⚔</span>
+          <span id="forgeLoading" class="btn-loading">█ FORGING… █</span>
+        </button>
+      </div>
+
+    </section>
+
+    <!-- Floating alert -->
+    <div id="alertBanner" class="alert-banner lobby-alert" role="alert" aria-live="polite"></div>
+
+    <!-- Frame edges -->
+    <div class="frame-edge frame-edge-top"></div>
+    <div class="frame-edge frame-edge-left"></div>
+    <div class="frame-edge frame-edge-right"></div>
+  </div>
+
+  <script type="module" src="/lobby/create-siege.js"></script>
+</body>
+</html>

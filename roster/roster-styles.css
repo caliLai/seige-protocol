@@ -225,6 +225,24 @@ body {
 /* Hide the lobby banner — too busy behind the wide grid */
 .lobby-banner { display: none; }
 
+/* ── LOADING HINT ── */
+.roster-loading {
+  grid-column: 1 / -1;
+  padding: 90px 0;
+  text-align: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: #f5c518;
+  text-shadow: 2px 2px 0 #000, 0 0 8px rgba(245, 197, 24, 0.35);
+  animation: roster-loading-pulse 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes roster-loading-pulse {
+  from { opacity: 0.45; }
+  to   { opacity: 1; }
+}
+
 /* ════════════════════════════════════════
    UNIT HOVER TOOLTIP
    ════════════════════════════════════════ */

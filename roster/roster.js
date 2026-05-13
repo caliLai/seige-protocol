@@ -335,5 +335,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── INIT ──
-await loadProfile();
-renderGrid();
+// Show a themed loading hint inside the grid panel while the profile is
+// fetched — avoids both the empty-bar gap and a "purchased units flash as
+// locked" flicker.
+grid.innerHTML = '<div class="roster-loading">⚜ MUSTERING THE WARRIORS… ⚜</div>';
+loadProfile().then(renderGrid);

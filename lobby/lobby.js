@@ -18,6 +18,7 @@ const playerTowers = document.getElementById('playerTowers');
 const occupancyText = document.getElementById('occupancyText');
 const joinBtn = document.getElementById('joinBtn');
 const disbandBtn = document.getElementById('disbandBtn');
+const leaveBtn = document.getElementById('leaveBtn');
 const startBtn = document.getElementById('startBtn');
 const disbandOverlay = document.getElementById('disbandOverlay');
 const disbandTargetName = document.getElementById('disbandTargetName');
@@ -98,6 +99,13 @@ const loadSieges = async () => {
   sieges = data || [];
 };
 
+// Returns the siege the current user is engaged with, host OR ally, or
+// null. "One lobby at a time" gating reads from this — JOIN is disabled
+// for bystanders who already have an active siege elsewhere.
+const findOwnEngagement = () => sieges.find(
+  s => s.host_id === user.id || s.ally_id === user.id
+) || null;
+
 // ── ROOM LIST ──
 const renderRoomList = () => {
   const filtered = sieges.filter(s => s.difficulty === currentDiff);
@@ -112,9 +120,11 @@ const renderRoomList = () => {
     return;
   }
   for (const siege of filtered) {
-    const occupancy = 1; // host counts as 1; ally-join TBD
+    const occupancy = siege.ally_id ? 2 : 1;
+    const isFull = occupancy >= 2;
     const card = document.createElement('div');
-    card.className = `room-card${selectedSiege?.id === siege.id ? ' is-selected' : ''}`;
+    card.className =
+      `room-card${selectedSiege?.id === siege.id ? ' is-selected' : ''}${isFull ? ' is-full' : ''}`;
     card.setAttribute('role', 'listitem');
     card.dataset.siegeId = siege.id;
     card.innerHTML = `
@@ -137,9 +147,15 @@ const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => (
 ));
 
 // ── PREVIEW PANE ──
+// Three viewer roles for any selected siege:
+//   • HOST    — you forged it. You get DISBAND. START lights up once an ally
+//               has joined.
+//   • ALLY    — you joined someone else's siege. You get LEAVE. START stays
+//               disabled because only the host fires the cannon.
+//   • BYSTANDER — neither. You get JOIN, gated on (slot empty AND you have
+//               no other engagement).
 const renderPreview = () => {
   if (!selectedSiege) {
-    // No siege selected → keep map dimmed and disable join.
     mapImage.style.opacity = '0.25';
     mapName.textContent = '—';
     roomDifficulty.className = 'diff-badge diff-recruit';
@@ -149,6 +165,7 @@ const renderPreview = () => {
     joinBtn.textContent = '⚔ JOIN SIEGE ⚔';
     joinBtn.hidden = false;
     disbandBtn.hidden = true;
+    leaveBtn.hidden = true;
     startBtn.hidden = true;
     setAllyEmpty();
     return;
@@ -164,34 +181,61 @@ const renderPreview = () => {
   roomDifficulty.className = `diff-badge diff-${s.difficulty}`;
   roomDifficulty.textContent = s.difficulty.toUpperCase();
 
-  occupancyText.textContent = '1 / 2 KNIGHTS';
+  const occupancy = s.ally_id ? 2 : 1;
+  occupancyText.textContent = `${occupancy} / 2 KNIGHTS`;
 
-  // The siege host fills the "ally" slot for everyone else; for your own
-  // siege we show YOU as host on the left and the ally slot stays empty.
-  // Hosts get a DISBAND button in place of JOIN — RLS policy
-  // `sieges_delete_own` already restricts deletes to the host.
-  const isYourSiege = s.host_id === user.id;
-  if (isYourSiege) {
-    setAllyEmpty();
-    joinBtn.hidden = true;
+  const isHost  = s.host_id === user.id;
+  const isAlly  = s.ally_id === user.id;
+  const slotFull = Boolean(s.ally_id);
+  const ownEngagement = findOwnEngagement();
+  const userBusyElsewhere = ownEngagement && ownEngagement.id !== s.id;
+
+  // Reset all action buttons; specific branch below shows the right pair.
+  joinBtn.hidden    = true;
+  disbandBtn.hidden = true;
+  leaveBtn.hidden   = true;
+  startBtn.hidden   = false;
+
+  if (isHost) {
+    // YOUR siege. Right slot shows the ally (or "awaiting ally").
+    if (slotFull) setAllyJoined(s.ally_username);
+    else          setAllyEmpty();
     disbandBtn.hidden = false;
     disbandBtn.disabled = false;
+  } else if (isAlly) {
+    // You've joined someone else's siege. Right slot shows the host.
+    setAllyJoined(s.host_username, 'HOST');
+    leaveBtn.hidden = false;
+    leaveBtn.disabled = false;
   } else {
-    setAllyHost(s.host_username);
+    // Bystander browsing. Right slot shows the host for context.
+    setAllyJoined(s.host_username, 'HOST');
     joinBtn.hidden = false;
-    joinBtn.disabled = false;
-    joinBtn.textContent = '⚔ JOIN SIEGE ⚔';
-    disbandBtn.hidden = true;
+    if (slotFull) {
+      joinBtn.disabled = true;
+      joinBtn.textContent = '⊘ SIEGE FULL';
+    } else if (userBusyElsewhere) {
+      joinBtn.disabled = true;
+      joinBtn.textContent = '⊘ ALREADY IN A SIEGE';
+    } else {
+      joinBtn.disabled = false;
+      joinBtn.textContent = '⚔ JOIN SIEGE ⚔';
+    }
   }
 
-  // START SIEGE sits beside whichever primary button is showing. It only
-  // lights up once an ally has joined this siege — that join-state will
-  // arrive with the future multiplayer layer. For now: always visible,
-  // always disabled, with a hint label so the gating reads as intentional.
-  const allyJoined = false; // TODO: wire to siege.ally_id once join is implemented
-  startBtn.hidden = false;
-  startBtn.disabled = !allyJoined;
-  startBtn.textContent = allyJoined ? '✦ START SIEGE ✦' : '✦ AWAITING ALLY ✦';
+  // START SIEGE — only the host can actually fire it, and only once an
+  // ally has joined. Joiners and bystanders see the button but it stays
+  // disabled with a context-aware label.
+  if (isHost) {
+    startBtn.disabled = !slotFull;
+    startBtn.textContent = slotFull ? '✦ START SIEGE ✦' : '✦ AWAITING ALLY ✦';
+  } else if (isAlly) {
+    startBtn.disabled = true;
+    startBtn.textContent = '✦ AWAITING HOST ✦';
+  } else {
+    startBtn.disabled = true;
+    startBtn.textContent = slotFull ? '✦ SIEGE IS FULL ✦' : '✦ AWAITING ALLY ✦';
+  }
 };
 
 const setAllyEmpty = () => {
@@ -209,14 +253,17 @@ const setAllyEmpty = () => {
   `;
 };
 
-const setAllyHost = (hostName) => {
+// Renders the right-side slot with whomever is occupying it. `roleLabel`
+// is shown nowhere in the markup yet (kept as a hook for future flair
+// like a "HOST" / "ALLY" badge); we just take it as a hint and ignore.
+const setAllyJoined = (name, _roleLabel = 'ALLY') => {
   allySlot.classList.remove('player-slot-empty');
   allySlot.innerHTML = `
     <div class="player-icon">
       <div class="player-avatar player-avatar-self" style="background-image:url('/assets/Soldier/Soldier/Soldier-Idle.png');"></div>
     </div>
     <div class="player-meta">
-      <div class="player-name">${escapeHtml(hostName)}</div>
+      <div class="player-name">${escapeHtml(name)}</div>
       <div class="player-stats">
         <div class="player-stat"><span class="player-stat-label">UNITS</span><span class="player-stat-val">?</span></div>
         <div class="player-stat"><span class="player-stat-label">TOWERS FELLED</span><span class="player-stat-val">?</span></div>
@@ -249,19 +296,102 @@ tabs.forEach(tab => {
 });
 
 // ── ACTIONS ──
-joinBtn.addEventListener('click', () => {
+// ── JOIN ──
+// Claim the ally slot on a vacant siege. The `.is('ally_id', null)` filter
+// makes the UPDATE race-safe — if two users click JOIN at the same instant,
+// Postgres sees one of the writes hit a row where ally_id IS NULL and the
+// other hit a row where ally_id is already set; only the first wins.
+// The `sieges_one_ally_idx` unique index is the belt to this suspenders —
+// it would also reject the second writer if they were trying to ally a
+// different siege while already in one.
+joinBtn.addEventListener('click', async () => {
   if (!selectedSiege || joinBtn.disabled) return;
-  showAlert(`⚔ MARCHING ON ${selectedSiege.name}…`, 'success');
-  setTimeout(() => smoothNavigate('/game/game.html'), 900);
+  if (selectedSiege.host_id === user.id) return; // can't ally yourself
+  if (findOwnEngagement()) {
+    showAlert('⊘ ABANDON THY CURRENT SIEGE FIRST', 'error');
+    return;
+  }
+
+  joinBtn.disabled = true;
+  const { data, error } = await supabase
+    .from('sieges')
+    .update({
+      ally_id:       user.id,
+      ally_username: (currentProfile?.username || 'KNIGHT'),
+    })
+    .eq('id', selectedSiege.id)
+    .is('ally_id', null)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error('join failed', error);
+    const raw = (error.message || '').toUpperCase();
+    const hint = raw.includes('SIEGES_ONE_ALLY')
+      ? ' — ALREADY IN A SIEGE'
+      : raw.includes('ROW-LEVEL') ? ' — RLS DENIED' : '';
+    showAlert(`✗ COULD NOT JOIN${hint}`, 'error');
+    renderPreview();
+    return;
+  }
+  if (!data) {
+    showAlert('⊘ SOMEONE WAS QUICKER — THE SLOT IS TAKEN', 'error');
+    renderPreview();
+    return;
+  }
+
+  // Optimistic local update; the realtime echo will arrive shortly and
+  // reconcile (idempotent overwrite).
+  applySiegeUpdate(data);
+  showAlert(`⚔ THOU HAST JOINED ${data.name}`, 'success');
 });
 
-// Kicks the actual battle off once both sides are seated. Disabled until
-// the multiplayer ally-join hook flips `allyJoined` true in renderPreview.
+// ── LEAVE ──
+// Vacate your own ally slot. Filtered on `ally_id = user.id` so the
+// statement is a no-op if the row already changed under us (e.g. host
+// disbanded mid-click).
+leaveBtn.addEventListener('click', async () => {
+  if (!selectedSiege || leaveBtn.disabled) return;
+  if (selectedSiege.ally_id !== user.id) return;
+
+  leaveBtn.disabled = true;
+  const { data, error } = await supabase
+    .from('sieges')
+    .update({ ally_id: null, ally_username: null })
+    .eq('id', selectedSiege.id)
+    .eq('ally_id', user.id)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error('leave failed', error);
+    showAlert(`✗ COULD NOT LEAVE: ${(error.message || '').toUpperCase()}`, 'error');
+    renderPreview();
+    return;
+  }
+  if (data) applySiegeUpdate(data);
+  showAlert('↶ YE HAVE WITHDRAWN FROM THE SIEGE', 'success');
+});
+
+// Kicks the actual battle off once both sides are seated. Host-only.
+// Joiners get auto-navigated by the realtime layer once `started_at` is
+// added in a future migration; for now the host's click is what fires it.
 startBtn.addEventListener('click', () => {
   if (!selectedSiege || startBtn.disabled) return;
   showAlert(`⚔ THE SIEGE OF ${selectedSiege.name} BEGINS…`, 'success');
   setTimeout(() => smoothNavigate('/game/game.html'), 900);
 });
+
+// Reconcile a single siege row into local state — used for optimistic
+// updates after a JOIN/LEAVE and also from the realtime UPDATE handler.
+const applySiegeUpdate = (fresh) => {
+  const idx = sieges.findIndex(s => s.id === fresh.id);
+  if (idx >= 0) sieges[idx] = fresh;
+  else sieges = [fresh, ...sieges];
+  if (selectedSiege?.id === fresh.id) selectedSiege = fresh;
+  renderRoomList();
+  renderPreview();
+};
 
 // ── DISBAND CONFIRMATION MODAL ──
 // Themed replacement for window.confirm — surfaces the consequences (ally
@@ -399,6 +529,26 @@ supabase
     if (!fresh || sieges.some(s => s.id === fresh.id)) return;
     sieges = [fresh, ...sieges];
     renderRoomList();
+  })
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sieges' }, (payload) => {
+    const fresh = payload.new;
+    if (!fresh) return;
+
+    // Detect ally transitions specifically so we can show a friendly
+    // alert to the host when their lobby just filled / emptied.
+    const prev = sieges.find(s => s.id === fresh.id);
+    const allyArrived = prev && !prev.ally_id && fresh.ally_id;
+    const allyDeparted = prev && prev.ally_id && !fresh.ally_id;
+
+    applySiegeUpdate(fresh);
+
+    if (fresh.host_id === user.id) {
+      if (allyArrived) {
+        showAlert(`⚔ ${fresh.ally_username} HATH JOINED THY SIEGE`, 'success');
+      } else if (allyDeparted) {
+        showAlert('↶ THINE ALLY HATH WITHDRAWN', 'error');
+      }
+    }
   })
   .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'sieges' }, (payload) => {
     const goneId = payload.old?.id;

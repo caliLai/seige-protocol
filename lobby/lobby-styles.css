@@ -560,6 +560,47 @@
 }
 .start-btn[hidden] { display: none; }
 
+/* LEAVE SIEGE — amber palette for "exit", distinct from gold JOIN and
+   crimson DISBAND. Visible only to the user currently occupying the
+   ally slot of the selected siege. */
+.leave-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  padding: 14px 22px;
+  color: #2a1606;
+  background: linear-gradient(180deg, #e08a30 0%, #a45a14 100%);
+  border: 4px solid #1a0a02;
+  box-shadow: 5px 5px 0 #4a2208, inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.20);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+.leave-btn:hover {
+  background: linear-gradient(180deg, #f5a14a 0%, #c4701c 100%);
+  box-shadow: 5px 5px 0 #4a2208, 0 0 22px 6px rgba(224, 138, 48, 0.55);
+}
+.leave-btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: 2px 2px 0 #4a2208 !important;
+}
+.leave-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+.leave-btn[hidden] { display: none; }
+
+/* Room-card "is-full" treatment — dim it slightly + recolor the
+   occupancy chip to red so a full siege reads at a glance. */
+.room-card.is-full {
+  filter: brightness(0.85) saturate(0.85);
+}
+.room-card.is-full .room-occupancy-chip {
+  color: #ff5040;
+}
+
 /* ════════════════════════════════════════
    DISBAND CONFIRMATION MODAL
    Stone-card overlay in a crimson tone so it visually distinguishes

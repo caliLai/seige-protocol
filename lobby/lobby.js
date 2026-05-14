@@ -17,6 +17,14 @@ const playerUnits = document.getElementById('playerUnits');
 const playerTowers = document.getElementById('playerTowers');
 const occupancyText = document.getElementById('occupancyText');
 const joinBtn = document.getElementById('joinBtn');
+const disbandBtn = document.getElementById('disbandBtn');
+const startBtn = document.getElementById('startBtn');
+const disbandOverlay = document.getElementById('disbandOverlay');
+const disbandTargetName = document.getElementById('disbandTargetName');
+const disbandCancelBtn = document.getElementById('disbandCancelBtn');
+const disbandConfirmBtn = document.getElementById('disbandConfirmBtn');
+const disbandConfirmText = document.getElementById('disbandConfirmText');
+const disbandConfirmLoading = document.getElementById('disbandConfirmLoading');
 const alertEl = document.getElementById('alertBanner');
 const treasuryAmount = document.getElementById('treasuryAmount');
 const allySlot = document.getElementById('playerSlotAlly');
@@ -139,6 +147,9 @@ const renderPreview = () => {
     occupancyText.textContent = '— / 2 KNIGHTS';
     joinBtn.disabled = true;
     joinBtn.textContent = '⚔ JOIN SIEGE ⚔';
+    joinBtn.hidden = false;
+    disbandBtn.hidden = true;
+    startBtn.hidden = true;
     setAllyEmpty();
     return;
   }
@@ -157,16 +168,30 @@ const renderPreview = () => {
 
   // The siege host fills the "ally" slot for everyone else; for your own
   // siege we show YOU as host on the left and the ally slot stays empty.
+  // Hosts get a DISBAND button in place of JOIN — RLS policy
+  // `sieges_delete_own` already restricts deletes to the host.
   const isYourSiege = s.host_id === user.id;
   if (isYourSiege) {
     setAllyEmpty();
-    joinBtn.disabled = true;
-    joinBtn.textContent = '✦ AWAITING ALLY ✦';
+    joinBtn.hidden = true;
+    disbandBtn.hidden = false;
+    disbandBtn.disabled = false;
   } else {
     setAllyHost(s.host_username);
+    joinBtn.hidden = false;
     joinBtn.disabled = false;
     joinBtn.textContent = '⚔ JOIN SIEGE ⚔';
+    disbandBtn.hidden = true;
   }
+
+  // START SIEGE sits beside whichever primary button is showing. It only
+  // lights up once an ally has joined this siege — that join-state will
+  // arrive with the future multiplayer layer. For now: always visible,
+  // always disabled, with a hint label so the gating reads as intentional.
+  const allyJoined = false; // TODO: wire to siege.ally_id once join is implemented
+  startBtn.hidden = false;
+  startBtn.disabled = !allyJoined;
+  startBtn.textContent = allyJoined ? '✦ START SIEGE ✦' : '✦ AWAITING ALLY ✦';
 };
 
 const setAllyEmpty = () => {
@@ -230,6 +255,99 @@ joinBtn.addEventListener('click', () => {
   setTimeout(() => smoothNavigate('/game/game.html'), 900);
 });
 
+// Kicks the actual battle off once both sides are seated. Disabled until
+// the multiplayer ally-join hook flips `allyJoined` true in renderPreview.
+startBtn.addEventListener('click', () => {
+  if (!selectedSiege || startBtn.disabled) return;
+  showAlert(`⚔ THE SIEGE OF ${selectedSiege.name} BEGINS…`, 'success');
+  setTimeout(() => smoothNavigate('/game/game.html'), 900);
+});
+
+// ── DISBAND CONFIRMATION MODAL ──
+// Themed replacement for window.confirm — surfaces the consequences (ally
+// gets kicked) and lets the user back out before issuing the DELETE.
+let pendingDisband = null;
+
+const openDisbandModal = (siege) => {
+  pendingDisband = siege;
+  disbandTargetName.textContent = `"${siege.name}"`;
+  disbandOverlay.classList.remove('hidden');
+  disbandOverlay.setAttribute('aria-hidden', 'false');
+  disbandConfirmBtn.disabled = false;
+  disbandConfirmText.style.display = 'inline';
+  disbandConfirmLoading.style.display = 'none';
+  // Focus the cancel button by default — fewer accidental deletes.
+  setTimeout(() => disbandCancelBtn.focus(), 30);
+};
+
+const closeDisbandModal = () => {
+  pendingDisband = null;
+  disbandOverlay.classList.add('hidden');
+  disbandOverlay.setAttribute('aria-hidden', 'true');
+};
+
+// Host-only: tear down the siege you forged. RLS enforces ownership so a
+// non-host clicking this (e.g. via devtools) would just get a 0-row delete.
+disbandBtn.addEventListener('click', () => {
+  if (!selectedSiege || disbandBtn.disabled) return;
+  if (selectedSiege.host_id !== user.id) return;
+  openDisbandModal(selectedSiege);
+});
+
+disbandCancelBtn.addEventListener('click', closeDisbandModal);
+
+// Clicking the backdrop or pressing Escape also cancels — standard modal UX.
+disbandOverlay.addEventListener('click', (e) => {
+  if (e.target === disbandOverlay) closeDisbandModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !disbandOverlay.classList.contains('hidden')) {
+    e.stopImmediatePropagation(); // don't let the back-to-start handler fire
+    closeDisbandModal();
+  }
+}, true);
+
+disbandConfirmBtn.addEventListener('click', async () => {
+  if (!pendingDisband) return;
+  const doomed = pendingDisband;
+
+  disbandConfirmBtn.disabled = true;
+  disbandConfirmText.style.display = 'none';
+  disbandConfirmLoading.style.display = 'inline';
+
+  const { error } = await supabase
+    .from('sieges')
+    .delete()
+    .eq('id', doomed.id);
+
+  if (error) {
+    console.error('siege disband failed', error);
+    closeDisbandModal();
+    showAlert(`✗ COULD NOT DISBAND: ${(error.message || '').toUpperCase()}`, 'error');
+    return;
+  }
+
+  // Local reconciliation. The realtime channel will also fire DELETE for
+  // every other connected viewer of this siege — that's the "kick them
+  // out" path.
+  removeSiegeLocally(doomed.id);
+  closeDisbandModal();
+  showAlert(`☠ ${doomed.name} HAS BEEN DISBANDED`, 'success');
+});
+
+// Shared cleanup for both local deletes and realtime DELETE pushes from
+// other clients. If the user is currently viewing the doomed siege, they
+// get bumped to the next siege in the active tab (or to "no selection").
+const removeSiegeLocally = (siegeId) => {
+  const wasSelected = selectedSiege?.id === siegeId;
+  sieges = sieges.filter(s => s.id !== siegeId);
+  if (wasSelected) {
+    selectedSiege = sieges.find(s => s.difficulty === currentDiff) || null;
+  }
+  renderRoomList();
+  renderPreview();
+};
+
 createSiegeBtn.addEventListener('click', () => {
   smoothNavigate('/lobby/create-siege.html');
 });
@@ -266,3 +384,31 @@ if (!selectedSiege) {
 renderRoomList();
 renderPreview();
 loadProfile();
+
+// ── REALTIME ──
+// Supabase Realtime broadcasts INSERT/DELETE events on the sieges table so
+// other lobbies update without a refresh. The "kick out when host disbands"
+// behavior rides on this — if a viewer is staring at a siege the host just
+// nuked, their renderPreview re-runs with selectedSiege cleared.
+// Requires: `alter publication supabase_realtime add table public.sieges;`
+// (see supabase-setup.sql).
+supabase
+  .channel('sieges-lobby')
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sieges' }, (payload) => {
+    const fresh = payload.new;
+    if (!fresh || sieges.some(s => s.id === fresh.id)) return;
+    sieges = [fresh, ...sieges];
+    renderRoomList();
+  })
+  .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'sieges' }, (payload) => {
+    const goneId = payload.old?.id;
+    if (!goneId) return;
+    const wasSelected = selectedSiege?.id === goneId;
+    removeSiegeLocally(goneId);
+    if (wasSelected && selectedSiege?.id !== goneId) {
+      // We were viewing the disbanded siege — let the user know why the
+      // preview pane just changed under them.
+      showAlert('☠ THE HOST HATH DISBANDED THIS SIEGE', 'error');
+    }
+  })
+  .subscribe();

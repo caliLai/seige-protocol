@@ -491,6 +491,228 @@
   box-shadow: 5px 5px 0 #7a600c, inset 0 0 0 1px rgba(255, 255, 255, 0.10) !important;
 }
 
+/* DISBAND — host-only "delete your own siege" action. Crimson palette so
+   it visually reads as destructive, mirroring the join-btn pixel-card
+   silhouette for a consistent feel. */
+.disband-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  padding: 14px 22px;
+  color: #f5e0d6;
+  background: linear-gradient(180deg, #b13030 0%, #7a1818 100%);
+  border: 4px solid #1a0606;
+  box-shadow: 5px 5px 0 #4a0a0a, inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  text-shadow: 1px 1px 0 #000;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+.disband-btn:hover {
+  background: linear-gradient(180deg, #d54545 0%, #962020 100%);
+  box-shadow: 5px 5px 0 #4a0a0a, 0 0 22px 6px rgba(220, 60, 60, 0.55);
+  text-shadow: 0 0 8px rgba(255, 90, 90, 0.9), 1px 1px 0 #000;
+}
+.disband-btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: 2px 2px 0 #4a0a0a !important;
+}
+.disband-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+  box-shadow: 5px 5px 0 #4a0a0a, inset 0 0 0 1px rgba(255, 255, 255, 0.10) !important;
+}
+.disband-btn[hidden] { display: none; }
+
+/* START SIEGE — emerald palette, distinct from gold JOIN and crimson
+   DISBAND. Sits beside whichever primary action is showing. Stays
+   disabled until an ally has joined the siege; multiplayer join hook
+   flips it active later. */
+.start-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  padding: 14px 22px;
+  color: #0a1a10;
+  background: linear-gradient(180deg, #4ad07a 0%, #1f8a44 100%);
+  border: 4px solid #061a0c;
+  box-shadow: 5px 5px 0 #0a4422, inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.25);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+.start-btn:hover {
+  background: linear-gradient(180deg, #6fe898 0%, #2ea857 100%);
+  box-shadow: 5px 5px 0 #0a4422, 0 0 22px 6px rgba(74, 208, 122, 0.55);
+  text-shadow: 0 0 8px rgba(120, 255, 160, 0.9), 1px 1px 0 rgba(255, 255, 255, 0.3);
+}
+.start-btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: 2px 2px 0 #0a4422 !important;
+}
+.start-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+  box-shadow: 5px 5px 0 #0a4422, inset 0 0 0 1px rgba(255, 255, 255, 0.10) !important;
+}
+.start-btn[hidden] { display: none; }
+
+/* ════════════════════════════════════════
+   DISBAND CONFIRMATION MODAL
+   Stone-card overlay in a crimson tone so it visually distinguishes
+   itself from the username prompt's neutral grey.
+   ════════════════════════════════════════ */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.78);
+  animation: confirmFadeIn 0.25s ease both;
+}
+.confirm-overlay.hidden { display: none; }
+
+@keyframes confirmFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.confirm-card {
+  position: relative;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  background-color: #4a2018;
+  background-image:
+    repeating-linear-gradient(0deg,  transparent 0 38px, #2a0e08 38px 40px),
+    repeating-linear-gradient(90deg, transparent 0 78px, #2a0e08 78px 80px),
+    radial-gradient(ellipse 60px 30px at 40px 20px,  #5a2820 0%, transparent 100%),
+    radial-gradient(ellipse 50px 25px at 200px 100px, #62281f 0%, transparent 100%),
+    radial-gradient(ellipse 70px 35px at 160px 180px, #3a160f 0%, transparent 100%);
+  border: 4px solid #0a0303;
+  box-shadow:
+    6px 6px 0 #000,
+    inset 0 0 0 2px rgba(220, 80, 80, 0.16),
+    inset 0 0 60px rgba(0, 0, 0, 0.55);
+  animation: confirmSlideIn 0.35s cubic-bezier(0.2, 0.8, 0.3, 1.1) both;
+}
+
+@keyframes confirmSlideIn {
+  from { transform: translateY(-14px) scale(0.94); opacity: 0; }
+  to   { transform: translateY(0)     scale(1);    opacity: 1; }
+}
+
+.confirm-card-inner-border {
+  position: absolute;
+  inset: 8px;
+  border: 2px solid rgba(220, 120, 120, 0.22);
+  pointer-events: none;
+}
+.confirm-card-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #7a2018;
+  border: 2px solid #0a0303;
+  z-index: 2;
+}
+.confirm-card-corner.tl { top: -4px;    left: -4px; }
+.confirm-card-corner.tr { top: -4px;    right: -4px; }
+.confirm-card-corner.bl { bottom: -4px; left: -4px; }
+.confirm-card-corner.br { bottom: -4px; right: -4px; }
+
+.confirm-card-content {
+  position: relative;
+  padding: 26px 30px 28px;
+  z-index: 1;
+}
+
+.confirm-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: #ffb0a0;
+  text-shadow: 2px 2px 0 #000;
+  text-align: center;
+}
+
+.confirm-divider {
+  margin: 14px 0 16px;
+}
+
+.confirm-body {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  line-height: 1.7;
+  color: #f0d9a0;
+  text-shadow: 1px 1px 0 #000;
+  text-align: center;
+  margin-bottom: 22px;
+}
+.confirm-target {
+  color: #ffd84a;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.confirm-cancel-btn,
+.confirm-danger-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  padding: 12px 18px;
+  border: 4px solid #0a0303;
+  position: relative;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+
+.confirm-cancel-btn {
+  color: #f0d9a0;
+  background: linear-gradient(180deg, #5a544c 0%, #2e2924 100%);
+  box-shadow: 4px 4px 0 #1a1510, inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  text-shadow: 1px 1px 0 #000;
+}
+.confirm-cancel-btn:hover {
+  background: linear-gradient(180deg, #6e6860 0%, #3e3832 100%);
+  box-shadow: 4px 4px 0 #1a1510, 0 0 14px 4px rgba(245, 197, 24, 0.20);
+}
+.confirm-cancel-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #1a1510 !important;
+}
+
+.confirm-danger-btn {
+  color: #f5e0d6;
+  background: linear-gradient(180deg, #b13030 0%, #7a1818 100%);
+  box-shadow: 4px 4px 0 #4a0a0a, inset 0 0 0 1px rgba(255, 255, 255, 0.20);
+  text-shadow: 1px 1px 0 #000;
+}
+.confirm-danger-btn:hover {
+  background: linear-gradient(180deg, #d54545 0%, #962020 100%);
+  box-shadow: 4px 4px 0 #4a0a0a, 0 0 20px 5px rgba(220, 60, 60, 0.55);
+  text-shadow: 0 0 8px rgba(255, 90, 90, 0.9), 1px 1px 0 #000;
+}
+.confirm-danger-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #4a0a0a !important;
+}
+.confirm-danger-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+}
+.confirm-danger-btn .btn-loading { display: none; }
+
 /* ── ALERT (overrides shared style for positioning) ── */
 .lobby-alert {
   position: absolute;

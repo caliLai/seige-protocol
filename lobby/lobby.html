@@ -140,8 +140,14 @@
           <div class="room-occupancy">
             <span id="occupancyText">1 / 2 KNIGHTS</span>
           </div>
+          <button type="button" id="disbandBtn" class="px-btn disband-btn" hidden>
+            ☠ DISBAND ☠
+          </button>
           <button type="button" id="joinBtn" class="px-btn join-btn">
             ⚔ JOIN SIEGE ⚔
+          </button>
+          <button type="button" id="startBtn" class="px-btn start-btn" hidden disabled>
+            ✦ START SIEGE ✦
           </button>
         </div>
 
@@ -151,6 +157,41 @@
 
     <!-- Floating alert -->
     <div id="alertBanner" class="alert-banner lobby-alert" role="alert" aria-live="polite"></div>
+
+    <!-- ═══ DISBAND CONFIRMATION OVERLAY ═══ -->
+    <div id="disbandOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="disbandTitle" aria-hidden="true">
+      <div class="confirm-card confirm-card-danger">
+        <div class="confirm-card-inner-border"></div>
+        <div class="confirm-card-corner tl"></div>
+        <div class="confirm-card-corner tr"></div>
+        <div class="confirm-card-corner bl"></div>
+        <div class="confirm-card-corner br"></div>
+
+        <div class="confirm-card-content">
+          <div id="disbandTitle" class="confirm-title">☠ DISBAND SIEGE? ☠</div>
+
+          <div class="divider confirm-divider">
+            <div class="dash-line"></div>
+            <span class="divider-icon">⚔</span>
+            <div class="dash-line"></div>
+          </div>
+
+          <p class="confirm-body">
+            THY SIEGE <span id="disbandTargetName" class="confirm-target">—</span>
+            WILL BE LOST FOREVER. ANY ALLY WITHIN THE WAR ROOM
+            WILL BE CAST OUT.
+          </p>
+
+          <div class="confirm-actions">
+            <button type="button" id="disbandCancelBtn" class="px-btn confirm-cancel-btn">◀ KEEP IT</button>
+            <button type="button" id="disbandConfirmBtn" class="px-btn confirm-danger-btn">
+              <span id="disbandConfirmText">☠ DISBAND ☠</span>
+              <span id="disbandConfirmLoading" class="btn-loading">█ DISBANDING… █</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Frame edges -->
     <div class="frame-edge frame-edge-top"></div>

@@ -140,6 +140,20 @@ forgeBtn.addEventListener('click', async () => {
   }
 
   setLoading(true);
+  // One-lobby-at-a-time gate. The DB will also reject this via the
+  // unique-on-host_id index, but a friendly pre-check beats a raw
+  // constraint-violation error string.
+  const { data: existing } = await supabase
+    .from('sieges')
+    .select('id, name')
+    .or(`host_id.eq.${user.id},ally_id.eq.${user.id}`)
+    .maybeSingle();
+  if (existing) {
+    showError(`✗ ABANDON "${existing.name.toUpperCase()}" FIRST`);
+    setLoading(false);
+    return;
+  }
+
   const { data, error } = await insertSiege({
     host_id:       user.id,
     host_username: currentProfile?.username || 'KNIGHT',

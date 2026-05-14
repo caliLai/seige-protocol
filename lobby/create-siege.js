@@ -106,29 +106,28 @@ const defaultName = () => {
   return `${banner}'S ${flavor}`;
 };
 
-// Routed through an RPC (create_siege) — bypasses PostgREST's table-cache
-// path, which on some projects is wedged for freshly-created tables.
-const insertSiegeWithRetry = async (payload, attempts = 4) => {
-  let lastError = null;
-  for (let i = 0; i < attempts; i++) {
-    const { data, error } = await supabase.rpc('create_siege', {
-      p_name:       payload.name,
-      p_map:        payload.map,
-      p_map_src:    payload.map_src,
-      p_difficulty: payload.difficulty,
-    });
-    if (!error) {
-      // RPC returns a set; pull the first row.
-      const row = Array.isArray(data) ? data[0] : data;
-      return { data: row || null, error: null };
-    }
-    lastError = error;
-    const msg = (error.message || '').toLowerCase();
-    const cacheMiss = msg.includes('schema cache') || msg.includes('could not find');
-    if (!cacheMiss) break;
-    await new Promise(r => setTimeout(r, 1200));
+// Direct INSERT into public.sieges. RLS policy `sieges_insert_own` enforces
+// that host_id matches the caller's auth uid, so no server-side function
+// is needed — Supabase's REST layer + RLS IS the multiplayer surface.
+const insertSiege = (payload) =>
+  supabase
+    .from('sieges')
+    .insert(payload)
+    .select()
+    .single();
+
+const formatInsertError = (error) => {
+  const raw = error.message || JSON.stringify(error);
+  const msg = raw.toLowerCase();
+  let hint = '';
+  if (msg.includes("relation") && msg.includes("sieges")) {
+    hint = ' — RUN supabase-setup.sql IN THE SQL EDITOR';
+  } else if (msg.includes('row-level security') || msg.includes('violates row-level')) {
+    hint = ' — CHECK RLS POLICIES (sieges_insert_own)';
+  } else if (msg.includes('schema cache') || msg.includes('could not find')) {
+    hint = ' — RESTART PROJECT (SETTINGS → GENERAL) OR RUN supabase-setup.sql';
   }
-  return { data: null, error: lastError };
+  return `✗ ${raw.toUpperCase().slice(0, 120)}${hint}`;
 };
 
 forgeBtn.addEventListener('click', async () => {
@@ -141,7 +140,7 @@ forgeBtn.addEventListener('click', async () => {
   }
 
   setLoading(true);
-  const { data, error } = await insertSiegeWithRetry({
+  const { data, error } = await insertSiege({
     host_id:       user.id,
     host_username: currentProfile?.username || 'KNIGHT',
     name,
@@ -152,17 +151,7 @@ forgeBtn.addEventListener('click', async () => {
 
   if (error) {
     console.error('siege create failed', error);
-    const raw = error.message || JSON.stringify(error);
-    const msg = raw.toLowerCase();
-    let hint = '';
-    if (msg.includes('could not find the function')) {
-      hint = ' — RUN THE RPC SQL OR RESTART PROJECT';
-    } else if (msg.includes('schema cache')) {
-      hint = ' — RESTART PROJECT (SETTINGS → GENERAL)';
-    } else if (msg.includes('row-level security') || msg.includes('rls')) {
-      hint = ' — CHECK RLS POLICIES';
-    }
-    showError(`✗ ${raw.toUpperCase().slice(0, 120)}${hint}`);
+    showError(formatInsertError(error));
     setLoading(false);
     return;
   }

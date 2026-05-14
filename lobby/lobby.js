@@ -73,19 +73,21 @@ const loadProfile = async () => {
 };
 
 // ── SIEGES FETCH ──
-// Routed through an RPC (list_sieges) instead of a direct table select to
-// sidestep a PostgREST table-cache miss that some projects hit. The RPC
-// returns the full sieges row set.
+// Direct SELECT from public.sieges, ordered newest-first by Postgres so we
+// don't have to re-sort on the client. RLS policy `sieges_select_all` lets
+// any signed-in user browse the whole list — every player sees the same
+// shared lobby state.
 const loadSieges = async () => {
-  const { data, error } = await supabase.rpc('list_sieges');
+  const { data, error } = await supabase
+    .from('sieges')
+    .select('*')
+    .order('created_at', { ascending: false });
   if (error) {
     console.error('sieges load failed', error);
     sieges = [];
     return;
   }
-  sieges = (data || []).sort((a, b) =>
-    new Date(b.created_at) - new Date(a.created_at)
-  );
+  sieges = data || [];
 };
 
 // ── ROOM LIST ──

@@ -164,12 +164,18 @@
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   padding: 10px 11px;
   background: linear-gradient(180deg, #3e3832 0%, #1f1c18 100%);
   border: 2px solid #1a1510;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+/* Inner text column — `min-width: 0` lets the 1fr track actually shrink
+   so long siege names wrap to a new line instead of pushing the diff
+   badge off the card. */
+.room-card > div {
+  min-width: 0;
 }
 .room-card:hover {
   transform: translate(-1px, -1px);
@@ -188,16 +194,25 @@
   letter-spacing: 0.12em;
   color: #f0d9a0;
   text-shadow: 1px 1px 0 #000;
+  line-height: 1.45;
+  /* `anywhere` lets the browser break inside long unspaced strings (the
+     pixel font has no soft hyphens), so a giant name wraps across lines
+     instead of overflowing the card. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .room-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px 6px;
   margin-top: 5px;
   font-family: 'Press Start 2P', monospace;
   font-size: 6px;
   letter-spacing: 0.15em;
   color: #a8a39c;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .room-occupancy-chip {
   color: #f5c518;

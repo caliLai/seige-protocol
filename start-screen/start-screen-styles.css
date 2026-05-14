@@ -4,6 +4,14 @@
 
 /* Pixel-art medieval wooden plank wall — vertical boards with knots,
    grain, and iron nails. Each tile is 80×160 px and fully pixelated. */
+/* Share a view-transition-name across start-screen ↔ roster so the wood-panel
+   frame is treated as one continuous element during cross-document VT. The
+   snapshots have identical background, so the bg appears stable while only the
+   inner content (menu card ↔ roster panel) cross-fades — no wood fade-out. */
+.game-frame.lobby-bg {
+  view-transition-name: lobby-bg-frame;
+}
+
 .lobby-bg {
   background-color: #3a2818;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='160' viewBox='0 0 80 160' shape-rendering='crispEdges'><rect width='80' height='160' fill='%234a3520'/><rect x='0' y='2' width='80' height='2' fill='%235c4326'/><rect x='0' y='28' width='80' height='1' fill='%233a2614'/><rect x='0' y='54' width='80' height='1' fill='%235c4326'/><rect x='0' y='84' width='80' height='1' fill='%233a2614'/><rect x='0' y='112' width='80' height='1' fill='%235c4326'/><rect x='0' y='140' width='80' height='1' fill='%233a2614'/><rect x='78' y='0' width='2' height='160' fill='%23160c06'/><rect x='0' y='0' width='2' height='160' fill='%231f1208'/><rect x='0' y='158' width='80' height='2' fill='%23160c06'/><rect x='0' y='0' width='80' height='2' fill='%23241509'/><rect x='22' y='66' width='10' height='10' fill='%232a1810'/><rect x='24' y='68' width='6' height='6' fill='%231a0a04'/><rect x='25' y='69' width='2' height='2' fill='%23000'/><rect x='52' y='118' width='8' height='8' fill='%232a1810'/><rect x='54' y='120' width='4' height='4' fill='%231a0a04'/><rect x='6' y='6' width='4' height='4' fill='%23857665'/><rect x='7' y='7' width='2' height='2' fill='%23a89880'/><rect x='70' y='6' width='4' height='4' fill='%23857665'/><rect x='71' y='7' width='2' height='2' fill='%23a89880'/><rect x='6' y='148' width='4' height='4' fill='%23857665'/><rect x='7' y='149' width='2' height='2' fill='%23a89880'/><rect x='70' y='148' width='4' height='4' fill='%23857665'/><rect x='71' y='149' width='2' height='2' fill='%23a89880'/><rect x='12' y='40' width='1' height='1' fill='%233a2614'/><rect x='40' y='96' width='1' height='1' fill='%233a2614'/><rect x='62' y='130' width='1' height='1' fill='%235c4326'/></svg>");
@@ -136,6 +144,7 @@
 /* Skip the entire castle-door intro when navigating back from another
    screen (the inline script in <head> sets this class before paint). */
 .no-door-animation #doorLoader { display: none !important; }
+.no-door-animation .menu-card-wrapper { animation: fadein 0.45s ease both; }
 
 .door {
   position: absolute;

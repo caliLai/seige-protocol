@@ -78,6 +78,7 @@
   border: 4px solid #1a0f08;
   box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.14), 4px 4px 0 #0a0604;
   overflow-y: auto;
+  min-height: 460px;
   max-height: 460px;
 }
 

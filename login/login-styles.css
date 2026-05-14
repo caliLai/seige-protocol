@@ -3,11 +3,26 @@
    ═══════════════════════════════════════════════ */
 
 /* ── CROSS-DOCUMENT VIEW TRANSITIONS (Chrome 126+, Safari 18+) ── */
+/* Sequenced fade (out, then in) over a dark backdrop — the default
+   simultaneous cross-fade lets the browser's white background show
+   through at the midpoint, causing a visible white flash. */
 @view-transition { navigation: auto; }
-::view-transition-old(root),
+::view-transition {
+  background-color: #1a1510;
+}
+::view-transition-old(root) {
+  animation: vt-fade-out 0.2s ease both;
+}
 ::view-transition-new(root) {
-  animation-duration: 0.4s;
-  animation-timing-function: ease;
+  animation: vt-fade-in 0.2s ease 0.2s both;
+}
+@keyframes vt-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes vt-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* ── RESET ── */
@@ -17,8 +32,11 @@
   padding: 0;
 }
 
-body {
+html, body {
   background: #1a1510;
+}
+
+body {
   display: flex;
   align-items: center;
   justify-content: center;

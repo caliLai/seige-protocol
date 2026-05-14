@@ -23,7 +23,7 @@ const treasuryAmount = document.getElementById('treasuryAmount');
 let usernameMode = 'create';
 let currentUsername = null;
 
-const DOOR_ANIMATION_MS = 2000;
+const DOOR_ANIMATION_MS = 2300;
 const USERNAME_RE = /^[A-Za-z0-9_-]{3,20}$/;
 // Inline head script flags returns from in-app screens so we skip the doors.
 const doorsSkipped = document.documentElement.classList.contains('no-door-animation');

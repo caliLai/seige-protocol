@@ -5,6 +5,11 @@
 .lobby-frame {
   display: grid;
   grid-template-rows: auto 1fr;
+  /* Pin the single column to the full content width so the body doesn't
+     shrink to its max-content. Without this, the lobby pane jitters left
+     when slot text shortens (e.g. "AWAITING THEE…" → a real username on
+     join). minmax(0, …) lets children with min-width:0 actually shrink. */
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   justify-items: stretch;
   gap: 0;

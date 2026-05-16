@@ -12,9 +12,6 @@ const tabs = document.querySelectorAll('.difficulty-tab');
 const mapImage = document.getElementById('mapImage');
 const mapName = document.getElementById('mapName');
 const roomDifficulty = document.getElementById('roomDifficulty');
-const playerName = document.getElementById('playerName');
-const playerUnits = document.getElementById('playerUnits');
-const playerTowers = document.getElementById('playerTowers');
 const occupancyText = document.getElementById('occupancyText');
 const joinBtn = document.getElementById('joinBtn');
 const disbandBtn = document.getElementById('disbandBtn');
@@ -28,6 +25,7 @@ const disbandConfirmText = document.getElementById('disbandConfirmText');
 const disbandConfirmLoading = document.getElementById('disbandConfirmLoading');
 const alertEl = document.getElementById('alertBanner');
 const treasuryAmount = document.getElementById('treasuryAmount');
+const selfSlot = document.getElementById('playerSlotSelf');
 const allySlot = document.getElementById('playerSlotAlly');
 
 // ── STATE ──
@@ -75,10 +73,6 @@ const loadProfile = async () => {
   if (error) console.error('profile load failed', error);
   currentProfile = data || { username: 'KNIGHT', points: 0, unlocked_units: [] };
   treasuryAmount.textContent = (currentProfile.points ?? 0).toLocaleString();
-  const totalUnits = 3 + (currentProfile.unlocked_units?.length ?? 0);
-  playerName.textContent = (currentProfile.username || 'KNIGHT').toUpperCase();
-  playerUnits.textContent = totalUnits;
-  playerTowers.textContent = '0';
 };
 
 // ── SIEGES FETCH ──
@@ -97,6 +91,40 @@ const loadSieges = async () => {
     return;
   }
   sieges = data || [];
+};
+
+// ── OTHER-PLAYER PROFILES ──
+// Cache other players' (username, unlocked_units) keyed by user_id so the
+// host/ally slots can show a real UNITS count instead of "?". Filled by a
+// single batched fetch after loadSieges, with incremental refills when
+// realtime brings in a new participant. Misses are stored as null so we
+// don't re-query for accounts that legitimately have no profile row.
+const profileCache = new Map();
+
+const prefetchSiegeProfiles = async () => {
+  const wanted = new Set();
+  for (const s of sieges) {
+    if (s.host_id && s.host_id !== user.id) wanted.add(s.host_id);
+    if (s.ally_id && s.ally_id !== user.id) wanted.add(s.ally_id);
+  }
+  const missing = [...wanted].filter(id => !profileCache.has(id));
+  if (!missing.length) return false;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('user_id, username, unlocked_units')
+    .in('user_id', missing);
+  if (error) { console.error('profile prefetch failed', error); return false; }
+  for (const row of data || []) profileCache.set(row.user_id, row);
+  for (const id of missing) if (!profileCache.has(id)) profileCache.set(id, null);
+  return true;
+};
+
+const unitCountFor = (userId) => {
+  if (!userId) return null;
+  if (userId === user.id) return 3 + (currentProfile?.unlocked_units?.length ?? 0);
+  const p = profileCache.get(userId);
+  if (!p) return null;
+  return 3 + (p.unlocked_units?.length ?? 0);
 };
 
 // Returns the siege the current user is engaged with, host OR ally, or
@@ -167,7 +195,8 @@ const renderPreview = () => {
     disbandBtn.hidden = true;
     leaveBtn.hidden = true;
     startBtn.hidden = true;
-    setAllyEmpty();
+    renderSlot(selfSlot, { empty: true, label: 'SELECT A SIEGE…' });
+    renderSlot(allySlot, { empty: true, label: 'SELECT A SIEGE…' });
     return;
   }
 
@@ -196,20 +225,22 @@ const renderPreview = () => {
   leaveBtn.hidden   = true;
   startBtn.hidden   = false;
 
+  // Slots are POSITIONAL: left = host, right = ally. Your own card just
+  // happens to land in whichever slot matches your role; bystanders see
+  // both occupants when the siege is full, neither slot filled with self.
   if (isHost) {
-    // YOUR siege. Right slot shows the ally (or "awaiting ally").
-    if (slotFull) setAllyJoined(s.ally_username);
-    else          setAllyEmpty();
+    renderSlot(selfSlot, { me: true });
+    renderSlot(allySlot, slotFull ? { other: s.ally_username, userId: s.ally_id } : { empty: true, label: 'AWAITING ALLY…' });
     disbandBtn.hidden = false;
     disbandBtn.disabled = false;
   } else if (isAlly) {
-    // You've joined someone else's siege. Right slot shows the host.
-    setAllyJoined(s.host_username, 'HOST');
+    renderSlot(selfSlot, { other: s.host_username, userId: s.host_id });
+    renderSlot(allySlot, { me: true });
     leaveBtn.hidden = false;
     leaveBtn.disabled = false;
   } else {
-    // Bystander browsing. Right slot shows the host for context.
-    setAllyJoined(s.host_username, 'HOST');
+    renderSlot(selfSlot, { other: s.host_username, userId: s.host_id });
+    renderSlot(allySlot, slotFull ? { other: s.ally_username, userId: s.ally_id } : { empty: true, label: 'AWAITING ALLY…' });
     joinBtn.hidden = false;
     if (slotFull) {
       joinBtn.disabled = true;
@@ -238,35 +269,57 @@ const renderPreview = () => {
   }
 };
 
-const setAllyEmpty = () => {
-  allySlot.classList.add('player-slot-empty');
-  allySlot.innerHTML = `
-    <div class="player-icon"><div class="player-avatar player-avatar-empty">?</div></div>
-    <div class="player-meta">
-      <div class="player-name muted">AWAITING ALLY…</div>
-      <div class="player-stats muted">
-        <div class="player-stat"><span class="player-stat-label">UNITS</span><span class="player-stat-val">—</span></div>
-        <div class="player-stat"><span class="player-stat-label">TOWERS FELLED</span><span class="player-stat-val">—</span></div>
+// Paint one of the two player-slot panels. `content` is one of:
+//   { me: true }            — current user's profile card (knight sprite + stats)
+//   { other: name }         — another player (soldier sprite + name); falls
+//                             back to "???" if name is missing, so legacy
+//                             rows without a denormalized username still draw
+//   { empty: true, label }  — dashed-border placeholder with the given label
+const renderSlot = (slotEl, content) => {
+  if (content.empty) {
+    slotEl.classList.add('player-slot-empty');
+    slotEl.innerHTML = `
+      <div class="player-icon"><div class="player-avatar player-avatar-empty">?</div></div>
+      <div class="player-meta">
+        <div class="player-name muted">${escapeHtml(content.label || 'AWAITING…')}</div>
+        <div class="player-stats muted">
+          <div class="player-stat"><span class="player-stat-label">UNITS</span><span class="player-stat-val">—</span></div>
+          <div class="player-stat"><span class="player-stat-label">TOWERS FELLED</span><span class="player-stat-val">—</span></div>
+        </div>
       </div>
-    </div>
-    <div class="player-status player-status-waiting">WAITING</div>
-  `;
-};
-
-// Renders the right-side slot with whomever is occupying it. `roleLabel`
-// is shown nowhere in the markup yet (kept as a hook for future flair
-// like a "HOST" / "ALLY" badge); we just take it as a hint and ignore.
-const setAllyJoined = (name, _roleLabel = 'ALLY') => {
-  allySlot.classList.remove('player-slot-empty');
-  allySlot.innerHTML = `
+      <div class="player-status player-status-waiting">WAITING</div>
+    `;
+    return;
+  }
+  slotEl.classList.remove('player-slot-empty');
+  if (content.me) {
+    const username = (currentProfile?.username || 'KNIGHT').toUpperCase();
+    const totalUnits = 3 + (currentProfile?.unlocked_units?.length ?? 0);
+    slotEl.innerHTML = `
+      <div class="player-icon"><div class="player-avatar player-avatar-self"></div></div>
+      <div class="player-meta">
+        <div class="player-name">${escapeHtml(username)}</div>
+        <div class="player-stats">
+          <div class="player-stat"><span class="player-stat-label">UNITS</span><span class="player-stat-val">${totalUnits}</span></div>
+          <div class="player-stat"><span class="player-stat-label">TOWERS FELLED</span><span class="player-stat-val">0</span></div>
+        </div>
+      </div>
+      <div class="player-status player-status-ready">READY</div>
+    `;
+    return;
+  }
+  const name = String(content.other || '???').toUpperCase();
+  const units = unitCountFor(content.userId);
+  const unitsDisplay = units != null ? units : '?';
+  slotEl.innerHTML = `
     <div class="player-icon">
       <div class="player-avatar player-avatar-self" style="background-image:url('/assets/Soldier/Soldier/Soldier-Idle.png');"></div>
     </div>
     <div class="player-meta">
       <div class="player-name">${escapeHtml(name)}</div>
       <div class="player-stats">
-        <div class="player-stat"><span class="player-stat-label">UNITS</span><span class="player-stat-val">?</span></div>
-        <div class="player-stat"><span class="player-stat-label">TOWERS FELLED</span><span class="player-stat-val">?</span></div>
+        <div class="player-stat"><span class="player-stat-label">UNITS</span><span class="player-stat-val">${unitsDisplay}</span></div>
+        <div class="player-stat"><span class="player-stat-label">TOWERS FELLED</span><span class="player-stat-val">0</span></div>
       </div>
     </div>
     <div class="player-status player-status-ready">READY</div>
@@ -391,6 +444,10 @@ const applySiegeUpdate = (fresh) => {
   if (selectedSiege?.id === fresh.id) selectedSiege = fresh;
   renderRoomList();
   renderPreview();
+  // If realtime brought a participant we haven't fetched yet (e.g. some
+  // stranger just joined a siege we're watching), warm the cache and
+  // repaint so the slot's UNITS count flips from "?" to the real value.
+  prefetchSiegeProfiles().then(changed => { if (changed) renderPreview(); });
 };
 
 // ── DISBAND CONFIRMATION MODAL ──
@@ -501,7 +558,8 @@ if (handoffDiff) {
   });
 }
 
-await loadSieges();
+await Promise.all([loadSieges(), loadProfile()]);
+await prefetchSiegeProfiles();
 
 if (handoffId) {
   sessionStorage.removeItem('lobbySelectedId');
@@ -513,7 +571,6 @@ if (!selectedSiege) {
 
 renderRoomList();
 renderPreview();
-loadProfile();
 
 // ── REALTIME ──
 // Supabase Realtime broadcasts INSERT/DELETE events on the sieges table so
@@ -529,6 +586,9 @@ supabase
     if (!fresh || sieges.some(s => s.id === fresh.id)) return;
     sieges = [fresh, ...sieges];
     renderRoomList();
+    // The new siege's host may not be in the profile cache yet — fetch so
+    // their UNITS count appears the moment a viewer clicks the room.
+    prefetchSiegeProfiles().then(changed => { if (changed) renderPreview(); });
   })
   .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sieges' }, (payload) => {
     const fresh = payload.new;

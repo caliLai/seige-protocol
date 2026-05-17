@@ -8,62 +8,51 @@ class Tower extends Sprite {
     reward = 80;
     isDead = false;
 
+    attackRadius = 200;
+    attackDamage = 10;
+    attackCooldownMs = 800;
+    lastAttackAt = 0;
+
+    target = null;
+
+    projectiles = [];
+    projectileSpeed = 5;
+    projectileSize = 8;
+
     constructor(position) {
         super(position);
     }
 
     render() {
-        // Draw tower
         gameCanvas.fillStyle = "blue";
         gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
-
-        // Draw HP bar above tower
         this.drawHealthBar();
     }
 
     drawHealthBar() {
-        const barWidth = this.width;
-        const barHeight = 6;
-
         const x = this.position.x;
         const y = this.position.y - 10;
 
-        // Background (missing HP)
         gameCanvas.fillStyle = "#3a3a3a";
-        gameCanvas.fillRect(x, y, barWidth, barHeight);
+        gameCanvas.fillRect(x, y, this.width, 6);
 
-        const healthPercent = this.health / this.maxHealth;
+        const hpRatio = this.health / this.maxHealth;
 
-        // HP color based on percentage
-        if (healthPercent > 0.6) {
-            gameCanvas.fillStyle = "limegreen";
-        } else if (healthPercent > 0.3) {
-            gameCanvas.fillStyle = "yellow";
-        } else {
-            gameCanvas.fillStyle = "#ff3b30";
-        }
+        if (hpRatio > 0.6) gameCanvas.fillStyle = "limegreen";
+        else if (hpRatio > 0.3) gameCanvas.fillStyle = "yellow";
+        else gameCanvas.fillStyle = "#ff3b30";
 
-        gameCanvas.fillRect(
-            x,
-            y,
-            barWidth * healthPercent,
-            barHeight
-        );
+        gameCanvas.fillRect(x, y, this.width * hpRatio, 6);
 
-        // Border
         gameCanvas.strokeStyle = "black";
-        gameCanvas.strokeRect(x, y, barWidth, barHeight);
+        gameCanvas.strokeRect(x, y, this.width, 6);
     }
 
     takeDamage(amount) {
         if (this.isDead) return;
 
         this.health -= amount;
-
-        // Clamp health
-        if (this.health < 0) {
-            this.health = 0;
-        }
+        if (this.health < 0) this.health = 0;
 
         if (this.health === 0 && !this.isDead) {
             this.isDead = true;
@@ -76,9 +65,88 @@ class Tower extends Sprite {
         }
     }
 
-    updateFrame() {
-        if (!this.isDead) {
-            this.render();
+    findTarget(unit) {
+        if (!unit || unit.health <= 0) {
+            this.target = null;
+            return;
         }
+
+        const dx = unit.centre.x - this.centre.x;
+        const dy = unit.centre.y - this.centre.y;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance <= this.attackRadius) {
+            this.target = unit;
+        } else {
+            this.target = null;
+        }
+    }
+
+    spawnProjectile(target) {
+        const from = {
+            x: this.centre.x,
+            y: this.centre.y
+        };
+
+        const dx = target.centre.x - from.x;
+        const dy = target.centre.y - from.y;
+        const angle = Math.atan2(dy, dx);
+
+        this.projectiles.push({
+            x: from.x,
+            y: from.y,
+            vx: Math.cos(angle) * this.projectileSpeed,
+            vy: Math.sin(angle) * this.projectileSpeed,
+            damage: this.attackDamage,
+            target
+        });
+    }
+
+    attack() {
+        if (!this.target) return;
+
+        const now = performance.now();
+
+        if (now - this.lastAttackAt < this.attackCooldownMs) return;
+
+        this.lastAttackAt = now;
+
+        this.spawnProjectile(this.target);
+    }
+
+    updateProjectiles() {
+        this.projectiles = this.projectiles.filter(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+
+            gameCanvas.fillStyle = "yellow";
+            gameCanvas.fillRect(p.x, p.y, this.projectileSize, this.projectileSize);
+
+            const target = p.target;
+            if (!target || target.health <= 0) return false;
+
+            const dx = target.centre.x - p.x;
+            const dy = target.centre.y - p.y;
+            const distance = Math.hypot(dx, dy);
+
+            if (distance <= 10) {
+                if (typeof target.takeDamage === "function") {
+                    target.takeDamage(p.damage);
+                }
+                return false;
+            }
+
+            return true;
+        });
+    }
+
+    updateFrame(unit) {
+        if (this.isDead) return;
+
+        this.findTarget(unit);
+        this.attack();
+        this.updateProjectiles();
+
+        this.render();
     }
 }

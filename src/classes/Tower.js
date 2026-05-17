@@ -22,7 +22,6 @@ class Tower extends Sprite {
     projectileSpeed = 5;
     projectileSize = 8;
 
-    // ✅ IMAGE SYSTEM
     static image = null;
     static loaded = false;
 
@@ -38,18 +37,15 @@ class Tower extends Sprite {
                 Tower.loaded = true;
             };
 
-            // ✅ your asset
             Tower.image.src = "../assets/Tower/tower_1.png";
         }
     }
 
     render() {
-        // ✅ ALWAYS attempt to draw image (no flicker fallback switching)
         if (Tower.image && Tower.loaded) {
             gameCanvas.drawImage(
                 Tower.image,
                 this.position.x - (this.drawWidth - this.width) / 2,
-                // ✅ FIX: anchor to bottom instead of center
                 this.position.y - (this.drawHeight - this.height),
                 this.drawWidth,
                 this.drawHeight

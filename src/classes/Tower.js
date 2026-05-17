@@ -2,6 +2,9 @@ class Tower extends Sprite {
     width = 50;
     height = 50;
 
+    drawWidth = 96;
+    drawHeight = 96;
+
     maxHealth = 100;
     health = 100;
 
@@ -19,13 +22,40 @@ class Tower extends Sprite {
     projectileSpeed = 5;
     projectileSize = 8;
 
+    // ✅ IMAGE SYSTEM
+    static image = null;
+    static loaded = false;
+
     constructor(position) {
         super(position);
+        Tower.loadAssets();
+    }
+
+    static loadAssets() {
+        if (!Tower.image) {
+            Tower.image = new Image();
+            Tower.image.onload = () => {
+                Tower.loaded = true;
+            };
+
+            // ✅ your asset
+            Tower.image.src = "../assets/Tower/tower_1.png";
+        }
     }
 
     render() {
-        gameCanvas.fillStyle = "blue";
-        gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
+        // ✅ ALWAYS attempt to draw image (no flicker fallback switching)
+        if (Tower.image && Tower.loaded) {
+            gameCanvas.drawImage(
+                Tower.image,
+                this.position.x - (this.drawWidth - this.width) / 2,
+                // ✅ FIX: anchor to bottom instead of center
+                this.position.y - (this.drawHeight - this.height),
+                this.drawWidth,
+                this.drawHeight
+            );
+        }
+
         this.drawHealthBar();
     }
 

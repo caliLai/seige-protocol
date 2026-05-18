@@ -1,25 +1,25 @@
-class Archer extends Unit {
-    role = 'Ranged Damage Dealer';
+class Soldier extends Unit {
+    role = 'Versatile Ranged';
 
     width = 50;
     height = 50;
     drawWidth = 120;
     drawHeight = 120;
-    maxHealth = 80;
-    health = 80;
+    maxHealth = 110;
+    health = 110;
     shield = 0;
-    armor = 0;
-    cost = 55;
+    armor = 2;
+    cost = 60;
 
-    moveSpeedPxPerSecond = 55;
+    moveSpeedPxPerSecond = 52;
 
-    attackRadius = 160;
-    attackStrength = 14;
-    attackCooldownMs = 1000 / 1.4;
+    attackRadius = 135;
+    attackStrength = 11;
+    attackCooldownMs = 1000 / 1.25;
 
-    projectileSpeed = 6;
+    projectileSpeed = 5.5;
     projectileSize = 10;
-    projectileDrawSize = 22;
+    projectileDrawSize = 20;
     projectileRotationOffset = 0;
 
     attackFrameDurationMs = 70;
@@ -34,8 +34,8 @@ class Archer extends Unit {
     currentWalkFrame = 0;
     lastWalkFrameAt = 0;
 
-    static bodyImage = null;
-    static bodyImageLoaded = false;
+    static idleImage = null;
+    static idleImageLoaded = false;
 
     static attackImage = null;
     static attackImageLoaded = false;
@@ -48,51 +48,51 @@ class Archer extends Unit {
 
     constructor(position) {
         super(position);
-        Archer.loadAssets();
+        Soldier.loadAssets();
     }
 
     static loadAssets() {
-        if (!Archer.bodyImage) {
-            Archer.bodyImage = new Image();
-            Archer.bodyImage.onload = () => {
-                Archer.bodyImageLoaded = true;
+        if (!Soldier.idleImage) {
+            Soldier.idleImage = new Image();
+            Soldier.idleImage.onload = () => {
+                Soldier.idleImageLoaded = true;
             };
-            Archer.bodyImage.src = "/assets/Archer/Archer/Archer-Idle.png";
+            Soldier.idleImage.src = "/assets/Soldier/Soldier/Soldier-Idle.png";
         }
 
-        if (!Archer.attackImage) {
-            Archer.attackImage = new Image();
-            Archer.attackImage.onload = () => {
-                Archer.attackImageLoaded = true;
+        if (!Soldier.attackImage) {
+            Soldier.attackImage = new Image();
+            Soldier.attackImage.onload = () => {
+                Soldier.attackImageLoaded = true;
             };
-            Archer.attackImage.src = "/assets/Archer/Archer/Archer-Attack01.png";
+            Soldier.attackImage.src = "/assets/Soldier/Soldier/Soldier-Attack01.png";
         }
 
-        if (!Archer.walkImage) {
-            Archer.walkImage = new Image();
-            Archer.walkImage.onload = () => {
-                Archer.walkImageLoaded = true;
+        if (!Soldier.walkImage) {
+            Soldier.walkImage = new Image();
+            Soldier.walkImage.onload = () => {
+                Soldier.walkImageLoaded = true;
             };
-            Archer.walkImage.src = "/assets/Archer/Archer/Archer-Walk.png";
+            Soldier.walkImage.src = "/assets/Soldier/Soldier/Soldier-Walk.png";
         }
 
-        if (!Archer.projectileImage) {
-            Archer.projectileImage = new Image();
-            Archer.projectileImage.onload = () => {
-                Archer.projectileImageLoaded = true;
+        if (!Soldier.projectileImage) {
+            Soldier.projectileImage = new Image();
+            Soldier.projectileImage.onload = () => {
+                Soldier.projectileImageLoaded = true;
             };
-            Archer.projectileImage.src = "/assets/Archer/Arrow(projectile)/Arrow02(32x32).png";
+            Soldier.projectileImage.src = "/assets/Soldier/Arrow(projectile)/Arrow01(32x32).png";
         }
     }
 
     get attackFrameCount() {
-        if (!Archer.attackImageLoaded) return 1;
-        return Math.max(1, Math.floor(Archer.attackImage.width / Archer.attackImage.height));
+        if (!Soldier.attackImageLoaded) return 1;
+        return Math.max(1, Math.floor(Soldier.attackImage.width / Soldier.attackImage.height));
     }
 
     get walkFrameCount() {
-        if (!Archer.walkImageLoaded) return 1;
-        return Math.max(1, Math.floor(Archer.walkImage.width / Archer.walkImage.height));
+        if (!Soldier.walkImageLoaded) return 1;
+        return Math.max(1, Math.floor(Soldier.walkImage.width / Soldier.walkImage.height));
     }
 
     updateWalkAnimation() {
@@ -109,9 +109,9 @@ class Archer extends Unit {
     }
 
     render() {
-        if (Archer.bodyImageLoaded) {
-            const usingAttackSheet = this.isAttacking && Archer.attackImageLoaded;
-            const usingWalkSheet = !usingAttackSheet && this.isMoving && Archer.walkImageLoaded;
+        if (Soldier.idleImageLoaded) {
+            const usingAttackSheet = this.isAttacking && Soldier.attackImageLoaded;
+            const usingWalkSheet = !usingAttackSheet && this.isMoving && Soldier.walkImageLoaded;
 
             if (usingWalkSheet) {
                 this.updateWalkAnimation();
@@ -120,8 +120,8 @@ class Archer extends Unit {
             }
 
             const spriteSheet = usingAttackSheet
-                ? Archer.attackImage
-                : (usingWalkSheet ? Archer.walkImage : Archer.bodyImage);
+                ? Soldier.attackImage
+                : (usingWalkSheet ? Soldier.walkImage : Soldier.idleImage);
             const frameSize = spriteSheet.height;
             const frameIndex = usingAttackSheet
                 ? Math.min(this.currentAttackFrame, this.attackFrameCount - 1)
@@ -220,7 +220,7 @@ class Archer extends Unit {
             projectile.x += projectile.vx;
             projectile.y += projectile.vy;
 
-            if (Archer.projectileImageLoaded) {
+            if (Soldier.projectileImageLoaded) {
                 const centerX = projectile.x + this.projectileSize / 2;
                 const centerY = projectile.y + this.projectileSize / 2;
                 const angle = Math.atan2(projectile.vy, projectile.vx) + this.projectileRotationOffset;
@@ -229,7 +229,7 @@ class Archer extends Unit {
                 gameCanvas.translate(centerX, centerY);
                 gameCanvas.rotate(angle);
                 gameCanvas.drawImage(
-                    Archer.projectileImage,
+                    Soldier.projectileImage,
                     -this.projectileDrawSize / 2,
                     -this.projectileDrawSize / 2,
                     this.projectileDrawSize,

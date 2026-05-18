@@ -1,24 +1,24 @@
-class Knight extends Unit {
-    role = 'Frontline Bruiser';
+class Swordsman extends Unit {
+    role = 'Balanced Melee';
 
     width = 52;
     height = 52;
     drawWidth = 128;
     drawHeight = 128;
 
-    maxHealth = 140;
-    health = 140;
+    maxHealth = 110;
+    health = 110;
     shield = 0;
-    armor = 4;
-    cost = 65;
+    armor = 2;
+    cost = 50;
 
-    moveSpeedPxPerSecond = 48;
+    moveSpeedPxPerSecond = 50;
 
-    attackRadius = 80;
-    attackStrength = 18;
-    attackCooldownMs = 1000 / 1.1;
+    attackRadius = 82;
+    attackStrength = 20;
+    attackCooldownMs = 1000 / 1.2;
 
-    attackFrameDurationMs = 70;
+    attackFrameDurationMs = 72;
     attackReleaseFrame = 5;
     isAttacking = false;
     hasAppliedHit = false;
@@ -42,43 +42,43 @@ class Knight extends Unit {
 
     constructor(position) {
         super(position);
-        Knight.loadAssets();
+        Swordsman.loadAssets();
     }
 
     static loadAssets() {
-        if (!Knight.idleImage) {
-            Knight.idleImage = new Image();
-            Knight.idleImage.onload = () => {
-                Knight.idleImageLoaded = true;
+        if (!Swordsman.idleImage) {
+            Swordsman.idleImage = new Image();
+            Swordsman.idleImage.onload = () => {
+                Swordsman.idleImageLoaded = true;
             };
-            Knight.idleImage.src = "/assets/Knight/Knight/Knight-Idle.png";
+            Swordsman.idleImage.src = "/assets/Swordsman/Swordsman/Swordsman-Idle.png";
         }
 
-        if (!Knight.attackImage) {
-            Knight.attackImage = new Image();
-            Knight.attackImage.onload = () => {
-                Knight.attackImageLoaded = true;
+        if (!Swordsman.attackImage) {
+            Swordsman.attackImage = new Image();
+            Swordsman.attackImage.onload = () => {
+                Swordsman.attackImageLoaded = true;
             };
-            Knight.attackImage.src = "/assets/Knight/Knight/Knight-Attack01.png";
+            Swordsman.attackImage.src = "/assets/Swordsman/Swordsman/Swordsman-Attack01.png";
         }
 
-        if (!Knight.walkImage) {
-            Knight.walkImage = new Image();
-            Knight.walkImage.onload = () => {
-                Knight.walkImageLoaded = true;
+        if (!Swordsman.walkImage) {
+            Swordsman.walkImage = new Image();
+            Swordsman.walkImage.onload = () => {
+                Swordsman.walkImageLoaded = true;
             };
-            Knight.walkImage.src = "/assets/Knight/Knight/Knight-Walk.png";
+            Swordsman.walkImage.src = "/assets/Swordsman/Swordsman/Swordsman-Walk.png";
         }
     }
 
     get attackFrameCount() {
-        if (!Knight.attackImageLoaded) return 1;
-        return Math.max(1, Math.floor(Knight.attackImage.width / Knight.attackImage.height));
+        if (!Swordsman.attackImageLoaded) return 1;
+        return Math.max(1, Math.floor(Swordsman.attackImage.width / Swordsman.attackImage.height));
     }
 
     get walkFrameCount() {
-        if (!Knight.walkImageLoaded) return 1;
-        return Math.max(1, Math.floor(Knight.walkImage.width / Knight.walkImage.height));
+        if (!Swordsman.walkImageLoaded) return 1;
+        return Math.max(1, Math.floor(Swordsman.walkImage.width / Swordsman.walkImage.height));
     }
 
     updateWalkAnimation() {
@@ -95,9 +95,9 @@ class Knight extends Unit {
     }
 
     render() {
-        if (Knight.idleImageLoaded) {
-            const usingAttackSheet = this.isAttacking && Knight.attackImageLoaded;
-            const usingWalkSheet = !usingAttackSheet && this.isMoving && Knight.walkImageLoaded;
+        if (Swordsman.idleImageLoaded) {
+            const usingAttackSheet = this.isAttacking && Swordsman.attackImageLoaded;
+            const usingWalkSheet = !usingAttackSheet && this.isMoving && Swordsman.walkImageLoaded;
 
             if (usingWalkSheet) {
                 this.updateWalkAnimation();
@@ -106,8 +106,8 @@ class Knight extends Unit {
             }
 
             const spriteSheet = usingAttackSheet
-                ? Knight.attackImage
-                : (usingWalkSheet ? Knight.walkImage : Knight.idleImage);
+                ? Swordsman.attackImage
+                : (usingWalkSheet ? Swordsman.walkImage : Swordsman.idleImage);
 
             const frameSize = spriteSheet.height;
             const frameIndex = usingAttackSheet

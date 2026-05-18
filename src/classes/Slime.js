@@ -1,31 +1,31 @@
-class Knight extends Unit {
-    role = 'Frontline Bruiser';
+class Slime extends Unit {
+    role = 'Melee Brawler';
 
-    width = 52;
-    height = 52;
-    drawWidth = 128;
-    drawHeight = 128;
+    width = 48;
+    height = 48;
+    drawWidth = 112;
+    drawHeight = 112;
 
-    maxHealth = 140;
-    health = 140;
+    maxHealth = 90;
+    health = 90;
     shield = 0;
-    armor = 4;
-    cost = 65;
+    armor = 0;
+    cost = 0;
 
-    moveSpeedPxPerSecond = 48;
+    moveSpeedPxPerSecond = 46;
 
-    attackRadius = 80;
-    attackStrength = 18;
-    attackCooldownMs = 1000 / 1.1;
+    attackRadius = 78;
+    attackStrength = 12;
+    attackCooldownMs = 1000 / 1.35;
 
     attackFrameDurationMs = 70;
-    attackReleaseFrame = 5;
+    attackReleaseFrame = 4;
     isAttacking = false;
     hasAppliedHit = false;
     currentAttackFrame = 0;
     lastAttackFrameAt = 0;
 
-    walkFrameDurationMs = 90;
+    walkFrameDurationMs = 95;
     isMoving = false;
     currentWalkFrame = 0;
     lastWalkFrameAt = 0;
@@ -42,43 +42,43 @@ class Knight extends Unit {
 
     constructor(position) {
         super(position);
-        Knight.loadAssets();
+        Slime.loadAssets();
     }
 
     static loadAssets() {
-        if (!Knight.idleImage) {
-            Knight.idleImage = new Image();
-            Knight.idleImage.onload = () => {
-                Knight.idleImageLoaded = true;
+        if (!Slime.idleImage) {
+            Slime.idleImage = new Image();
+            Slime.idleImage.onload = () => {
+                Slime.idleImageLoaded = true;
             };
-            Knight.idleImage.src = "/assets/Knight/Knight/Knight-Idle.png";
+            Slime.idleImage.src = "/assets/Slime/Slime/Slime-Idle.png";
         }
 
-        if (!Knight.attackImage) {
-            Knight.attackImage = new Image();
-            Knight.attackImage.onload = () => {
-                Knight.attackImageLoaded = true;
+        if (!Slime.attackImage) {
+            Slime.attackImage = new Image();
+            Slime.attackImage.onload = () => {
+                Slime.attackImageLoaded = true;
             };
-            Knight.attackImage.src = "/assets/Knight/Knight/Knight-Attack01.png";
+            Slime.attackImage.src = "/assets/Slime/Slime/Slime-Attack01.png";
         }
 
-        if (!Knight.walkImage) {
-            Knight.walkImage = new Image();
-            Knight.walkImage.onload = () => {
-                Knight.walkImageLoaded = true;
+        if (!Slime.walkImage) {
+            Slime.walkImage = new Image();
+            Slime.walkImage.onload = () => {
+                Slime.walkImageLoaded = true;
             };
-            Knight.walkImage.src = "/assets/Knight/Knight/Knight-Walk.png";
+            Slime.walkImage.src = "/assets/Slime/Slime/Slime-Walk.png";
         }
     }
 
     get attackFrameCount() {
-        if (!Knight.attackImageLoaded) return 1;
-        return Math.max(1, Math.floor(Knight.attackImage.width / Knight.attackImage.height));
+        if (!Slime.attackImageLoaded) return 1;
+        return Math.max(1, Math.floor(Slime.attackImage.width / Slime.attackImage.height));
     }
 
     get walkFrameCount() {
-        if (!Knight.walkImageLoaded) return 1;
-        return Math.max(1, Math.floor(Knight.walkImage.width / Knight.walkImage.height));
+        if (!Slime.walkImageLoaded) return 1;
+        return Math.max(1, Math.floor(Slime.walkImage.width / Slime.walkImage.height));
     }
 
     updateWalkAnimation() {
@@ -95,9 +95,9 @@ class Knight extends Unit {
     }
 
     render() {
-        if (Knight.idleImageLoaded) {
-            const usingAttackSheet = this.isAttacking && Knight.attackImageLoaded;
-            const usingWalkSheet = !usingAttackSheet && this.isMoving && Knight.walkImageLoaded;
+        if (Slime.idleImageLoaded) {
+            const usingAttackSheet = this.isAttacking && Slime.attackImageLoaded;
+            const usingWalkSheet = !usingAttackSheet && this.isMoving && Slime.walkImageLoaded;
 
             if (usingWalkSheet) {
                 this.updateWalkAnimation();
@@ -106,8 +106,8 @@ class Knight extends Unit {
             }
 
             const spriteSheet = usingAttackSheet
-                ? Knight.attackImage
-                : (usingWalkSheet ? Knight.walkImage : Knight.idleImage);
+                ? Slime.attackImage
+                : (usingWalkSheet ? Slime.walkImage : Slime.idleImage);
 
             const frameSize = spriteSheet.height;
             const frameIndex = usingAttackSheet

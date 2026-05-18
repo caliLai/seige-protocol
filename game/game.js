@@ -120,8 +120,23 @@ const startGame = () => {
         case "archer":
             attackUnit = new Archer(pathStart);
             break;
+        case "soldier":
+            attackUnit = new Soldier(pathStart);
+            break;
         case "knight":
             attackUnit = new Knight(pathStart);
+            break;
+        case "orc":
+            attackUnit = new Orc(pathStart);
+            break;
+        case "swordsman":
+            attackUnit = new Swordsman(pathStart);
+            break;
+        case "slime":
+            attackUnit = new Slime(pathStart);
+            break;
+        case "skeleton":
+            attackUnit = new Skeleton(pathStart);
             break;
         case "unit":
             attackUnit = new Unit(pathStart);

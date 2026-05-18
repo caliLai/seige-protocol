@@ -1,35 +1,34 @@
-class Knight extends Unit {
-    role = 'Frontline Bruiser';
+class Orc extends Unit {
+    role = 'Bruiser';
 
-    width = 52;
-    height = 52;
-    drawWidth = 128;
-    drawHeight = 128;
+    width = 54;
+    height = 54;
+    drawWidth = 132;
+    drawHeight = 132;
 
-    maxHealth = 140;
-    health = 140;
+    maxHealth = 130;
+    health = 130;
     shield = 0;
-    armor = 4;
-    cost = 65;
+    armor = 2;
+    cost = 50;
 
-    moveSpeedPxPerSecond = 48;
+    moveSpeedPxPerSecond = 44;
 
-    attackRadius = 80;
-    attackStrength = 18;
-    attackCooldownMs = 1000 / 1.1;
+    attackRadius = 85;
+    attackStrength = 22;
+    attackCooldownMs = 1000 / 1.0;
 
-    attackFrameDurationMs = 70;
+    attackFrameDurationMs = 75;
     attackReleaseFrame = 5;
     isAttacking = false;
     hasAppliedHit = false;
     currentAttackFrame = 0;
     lastAttackFrameAt = 0;
 
-    walkFrameDurationMs = 90;
+    walkFrameDurationMs = 95;
     isMoving = false;
     currentWalkFrame = 0;
     lastWalkFrameAt = 0;
-    facingDirection = 1;
 
     static idleImage = null;
     static idleImageLoaded = false;
@@ -42,43 +41,43 @@ class Knight extends Unit {
 
     constructor(position) {
         super(position);
-        Knight.loadAssets();
+        Orc.loadAssets();
     }
 
     static loadAssets() {
-        if (!Knight.idleImage) {
-            Knight.idleImage = new Image();
-            Knight.idleImage.onload = () => {
-                Knight.idleImageLoaded = true;
+        if (!Orc.idleImage) {
+            Orc.idleImage = new Image();
+            Orc.idleImage.onload = () => {
+                Orc.idleImageLoaded = true;
             };
-            Knight.idleImage.src = "/assets/Knight/Knight/Knight-Idle.png";
+            Orc.idleImage.src = "/assets/Orc/Orc/Orc-Idle.png";
         }
 
-        if (!Knight.attackImage) {
-            Knight.attackImage = new Image();
-            Knight.attackImage.onload = () => {
-                Knight.attackImageLoaded = true;
+        if (!Orc.attackImage) {
+            Orc.attackImage = new Image();
+            Orc.attackImage.onload = () => {
+                Orc.attackImageLoaded = true;
             };
-            Knight.attackImage.src = "/assets/Knight/Knight/Knight-Attack01.png";
+            Orc.attackImage.src = "/assets/Orc/Orc/Orc-Attack01.png";
         }
 
-        if (!Knight.walkImage) {
-            Knight.walkImage = new Image();
-            Knight.walkImage.onload = () => {
-                Knight.walkImageLoaded = true;
+        if (!Orc.walkImage) {
+            Orc.walkImage = new Image();
+            Orc.walkImage.onload = () => {
+                Orc.walkImageLoaded = true;
             };
-            Knight.walkImage.src = "/assets/Knight/Knight/Knight-Walk.png";
+            Orc.walkImage.src = "/assets/Orc/Orc/Orc-Walk.png";
         }
     }
 
     get attackFrameCount() {
-        if (!Knight.attackImageLoaded) return 1;
-        return Math.max(1, Math.floor(Knight.attackImage.width / Knight.attackImage.height));
+        if (!Orc.attackImageLoaded) return 1;
+        return Math.max(1, Math.floor(Orc.attackImage.width / Orc.attackImage.height));
     }
 
     get walkFrameCount() {
-        if (!Knight.walkImageLoaded) return 1;
-        return Math.max(1, Math.floor(Knight.walkImage.width / Knight.walkImage.height));
+        if (!Orc.walkImageLoaded) return 1;
+        return Math.max(1, Math.floor(Orc.walkImage.width / Orc.walkImage.height));
     }
 
     updateWalkAnimation() {
@@ -95,9 +94,9 @@ class Knight extends Unit {
     }
 
     render() {
-        if (Knight.idleImageLoaded) {
-            const usingAttackSheet = this.isAttacking && Knight.attackImageLoaded;
-            const usingWalkSheet = !usingAttackSheet && this.isMoving && Knight.walkImageLoaded;
+        if (Orc.idleImageLoaded) {
+            const usingAttackSheet = this.isAttacking && Orc.attackImageLoaded;
+            const usingWalkSheet = !usingAttackSheet && this.isMoving && Orc.walkImageLoaded;
 
             if (usingWalkSheet) {
                 this.updateWalkAnimation();
@@ -106,8 +105,8 @@ class Knight extends Unit {
             }
 
             const spriteSheet = usingAttackSheet
-                ? Knight.attackImage
-                : (usingWalkSheet ? Knight.walkImage : Knight.idleImage);
+                ? Orc.attackImage
+                : (usingWalkSheet ? Orc.walkImage : Orc.idleImage);
 
             const frameSize = spriteSheet.height;
             const frameIndex = usingAttackSheet
@@ -119,38 +118,17 @@ class Knight extends Unit {
             const sw = frameSize;
             const sh = frameSize;
 
-            const drawX = this.position.x - (this.drawWidth - this.width) / 2;
-            const drawY = this.position.y - (this.drawHeight - this.height) / 2;
-
-            if (this.facingDirection >= 0) {
-                gameCanvas.drawImage(
-                    spriteSheet,
-                    sx,
-                    sy,
-                    sw,
-                    sh,
-                    drawX,
-                    drawY,
-                    this.drawWidth,
-                    this.drawHeight
-                );
-            } else {
-                gameCanvas.save();
-                gameCanvas.translate(drawX + this.drawWidth / 2, 0);
-                gameCanvas.scale(-1, 1);
-                gameCanvas.drawImage(
-                    spriteSheet,
-                    sx,
-                    sy,
-                    sw,
-                    sh,
-                    -this.drawWidth / 2,
-                    drawY,
-                    this.drawWidth,
-                    this.drawHeight
-                );
-                gameCanvas.restore();
-            }
+            gameCanvas.drawImage(
+                spriteSheet,
+                sx,
+                sy,
+                sw,
+                sh,
+                this.position.x - (this.drawWidth - this.width) / 2,
+                this.position.y - (this.drawHeight - this.height) / 2,
+                this.drawWidth,
+                this.drawHeight
+            );
             return;
         }
 
@@ -163,11 +141,6 @@ class Knight extends Unit {
             this.hasAppliedHit = false;
             this.currentAttackFrame = 0;
             return;
-        }
-
-        const targetDx = this.target.centre.x - this.centre.x;
-        if (Math.abs(targetDx) > 0.001) {
-            this.facingDirection = targetDx >= 0 ? 1 : -1;
         }
 
         const now = performance.now();
@@ -207,11 +180,6 @@ class Knight extends Unit {
         const beforeY = this.position.y;
 
         super.calculateAndUpdatePathMovement();
-
-        const deltaX = this.position.x - beforeX;
-        if (Math.abs(deltaX) > 0.001) {
-            this.facingDirection = deltaX >= 0 ? 1 : -1;
-        }
 
         const movedDistance = Math.hypot(this.position.x - beforeX, this.position.y - beforeY);
         this.isMoving = movedDistance > 0.001;

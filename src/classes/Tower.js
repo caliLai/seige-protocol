@@ -9,8 +9,8 @@ class Tower extends Sprite {
     health = 100;
 
     reward = 80;
-    isDead = false;
 
+    //keep combat values (not in parent actually)
     attackRadius = 200;
     attackDamage = 10;
     attackCooldownMs = 800;
@@ -42,15 +42,16 @@ class Tower extends Sprite {
     }
 
     render() {
-        if (Tower.image && Tower.loaded) {
-            gameCanvas.drawImage(
-                Tower.image,
-                this.position.x - (this.drawWidth - this.width) / 2,
-                this.position.y - (this.drawHeight - this.height),
-                this.drawWidth,
-                this.drawHeight
-            );
-        }
+        //early return pattern (review feedback)
+        if (!Tower.image || !Tower.loaded) return;
+
+        gameCanvas.drawImage(
+            Tower.image,
+            this.position.x - (this.drawWidth - this.width) / 2,
+            this.position.y - (this.drawHeight - this.height),
+            this.drawWidth,
+            this.drawHeight
+        );
 
         this.drawHealthBar();
     }
@@ -75,14 +76,10 @@ class Tower extends Sprite {
     }
 
     takeDamage(amount) {
-        if (this.isDead) return;
-
+        // no flag check needed anymore
         this.health -= amount;
-        if (this.health < 0) this.health = 0;
 
-        if (this.health === 0 && !this.isDead) {
-            this.isDead = true;
-
+        if (this.health <= 0) {
             console.log("Tower destroyed! +" + this.reward + " gold");
 
             if (typeof addGold === "function") {
@@ -92,7 +89,7 @@ class Tower extends Sprite {
     }
 
     findTarget(unit) {
-        if (!unit || unit.health <= 0) {
+        if (!unit || unit.isDead) {
             this.target = null;
             return;
         }
@@ -101,11 +98,7 @@ class Tower extends Sprite {
         const dy = unit.centre.y - this.centre.y;
         const distance = Math.hypot(dx, dy);
 
-        if (distance <= this.attackRadius) {
-            this.target = unit;
-        } else {
-            this.target = null;
-        }
+        this.target = distance <= this.attackRadius ? unit : null;
     }
 
     spawnProjectile(target) {
@@ -141,6 +134,7 @@ class Tower extends Sprite {
     }
 
     updateProjectiles() {
+        //still using filter intentionally
         this.projectiles = this.projectiles.filter(p => {
             p.x += p.vx;
             p.y += p.vy;
@@ -149,7 +143,7 @@ class Tower extends Sprite {
             gameCanvas.fillRect(p.x, p.y, this.projectileSize, this.projectileSize);
 
             const target = p.target;
-            if (!target || target.health <= 0) return false;
+            if (!target || target.isDead) return false;
 
             const dx = target.centre.x - p.x;
             const dy = target.centre.y - p.y;
@@ -159,10 +153,10 @@ class Tower extends Sprite {
                 if (typeof target.takeDamage === "function") {
                     target.takeDamage(p.damage);
                 }
-                return false;
+                return false; // remove projectile
             }
 
-            return true;
+            return true; // keep projectile
         });
     }
 

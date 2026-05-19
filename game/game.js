@@ -53,20 +53,22 @@ const animate = () => {
 
     if (!mapLoaded) return;
 
+    // needed to prevent previous frame artifacts
     gameCanvas.clearRect(0, 0, gameCanvasElement.width, gameCanvasElement.height);
+
     gameCanvas.drawImage(backgroundImage, 0, 0);
 
     const tower = towers[0];
 
     if (tower && attackUnit && !gameFinished) {
-        const dx = Math.abs(tower.centre.x - attackUnit.centre.x);
-        const dy = Math.abs(tower.centre.y - attackUnit.centre.y);
+        const dx = tower.centre.x - attackUnit.centre.x;
+        const dy = tower.centre.y - attackUnit.centre.y;
         const distance = Math.hypot(dx, dy);
 
-        if (tower.health > 0 && distance <= attackUnit.attackRadius) {
+        if (!tower.isDead && distance <= attackUnit.attackRadius) {
             attackUnit.target = tower;
         } else {
-            if (tower.health <= 0) {
+            if (tower.isDead) {
                 towers.shift();
 
                 towersDestroyedCount++;
@@ -80,21 +82,12 @@ const animate = () => {
     }
 
     if (attackUnit) {
-        attackUnit.updateFrame(); 
+        attackUnit.updateFrame();
     }
 
+    // simplified – each tower manages itself
     towers.forEach(tower => {
-        if (!tower.isDead) {
-            tower.findTarget(attackUnit);
-            tower.attack();
-            tower.updateProjectiles();
-        }
-    });
-
-    towers.forEach(tower => {
-        if (!tower.isDead) {
-            tower.render();
-        }
+        tower.updateFrame(attackUnit);
     });
 };
 
@@ -145,8 +138,9 @@ backgroundImage.onload = () => {
     mapLoaded = true;
     initialiseTowers();
 
+    //render once before game starts
     gameCanvas.drawImage(backgroundImage, 0, 0);
-
     towers.forEach(tower => tower.render());
 };
+
 backgroundImage.src = "../assets/maps/calista-map.png";

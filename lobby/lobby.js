@@ -426,14 +426,74 @@ leaveBtn.addEventListener('click', async () => {
   showAlert('↶ YE HAVE WITHDRAWN FROM THE SIEGE', 'success');
 });
 
-// Kicks the actual battle off once both sides are seated. Host-only.
-// Joiners get auto-navigated by the realtime layer once `started_at` is
-// added in a future migration; for now the host's click is what fires it.
-startBtn.addEventListener('click', () => {
+// Kicks the actual battle off once both sides are seated. Host-only. The
+// host navigates directly here on a successful update; the ally rides the
+// realtime UPDATE event below to land on the same screen.
+startBtn.addEventListener('click', async () => {
   if (!selectedSiege || startBtn.disabled) return;
-  showAlert(`⚔ THE SIEGE OF ${selectedSiege.name} BEGINS…`, 'success');
-  setTimeout(() => smoothNavigate('/game/game.html'), 900);
+  if (selectedSiege.host_id !== user.id) return;
+
+  startBtn.disabled = true;
+  const { data, error } = await supabase
+    .from('sieges')
+    .update({ started_at: new Date().toISOString() })
+    .eq('id', selectedSiege.id)
+    .eq('host_id', user.id)
+    .is('started_at', null)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error('start siege failed', error);
+    showAlert(`✗ COULD NOT START: ${(error.message || '').toUpperCase()}`, 'error');
+    renderPreview();
+    return;
+  }
+
+  if (data) {
+    showAlert(`⚔ THE SIEGE OF ${data.name} BEGINS…`, 'success');
+    navigateToSetup(data.id);
+    return;
+  }
+
+  // data === null means the `.is('started_at', null)` filter matched no
+  // rows. That can mean "already started" (recoverable — just resume) OR
+  // "the row no longer matches our other filters" (host_id mismatch, row
+  // gone, RLS rejection). Re-read the row to tell the two apart instead
+  // of navigating into an invalid state that immediately bounces back.
+  const { data: row, error: readErr } = await supabase
+    .from('sieges')
+    .select('id, started_at, host_id')
+    .eq('id', selectedSiege.id)
+    .maybeSingle();
+
+  if (readErr || !row) {
+    console.error('start siege: row re-read failed', { readErr, row });
+    showAlert('⊘ THE SIEGE HATH VANISHED', 'error');
+    renderPreview();
+    return;
+  }
+  if (row.started_at) {
+    // Genuinely already started — resume into setup.
+    navigateToSetup(row.id);
+    return;
+  }
+  // started_at is still null on the actual row, yet our UPDATE didn't take.
+  // The most common cause is an RLS UPDATE policy that doesn't allow the
+  // host to write the new column. Surface it instead of bouncing forever.
+  console.error('start siege: UPDATE silently no-op', { selectedSiege, row, user });
+  showAlert('⊘ THE FORGE REJECTED THE WRIT — CHECK RLS UPDATE POLICY', 'error');
+  renderPreview();
 });
+
+// Navigation hand-off to the setup page. Called from the realtime UPDATE
+// handler when `started_at` flips, so both host and ally land on the same
+// screen at the same moment. sessionStorage carries the siege id so the
+// setup page doesn't have to guess.
+const navigateToSetup = (siegeId) => {
+  sessionStorage.setItem('setupSiegeId', siegeId);
+  smoothNavigate('/siege-setup/siege-setup.html');
+};
 
 // Reconcile a single siege row into local state — used for optimistic
 // updates after a JOIN/LEAVE and also from the realtime UPDATE handler.
@@ -569,8 +629,18 @@ if (!selectedSiege) {
   selectedSiege = sieges.find(s => s.difficulty === currentDiff) || null;
 }
 
-renderRoomList();
-renderPreview();
+// If the user is mid-setup (e.g. they refreshed during the unit-pick phase
+// or arrived via a deep link), bounce them straight back to the setup
+// screen rather than stranding them at the START button.
+const ongoing = sieges.find(
+  s => (s.host_id === user.id || s.ally_id === user.id) && s.started_at
+);
+if (ongoing) {
+  navigateToSetup(ongoing.id);
+} else {
+  renderRoomList();
+  renderPreview();
+}
 
 // ── REALTIME ──
 // Supabase Realtime broadcasts INSERT/DELETE events on the sieges table so
@@ -608,6 +678,16 @@ supabase
       } else if (allyDeparted) {
         showAlert('↶ THINE ALLY HATH WITHDRAWN', 'error');
       }
+    }
+
+    // If this UPDATE leaves the user looking at a siege they're in with a
+    // non-null started_at, jump to the setup page. We intentionally do NOT
+    // require a null→set transition here — that check breaks down when the
+    // ally's local `prev` was loaded already-started (e.g. they refreshed),
+    // or when the realtime payload's prev fields aren't trustworthy.
+    const userInSiege = fresh.host_id === user.id || fresh.ally_id === user.id;
+    if (userInSiege && fresh.started_at) {
+      navigateToSetup(fresh.id);
     }
   })
   .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'sieges' }, (payload) => {

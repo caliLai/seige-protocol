@@ -5,7 +5,7 @@ gameCanvasElement.width = 1120;
 gameCanvasElement.height = 640;
 
 const towers = [];
-let attackUnit = null;
+let attackUnits = [];
 
 let playerGold = 0;
 let animationId = null;
@@ -53,14 +53,19 @@ const animate = () => {
 
     if (!mapLoaded) return;
 
-    // needed to prevent previous frame artifacts
+    // clear frame
     gameCanvas.clearRect(0, 0, gameCanvasElement.width, gameCanvasElement.height);
 
+    // draw map
     gameCanvas.drawImage(backgroundImage, 0, 0);
 
-    const tower = towers[0];
+    // unit vs tower targeting logic (multi-unit safe)
+    for (let i = 0; i < attackUnits.length && towers.length && !gameFinished; i++) {
+        let attackUnit = attackUnits[i];
+        let tower = towers[0];
 
-    if (tower && attackUnit && !gameFinished) {
+        if (!attackUnit || !tower) continue;
+
         const dx = tower.centre.x - attackUnit.centre.x;
         const dy = tower.centre.y - attackUnit.centre.y;
         const distance = Math.hypot(dx, dy);
@@ -81,13 +86,12 @@ const animate = () => {
         }
     }
 
-    if (attackUnit) {
-        attackUnit.updateFrame();
-    }
+    // update all units
+    attackUnits.forEach(unit => unit.updateFrame());
 
-    // simplified – each tower manages itself
+    // single clean tower loop (your refactor preserved)
     towers.forEach(tower => {
-        tower.updateFrame(attackUnit);
+        tower.updateFrame(attackUnits[0]); //keeps compatibility with current tower logic
     });
 };
 
@@ -112,21 +116,28 @@ const startGame = () => {
 
     const pathStart = { x: path[0].x, y: path[0].y };
 
+    let newUnit;
+
     switch (selectedUnitType) {
         case "archer":
-            attackUnit = new Archer(pathStart);
+            newUnit = new Archer(pathStart);
             break;
         case "knight":
-            attackUnit = new Knight(pathStart);
+            newUnit = new Knight(pathStart);
             break;
         case "unit":
-            attackUnit = new Unit(pathStart);
+            newUnit = new Unit(pathStart);
             break;
         default:
             throw new Error("Invalid unit type");
     }
 
-    animate();
+    attackUnits.push(newUnit);
+
+    //ensure animation starts only once
+    if (!animationId) {
+        animate();
+    }
 };
 
 const nextWave = () => {
@@ -138,7 +149,7 @@ backgroundImage.onload = () => {
     mapLoaded = true;
     initialiseTowers();
 
-    //render once before game starts
+    // initial render
     gameCanvas.drawImage(backgroundImage, 0, 0);
     towers.forEach(tower => tower.render());
 };

@@ -150,15 +150,26 @@ const renderRoomList = () => {
   for (const siege of filtered) {
     const occupancy = siege.ally_id ? 2 : 1;
     const isFull = occupancy >= 2;
+    const isMineHost = siege.host_id === user.id;
+    const isMineAlly = siege.ally_id === user.id;
+    const isMine = isMineHost || isMineAlly;
     const card = document.createElement('div');
     card.className =
-      `room-card${selectedSiege?.id === siege.id ? ' is-selected' : ''}${isFull ? ' is-full' : ''}`;
+      `room-card${selectedSiege?.id === siege.id ? ' is-selected' : ''}${isFull ? ' is-full' : ''}${isMine ? ' is-mine' : ''}`;
     card.setAttribute('role', 'listitem');
     card.dataset.siegeId = siege.id;
+    // A persistent "this one is yours" chip so the user can spot their own
+    // engagement in a long list even when it's not currently selected.
+    const mineChip = isMineHost
+      ? `<span class="room-mine-chip room-mine-host" title="Thy siege">★ THINE</span>`
+      : isMineAlly
+        ? `<span class="room-mine-chip room-mine-ally" title="Siege thou hast joined">⚜ JOINED</span>`
+        : '';
     card.innerHTML = `
       <div>
         <div class="room-name">${escapeHtml(siege.name)}</div>
         <div class="room-meta">
+          ${mineChip}
           <span class="room-occupancy-chip">${occupancy}/2</span>
           <span>${escapeHtml(siege.map)}</span>
         </div>
@@ -388,7 +399,23 @@ joinBtn.addEventListener('click', async () => {
     return;
   }
   if (!data) {
-    showAlert('⊘ SOMEONE WAS QUICKER — THE SLOT IS TAKEN', 'error');
+    // data === null could mean either: (a) someone genuinely beat us to
+    // the slot, or (b) RLS rejected the UPDATE silently because the
+    // policy's USING clause requires the user to already be host/ally.
+    // Re-fetch the row so we can show the accurate reason.
+    const { data: row } = await supabase
+      .from('sieges')
+      .select('id, ally_id')
+      .eq('id', selectedSiege.id)
+      .maybeSingle();
+    if (row && row.ally_id) {
+      showAlert('⊘ SOMEONE WAS QUICKER — THE SLOT IS TAKEN', 'error');
+    } else if (!row) {
+      showAlert('⊘ THE SIEGE HATH VANISHED', 'error');
+    } else {
+      console.error('join: UPDATE silently no-op', { selectedSiege, row, user });
+      showAlert('⊘ THE FORGE REJECTED THY JOIN — CHECK RLS UPDATE POLICY', 'error');
+    }
     renderPreview();
     return;
   }
@@ -624,6 +651,23 @@ await prefetchSiegeProfiles();
 if (handoffId) {
   sessionStorage.removeItem('lobbySelectedId');
   selectedSiege = sieges.find(s => s.id === handoffId) || null;
+}
+// Autofocus the user's engagement (host OR ally) if there is one. If it's
+// on a different difficulty tab, swing the tab over too so the card is
+// actually visible in the list. Falls through to the per-tab default if
+// the user has no current engagement.
+if (!selectedSiege) {
+  const mine = findOwnEngagement();
+  if (mine) {
+    selectedSiege = mine;
+    if (mine.difficulty !== currentDiff) {
+      currentDiff = mine.difficulty;
+      tabs.forEach(t => {
+        t.classList.toggle('is-active', t.dataset.diff === currentDiff);
+        t.setAttribute('aria-selected', t.dataset.diff === currentDiff ? 'true' : 'false');
+      });
+    }
+  }
 }
 if (!selectedSiege) {
   selectedSiege = sieges.find(s => s.difficulty === currentDiff) || null;

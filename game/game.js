@@ -6,7 +6,7 @@ gameCanvasElement.width = 1120;
 gameCanvasElement.height = 640;
 
 const towers = [];
-let attackUnit = null;
+let attackUnits = [];
 
 let playerGold = 0;
 let animationId = null;
@@ -62,32 +62,30 @@ const animate = () => {
     // ✅ normal rendering — no offset now
     gameCanvas.drawImage(backgroundImage, 0, 0);
 
-    const tower = towers[0];
+	for (let i = 0; i < attackUnits.length && towers.length && !gameFinished; i++) {
+		let attackUnit = attackUnits[i];
+		let tower = towers[0];
+		const dx = Math.abs(tower.centre.x - attackUnit.centre.x);
+		const dy = Math.abs(tower.centre.y - attackUnit.centre.y);
+		const distance = Math.hypot(dx, dy);
 
-    if (tower && attackUnit && !gameFinished) {
-        const dx = Math.abs(tower.centre.x - attackUnit.centre.x);
-        const dy = Math.abs(tower.centre.y - attackUnit.centre.y);
-        const distance = Math.hypot(dx, dy);
+		if (tower.health > 0 && distance <= attackUnit.attackRadius) {
+			attackUnit.target = tower;
+		} else {
+			if (tower.health <= 0) {
+				towers.shift();
 
-        if (tower.health > 0 && distance <= attackUnit.attackRadius) {
-            attackUnit.target = tower;
-        } else {
-            if (tower.health <= 0) {
-                towers.shift();
+				towersDestroyedCount++;
+				addGold(80);
 
-                towersDestroyedCount++;
-                addGold(80);
+				checkWinCondition();
+			}
 
-                checkWinCondition();
-            }
+			attackUnit.target = null;
+		}
+	}
 
-            attackUnit.target = null;
-        }
-    }
-
-    if (attackUnit) {
-        attackUnit.updateFrame();
-    }
+	attackUnits.forEach(unit => unit.updateFrame());
 
     towers.forEach(tower => tower.updateFrame());
 };
@@ -115,21 +113,23 @@ const startGame = () => {
 
     const pathStart = { x: path[0].x, y: path[0].y };
 
+	let newUnit;
     // todo: create a factory somewhere else?
     switch (selectedUnitType) {
         case "archer":
-            attackUnit = new Archer(pathStart);
+            newUnit = new Archer(pathStart);
             break;
         case "knight":
-            attackUnit = new Knight(pathStart);
+            newUnit = new Knight(pathStart);
             break;
         case "unit":
-            attackUnit = new Unit(pathStart);
+            newUnit = new Unit(pathStart);
             break;
         default:
             throw new Error("Invalid unit type");
     }
 
+    attackUnits.push(newUnit);
     animate();
 };
 

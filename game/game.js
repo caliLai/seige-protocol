@@ -1,7 +1,6 @@
 const gameCanvasElement = document.getElementById('gameCanvas');
 const gameCanvas = gameCanvasElement.getContext('2d');
 
-// ✅ restore original canvas size (fix movement issues)
 gameCanvasElement.width = 1120;
 gameCanvasElement.height = 640;
 
@@ -14,7 +13,6 @@ let gameFinished = false;
 let towersDestroyedCount = 0;
 let mapLoaded = false;
 
-// GOLD SYSTEM → updates HTML instead of canvas
 const addGold = (amount) => {
     playerGold += amount;
 
@@ -24,7 +22,6 @@ const addGold = (amount) => {
     }
 };
 
-// INIT TOWERS
 const initialiseTowers = () => {
     towers.length = 0;
     for (let location of towerLocations) {
@@ -32,7 +29,6 @@ const initialiseTowers = () => {
     }
 };
 
-// SHOW END SCREEN
 const showEndScreen = () => {
     document.getElementById("goldEarned").innerText = "Gold Earned: " + playerGold;
     document.getElementById("towersDestroyed").innerText = "Towers Destroyed: " + towersDestroyedCount;
@@ -41,7 +37,6 @@ const showEndScreen = () => {
     document.getElementById("endScreen").style.display = "flex";
 };
 
-// WIN CONDITION
 const checkWinCondition = () => {
     if (towers.length === 0 && !gameFinished) {
         gameFinished = true;
@@ -53,44 +48,50 @@ const checkWinCondition = () => {
     }
 };
 
-// MAIN LOOP
 const animate = () => {
     animationId = requestAnimationFrame(animate);
 
     if (!mapLoaded) return;
 
-    // ✅ normal rendering — no offset now
+    // ✅ background redraw replaces clearRect
     gameCanvas.drawImage(backgroundImage, 0, 0);
 
-	for (let i = 0; i < attackUnits.length && towers.length && !gameFinished; i++) {
-		let attackUnit = attackUnits[i];
-		let tower = towers[0];
-		const dx = Math.abs(tower.centre.x - attackUnit.centre.x);
-		const dy = Math.abs(tower.centre.y - attackUnit.centre.y);
-		const distance = Math.hypot(dx, dy);
+    // ✅ unit vs tower logic
+    for (let i = 0; i < attackUnits.length && towers.length && !gameFinished; i++) {
+        let attackUnit = attackUnits[i];
+        let tower = towers[0];
 
-		if (tower.health > 0 && distance <= attackUnit.attackRadius) {
-			attackUnit.target = tower;
-		} else {
-			if (tower.health <= 0) {
-				towers.shift();
+        if (!attackUnit || !tower) continue;
 
-				towersDestroyedCount++;
-				addGold(80);
+        const dx = tower.centre.x - attackUnit.centre.x;
+        const dy = tower.centre.y - attackUnit.centre.y;
+        const distance = Math.hypot(dx, dy);
 
-				checkWinCondition();
-			}
+        if (!tower.isDead && distance <= attackUnit.attackRadius) {
+            attackUnit.target = tower;
+        } else {
+            if (tower.isDead) {
+                towers.shift();
 
-			attackUnit.target = null;
-		}
-	}
+                towersDestroyedCount++;
+                addGold(80);
 
-	attackUnits.forEach(unit => unit.updateFrame());
+                checkWinCondition();
+            }
 
-    towers.forEach(tower => tower.updateFrame());
+            attackUnit.target = null;
+        }
+    }
+
+    // ✅ update units
+    attackUnits.forEach(unit => unit.updateFrame());
+
+    // ✅ update towers
+    towers.forEach(tower => {
+        tower.updateFrame(attackUnits[0]);
+    });
 };
 
-// START GAME (with switch preserved)
 const startGame = () => {
     if (!mapLoaded) {
         alert("Map is still loading. Try again in a moment.");
@@ -108,13 +109,12 @@ const startGame = () => {
     towersDestroyedCount = 0;
     gameFinished = false;
 
-    // reset UI
     document.getElementById("goldDisplay").innerText = "Gold: 0";
 
     const pathStart = { x: path[0].x, y: path[0].y };
 
-	let newUnit;
-    // todo: create a factory somewhere else?
+    let newUnit;
+
     switch (selectedUnitType) {
         case "archer":
             newUnit = new Archer(pathStart);
@@ -130,22 +130,23 @@ const startGame = () => {
     }
 
     attackUnits.push(newUnit);
-    animate();
+
+    if (!animationId) {
+        animate();
+    }
 };
 
-// NEXT WAVE
 const nextWave = () => {
     location.reload();
 };
 
-// LOAD MAP
 const backgroundImage = new Image();
 backgroundImage.onload = () => {
     mapLoaded = true;
     initialiseTowers();
 
-    // Draw the map and towers once on load so the scene is visible pre-start.
     gameCanvas.drawImage(backgroundImage, 0, 0);
-    towers.forEach(tower => tower.updateFrame());
+    towers.forEach(tower => tower.render());
 };
+
 backgroundImage.src = "../assets/maps/calista-map.png";

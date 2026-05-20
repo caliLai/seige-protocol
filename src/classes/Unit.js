@@ -31,7 +31,6 @@ class Unit extends Sprite {
         gameCanvas.fillStyle = 'red';
         gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
 
-        // ✅ draw health bar after unit
         this.drawHealthBar();
     }
 
@@ -44,7 +43,6 @@ class Unit extends Sprite {
         const x = this.position.x;
         const y = this.position.y - 8;
 
-        // background
         gameCanvas.fillStyle = "#3a3a3a";
         gameCanvas.fillRect(x, y, barWidth, barHeight);
 
@@ -60,6 +58,15 @@ class Unit extends Sprite {
         gameCanvas.strokeRect(x, y, barWidth, barHeight);
     }
 
+    // ✅ ✅ ✅ THIS IS THE FIX
+    takeDamage(amount) {
+        this.health -= amount;
+
+        if (this.health <= 0) {
+            this.health = 0;
+        }
+    }
+
     attack() {
         if (!this.target) return;
 
@@ -72,7 +79,6 @@ class Unit extends Sprite {
             x: this.centre.x - this.projectileSize / 2,
             y: this.centre.y - this.projectileSize / 2,
         };
-
         const to = this.target.centre;
         const angle = Math.atan2(to.y - this.centre.y, to.x - this.centre.x);
 
@@ -99,7 +105,6 @@ class Unit extends Sprite {
 
             const projectileCenterX = projectile.x + this.projectileSize / 2;
             const projectileCenterY = projectile.y + this.projectileSize / 2;
-
             const dx = target.centre.x - projectileCenterX;
             const dy = target.centre.y - projectileCenterY;
             const distance = Math.hypot(dx, dy);
@@ -115,6 +120,7 @@ class Unit extends Sprite {
 
     calculateAndUpdatePathMovement() {
         const pathPoint = path[this.pathIndex];
+
         if (!pathPoint) return;
 
         const dx = pathPoint.x - this.centre.x;
@@ -128,8 +134,8 @@ class Unit extends Sprite {
         }
 
         const angle = Math.atan2(dy, dx);
-        const frameStep = this.moveSpeedPxPerSecond / 60;
 
+        const frameStep = this.moveSpeedPxPerSecond / 60;
         this.position.x += Math.cos(angle) * frameStep;
         this.position.y += Math.sin(angle) * frameStep;
     }

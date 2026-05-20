@@ -53,13 +53,10 @@ const animate = () => {
 
     if (!mapLoaded) return;
 
-    // clear frame
-    gameCanvas.clearRect(0, 0, gameCanvasElement.width, gameCanvasElement.height);
-
-    // draw map
+    // ✅ background redraw replaces clearRect
     gameCanvas.drawImage(backgroundImage, 0, 0);
 
-    // unit vs tower targeting logic (multi-unit safe)
+    // ✅ unit vs tower logic
     for (let i = 0; i < attackUnits.length && towers.length && !gameFinished; i++) {
         let attackUnit = attackUnits[i];
         let tower = towers[0];
@@ -86,12 +83,12 @@ const animate = () => {
         }
     }
 
-    // update all units
+    // ✅ update units
     attackUnits.forEach(unit => unit.updateFrame());
 
-    // single clean tower loop (your refactor preserved)
+    // ✅ update towers
     towers.forEach(tower => {
-        tower.updateFrame(attackUnits[0]); //keeps compatibility with current tower logic
+        tower.updateFrame(attackUnits[0]);
     });
 };
 
@@ -134,7 +131,6 @@ const startGame = () => {
 
     attackUnits.push(newUnit);
 
-    //ensure animation starts only once
     if (!animationId) {
         animate();
     }
@@ -149,7 +145,6 @@ backgroundImage.onload = () => {
     mapLoaded = true;
     initialiseTowers();
 
-    // initial render
     gameCanvas.drawImage(backgroundImage, 0, 0);
     towers.forEach(tower => tower.render());
 };

@@ -122,27 +122,29 @@ class Archer extends Unit {
             const spriteSheet = usingAttackSheet
                 ? Archer.attackImage
                 : (usingWalkSheet ? Archer.walkImage : Archer.bodyImage);
+
             const frameSize = spriteSheet.height;
             const frameIndex = usingAttackSheet
                 ? Math.min(this.currentAttackFrame, this.attackFrameCount - 1)
                 : (usingWalkSheet ? this.currentWalkFrame : 0);
 
             const sx = frameIndex * frameSize;
-            const sy = 0;
-            const sw = frameSize;
-            const sh = frameSize;
 
             gameCanvas.drawImage(
                 spriteSheet,
                 sx,
-                sy,
-                sw,
-                sh,
+                0,
+                frameSize,
+                frameSize,
                 this.position.x - (this.drawWidth - this.width) / 2,
                 this.position.y - (this.drawHeight - this.height) / 2,
                 this.drawWidth,
                 this.drawHeight
             );
+
+            // ✅ ADD HEALTH BAR
+            this.drawHealthBar();
+
             return;
         }
 
@@ -154,8 +156,11 @@ class Archer extends Unit {
             x: this.centre.x - this.projectileSize / 2,
             y: this.centre.y - this.projectileSize / 2,
         };
-        const to = target.centre;
-        const angle = Math.atan2(to.y - this.centre.y, to.x - this.centre.x);
+
+        const angle = Math.atan2(
+            target.centre.y - this.centre.y,
+            target.centre.x - this.centre.x
+        );
 
         this.projectiles.push({
             x: from.x,
@@ -216,7 +221,7 @@ class Archer extends Unit {
     }
 
     updateProjectiles() {
-        this.projectiles = this.projectiles.filter((projectile) => {
+        this.projectiles = this.projectiles.filter(projectile => {
             projectile.x += projectile.vx;
             projectile.y += projectile.vy;
 
@@ -244,13 +249,10 @@ class Archer extends Unit {
             const target = projectile.target;
             if (!target || target.isDead) return false;
 
-            const projectileCenterX = projectile.x + this.projectileSize / 2;
-            const projectileCenterY = projectile.y + this.projectileSize / 2;
-            const dx = target.centre.x - projectileCenterX;
-            const dy = target.centre.y - projectileCenterY;
-            const distance = Math.hypot(dx, dy);
+            const dx = target.centre.x - (projectile.x + this.projectileSize / 2);
+            const dy = target.centre.y - (projectile.y + this.projectileSize / 2);
 
-            if (distance <= this.projectileSize + 4) {
+            if (Math.hypot(dx, dy) <= this.projectileSize + 4) {
                 target.takeDamage(projectile.damage);
                 return false;
             }

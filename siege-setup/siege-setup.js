@@ -437,6 +437,7 @@ const applySiegeUpdate = (fresh) => {
     navigated = true;
     bothReadyBanner.classList.remove('hidden');
     bothReadyBanner.setAttribute('aria-hidden', 'false');
+    sessionStorage.setItem('gameSiegeId', siege.id);
     setTimeout(() => smoothNavigate('/game/game.html'), 1100);
     return;
   }

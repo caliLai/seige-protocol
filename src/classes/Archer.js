@@ -1,4 +1,6 @@
-class Archer extends Unit {
+import { Unit } from "./Unit.js";
+
+export class Archer extends Unit {
     role = 'Ranged Damage Dealer';
 
     width = 50;
@@ -46,8 +48,8 @@ class Archer extends Unit {
     static projectileImage = null;
     static projectileImageLoaded = false;
 
-    constructor(position) {
-        super(position);
+    constructor(position, gameCanvas) {
+        super(position, gameCanvas);
         Archer.loadAssets();
     }
 
@@ -130,7 +132,7 @@ class Archer extends Unit {
 
             const sx = frameIndex * frameSize;
 
-            gameCanvas.drawImage(
+            this.gameCanvas.drawImage(
                 spriteSheet,
                 sx,
                 0,
@@ -229,20 +231,20 @@ class Archer extends Unit {
                 const centerY = projectile.y + this.projectileSize / 2;
                 const angle = Math.atan2(projectile.vy, projectile.vx) + this.projectileRotationOffset;
 
-                gameCanvas.save();
-                gameCanvas.translate(centerX, centerY);
-                gameCanvas.rotate(angle);
-                gameCanvas.drawImage(
+                this.gameCanvas.save();
+                this.gameCanvas.translate(centerX, centerY);
+                this.gameCanvas.rotate(angle);
+                this.gameCanvas.drawImage(
                     Archer.projectileImage,
                     -this.projectileDrawSize / 2,
                     -this.projectileDrawSize / 2,
                     this.projectileDrawSize,
                     this.projectileDrawSize
                 );
-                gameCanvas.restore();
+                this.gameCanvas.restore();
             } else {
-                gameCanvas.fillStyle = '#ff2b2b';
-                gameCanvas.fillRect(projectile.x, projectile.y, this.projectileSize, this.projectileSize);
+                this.gameCanvas.fillStyle = '#ff2b2b';
+                this.gameCanvas.fillRect(projectile.x, projectile.y, this.projectileSize, this.projectileSize);
             }
 
             const target = projectile.target;

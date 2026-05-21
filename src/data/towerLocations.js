@@ -1,5 +1,5 @@
 // sorted in order of which come first along the path
-const towerLocations = [
+export const towerLocations = [
   { x: 300, y: 230 },
   { x: 440, y: 230 },
   { x: 200, y: 430 },

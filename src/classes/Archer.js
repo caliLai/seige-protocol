@@ -142,7 +142,6 @@ class Archer extends Unit {
                 this.drawHeight
             );
 
-            // ✅ ADD HEALTH BAR
             this.drawHealthBar();
 
             return;

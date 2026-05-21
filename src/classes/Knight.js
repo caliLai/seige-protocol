@@ -127,7 +127,6 @@ class Knight extends Unit {
                 this.drawHeight
             );
 
-            // ✅ ADD HEALTH BAR
             this.drawHealthBar();
 
             return;

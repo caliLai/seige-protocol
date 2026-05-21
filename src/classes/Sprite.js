@@ -18,7 +18,6 @@ class Sprite {
         };
     }
 
-    // replaces isDead flag everywhere
     get isDead() {
         return this.health <= 0;
     }

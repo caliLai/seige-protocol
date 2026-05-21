@@ -53,10 +53,8 @@ const animate = () => {
 
     if (!mapLoaded) return;
 
-    // ✅ background redraw replaces clearRect
     gameCanvas.drawImage(backgroundImage, 0, 0);
 
-    // ✅ unit vs tower logic
     for (let i = 0; i < attackUnits.length && towers.length && !gameFinished; i++) {
         let attackUnit = attackUnits[i];
         let tower = towers[0];
@@ -82,13 +80,13 @@ const animate = () => {
             attackUnit.target = null;
         }
     }
+    attackUnits = attackUnits.filter(unit => !unit.isDead);
 
-    // ✅ update units
     attackUnits.forEach(unit => unit.updateFrame());
-
-    // ✅ update towers
+    
     towers.forEach(tower => {
-        tower.updateFrame(attackUnits[0]);
+        const target = attackUnits.find(unit => !unit.isDead);
+        tower.updateFrame(target);
     });
 };
 

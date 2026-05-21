@@ -114,21 +114,21 @@ class Knight extends Unit {
                 : (usingWalkSheet ? this.currentWalkFrame : 0);
 
             const sx = frameIndex * frameSize;
-            const sy = 0;
-            const sw = frameSize;
-            const sh = frameSize;
 
             gameCanvas.drawImage(
                 spriteSheet,
                 sx,
-                sy,
-                sw,
-                sh,
+                0,
+                frameSize,
+                frameSize,
                 this.position.x - (this.drawWidth - this.width) / 2,
                 this.position.y - (this.drawHeight - this.height) / 2,
                 this.drawWidth,
                 this.drawHeight
             );
+
+            this.drawHealthBar();
+
             return;
         }
 

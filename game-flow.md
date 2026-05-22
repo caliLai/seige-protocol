@@ -287,6 +287,10 @@ Healing/support value
 Special objective contribution
 ```
 
+There are two different currency:
+1. One for buying units to queue in battle
+2. One for unlocking available unit from roster
+
 ---
 
 # 13. Return to Lobby

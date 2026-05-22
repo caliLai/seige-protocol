@@ -5,7 +5,7 @@
    ═══════════════════════════════════════════════ */
 
 import { supabase } from '/lib/supabase.js';
-import { UNITS_BY_ID, idleSpriteUrl } from '/lib/units.js';
+import { UNITS_BY_ID, idleSpriteUrl, deployCost, deployCostById } from '/lib/units.js';
 
 // Starting gold by difficulty. Numbers from game-flow.md (easy/normal/hard
 // map to recruit/veteran/elite). Tune here if economy needs rebalancing.
@@ -59,12 +59,9 @@ const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
 
-const queueCost = (queue) => queue.reduce((sum, id) => {
-  const u = UNITS_BY_ID.get(id);
-  // Treat unknown ids as zero rather than NaN — keeps the running total
-  // honest if a unit definition is renamed mid-session.
-  return sum + (u?.cost ?? 0);
-}, 0);
+// Running total of deploy gold for the queue. Unknown ids contribute 0 so
+// a renamed unit can't NaN the counter.
+const queueCost = (queue) => queue.reduce((sum, id) => sum + deployCostById(id), 0);
 
 const showAlert = (msg, type = 'info') => {
   alertEl.textContent = msg;
@@ -226,7 +223,7 @@ const renderTypes = (containerEl, types, interactive, remainingGold) => {
   for (const id of types) {
     const unit = UNITS_BY_ID.get(id);
     if (!unit) continue;
-    const cost = unit.cost ?? 0;
+    const cost = deployCost(unit);
     const canAfford = interactive ? cost <= remainingGold : true;
     const card = document.createElement('div');
     card.className = `wave1-type-card${canAfford ? '' : ' is-disabled'}`;
@@ -350,7 +347,7 @@ const addToQueue = (unitId) => {
   if (!myTypes.includes(unitId)) return;
 
   const spent = queueCost(queue);
-  if (spent + (unit.cost ?? 0) > startingGold) {
+  if (spent + deployCost(unit) > startingGold) {
     showAlert('✗ NOT ENOUGH GOLD', 'error');
     return;
   }

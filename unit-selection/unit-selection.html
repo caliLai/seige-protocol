@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Siege Protocol — Unit Type Selection</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/login/login-styles.css" />
+  <link rel="stylesheet" href="/start-screen/start-screen-styles.css" />
+  <link rel="stylesheet" href="/unit-selection/unit-selection-styles.css" />
+</head>
+<body>
+
+  <div class="game-frame stone-bg us-frame">
+    <div class="scanlines-overlay"></div>
+
+    <!-- ═══ HEADER BAR ═══ -->
+    <div class="us-topbar">
+      <!-- Left: room info -->
+      <div class="us-room-info">
+        <div class="us-room-chip">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" class="us-shield-icon">
+            <rect x="2" y="1" width="10" height="1" fill="#a89060"/>
+            <rect x="1" y="2" width="1" height="7" fill="#a89060"/>
+            <rect x="12" y="2" width="1" height="7" fill="#a89060"/>
+            <rect x="2" y="9" width="3" height="1" fill="#a89060"/>
+            <rect x="9" y="9" width="3" height="1" fill="#a89060"/>
+            <rect x="4" y="10" width="2" height="1" fill="#a89060"/>
+            <rect x="8" y="10" width="2" height="1" fill="#a89060"/>
+            <rect x="6" y="11" width="2" height="2" fill="#a89060"/>
+            <rect x="3" y="3" width="8" height="5" fill="#c4a050"/>
+          </svg>
+          <span class="us-room-label">ROOM:</span>
+          <span id="roomCode" class="us-room-code">——</span>
+        </div>
+        <div class="us-room-chip">
+          <span class="us-room-label">SIEGE:</span>
+          <span id="roomName" class="us-room-name">——</span>
+        </div>
+      </div>
+
+      <!-- Center: title -->
+      <div class="us-title-block">
+        <div class="us-title">UNIT TYPE SELECTION</div>
+        <div class="us-subtitle">Select unit types to use in this run</div>
+      </div>
+
+      <!-- Right: players ready + settings -->
+      <div class="us-right-info">
+        <div class="us-players-chip">
+          <span id="playersCount" class="us-players-count">READY 0/2</span>
+          <span id="readyStatus" class="us-ready-badge not-ready">NOT READY</span>
+        </div>
+        <button class="us-settings-btn" aria-label="Settings">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="7" y="1" width="2" height="2" fill="currentColor"/>
+            <rect x="7" y="13" width="2" height="2" fill="currentColor"/>
+            <rect x="1" y="7" width="2" height="2" fill="currentColor"/>
+            <rect x="13" y="7" width="2" height="2" fill="currentColor"/>
+            <rect x="3" y="3" width="2" height="2" fill="currentColor"/>
+            <rect x="11" y="3" width="2" height="2" fill="currentColor"/>
+            <rect x="3" y="11" width="2" height="2" fill="currentColor"/>
+            <rect x="11" y="11" width="2" height="2" fill="currentColor"/>
+            <rect x="5" y="5" width="6" height="6" fill="currentColor"/>
+            <rect x="6" y="6" width="4" height="4" fill="#2a2218"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ PROGRESS BAR ═══ -->
+    <div class="us-progress-bar">
+      <div class="us-progress-step done">
+        <span class="us-step-check">✓</span>
+        <span class="us-step-label">ROOM SETUP</span>
+      </div>
+      <div class="us-progress-divider"></div>
+      <div class="us-progress-step active">
+        <span class="us-step-num">2</span>
+        <span class="us-step-label">UNIT TYPE SELECTION</span>
+      </div>
+      <div class="us-progress-divider"></div>
+      <div class="us-progress-step locked">
+        <span class="us-step-num">3</span>
+        <span class="us-step-label">WAVE 1 SETUP</span>
+      </div>
+      <div class="us-progress-divider"></div>
+      <div class="us-progress-step locked">
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" class="us-lock-icon">
+          <rect x="3" y="1" width="4" height="1" fill="currentColor"/>
+          <rect x="2" y="2" width="1" height="2" fill="currentColor"/>
+          <rect x="7" y="2" width="1" height="2" fill="currentColor"/>
+          <rect x="1" y="4" width="8" height="5" fill="currentColor"/>
+          <rect x="4" y="5" width="2" height="3" fill="#2a2218"/>
+        </svg>
+        <span class="us-step-label">BATTLE</span>
+      </div>
+
+      <div id="tipBanner" class="us-tip-banner">
+        <span class="us-tip-icon">⚜</span>
+        <span id="tipText">A balanced mix of tank, damage, and support units works best!</span>
+      </div>
+    </div>
+
+    <!-- ═══ MAIN 3-COLUMN LAYOUT ═══ -->
+    <div class="us-body">
+
+      <!-- ── LEFT: Player 1 panel ── -->
+      <div class="us-player-panel us-player1-panel">
+        <div class="us-player-header">
+          <svg width="20" height="20" viewBox="0 0 14 14" aria-hidden="true" class="us-faction-icon">
+            <rect x="2" y="1" width="10" height="1" fill="#6a9fd8"/>
+            <rect x="1" y="2" width="1" height="7" fill="#6a9fd8"/>
+            <rect x="12" y="2" width="1" height="7" fill="#6a9fd8"/>
+            <rect x="2" y="9" width="3" height="1" fill="#6a9fd8"/>
+            <rect x="9" y="9" width="3" height="1" fill="#6a9fd8"/>
+            <rect x="4" y="10" width="2" height="1" fill="#6a9fd8"/>
+            <rect x="8" y="10" width="2" height="1" fill="#6a9fd8"/>
+            <rect x="6" y="11" width="2" height="2" fill="#6a9fd8"/>
+            <rect x="3" y="3" width="8" height="5" fill="#88c0f0"/>
+          </svg>
+          <div class="us-player-name-block">
+            <div id="p1Name" class="us-player-name">—</div>
+            <div id="p1Ready" class="us-player-ready not-ready">Not Ready</div>
+          </div>
+        </div>
+
+        <div class="us-selected-label">
+          SELECTED UNIT TYPES
+          <span id="p1Count" class="us-selected-count">0 / 6</span>
+        </div>
+        <div id="p1Selected" class="us-selected-grid"></div>
+
+        <div class="us-available-label">AVAILABLE UNIT TYPES</div>
+        <div id="p1Available" class="us-available-grid"></div>
+      </div>
+
+      <!-- ── CENTER: Map preview + info ── -->
+      <div class="us-center-panel">
+        <div class="us-map-label">MAP PREVIEW</div>
+
+        <!-- Spacers above and below the map share the leftover vertical
+             space equally, so the map stays vertically centered between
+             the label and the info row regardless of viewport size. -->
+        <div class="us-center-spacer" aria-hidden="true"></div>
+
+        <div class="us-map-frame">
+          <img id="mapPreviewImg" src="" alt="Map preview" class="us-map-img" />
+        </div>
+
+        <div class="us-center-spacer" aria-hidden="true"></div>
+
+        <div class="us-map-info-row">
+          <div class="us-map-info-box">
+            <div class="us-map-info-name">MAP: <span id="mapInfoName">—</span></div>
+            <div id="mapInfoDesc" class="us-map-info-desc"></div>
+          </div>
+          <div class="us-difficulty-box">
+            <div class="us-diff-title">DIFFICULTY: <span id="diffLabel" class="us-diff-hard">—</span></div>
+            <ul class="us-diff-stats" id="diffStats"></ul>
+          </div>
+        </div>
+
+        <div class="us-team-label">TEAM PREVIEW</div>
+        <div id="teamPreview" class="us-team-preview"></div>
+        <div class="us-team-hint">
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" class="us-info-icon">
+            <rect x="5" y="1" width="2" height="2" fill="currentColor"/>
+            <rect x="5" y="4" width="2" height="7" fill="currentColor"/>
+          </svg>
+          You can change your unit order and compose your waves in the next step.
+        </div>
+      </div>
+
+      <!-- ── RIGHT: Player 2 panel ── -->
+      <div class="us-player-panel us-player2-panel">
+        <div class="us-player-header">
+          <svg width="20" height="20" viewBox="0 0 14 14" aria-hidden="true" class="us-faction-icon enemy">
+            <rect x="2" y="1" width="10" height="1" fill="#c04040"/>
+            <rect x="1" y="2" width="1" height="7" fill="#c04040"/>
+            <rect x="12" y="2" width="1" height="7" fill="#c04040"/>
+            <rect x="2" y="9" width="3" height="1" fill="#c04040"/>
+            <rect x="9" y="9" width="3" height="1" fill="#c04040"/>
+            <rect x="4" y="10" width="2" height="1" fill="#c04040"/>
+            <rect x="8" y="10" width="2" height="1" fill="#c04040"/>
+            <rect x="6" y="11" width="2" height="2" fill="#c04040"/>
+            <rect x="3" y="3" width="8" height="5" fill="#e06060"/>
+          </svg>
+          <div class="us-player-name-block">
+            <div id="p2Name" class="us-player-name">—</div>
+            <div id="p2Ready" class="us-player-ready not-ready">Not Ready</div>
+          </div>
+        </div>
+
+        <div class="us-selected-label">
+          SELECTED UNIT TYPES
+          <span id="p2Count" class="us-selected-count">0 / 6</span>
+        </div>
+        <div id="p2Selected" class="us-selected-grid"></div>
+
+        <div class="us-available-label">AVAILABLE UNIT TYPES</div>
+        <div id="p2Available" class="us-available-grid"></div>
+      </div>
+
+    </div><!-- end .us-body -->
+
+    <!-- ═══ BOTTOM ACTION BAR ═══ -->
+    <div class="us-action-bar">
+      <button id="backToLobbyBtn" class="us-back-btn">◀ BACK TO LOBBY</button>
+      <div class="us-action-center"></div>
+      <button id="confirmBtn" class="us-confirm-btn" disabled>✓ CONFIRM SELECTION</button>
+    </div>
+
+  </div><!-- end .us-frame -->
+
+  <script type="module" src="/unit-selection/unit-selection.js"></script>
+</body>
+</html>

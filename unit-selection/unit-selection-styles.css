@@ -1,0 +1,722 @@
+/* ════════════════════════════════════════
+   UNIT TYPE SELECTION — full-viewport page
+   ════════════════════════════════════════ */
+
+/* Override body centering so our full-viewport frame isn't constrained */
+body {
+  display: block !important;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ── LAYOUT SHELL ── */
+/* Override the fixed 1120×640 game-frame to fill the whole viewport */
+.us-frame {
+  width: 100vw !important;
+  height: 100vh !important;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  padding: 0;
+  overflow: hidden;
+  align-items: stretch;
+  justify-items: stretch;
+}
+
+/* ── TOP BAR ── */
+.us-topbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 10px 20px 8px;
+  background: rgba(0,0,0,0.45);
+  border-bottom: 2px solid #1a1208;
+  position: relative;
+  z-index: 10;
+  gap: 12px;
+}
+
+.us-room-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.us-room-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0,0,0,0.5);
+  border: 2px solid #3a3020;
+  padding: 5px 10px;
+}
+
+.us-shield-icon { flex-shrink: 0; }
+
+.us-room-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #8c7040;
+  letter-spacing: 0.1em;
+}
+
+.us-room-code, .us-room-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #d6b868;
+  letter-spacing: 0.12em;
+}
+
+.us-title-block { text-align: center; }
+
+.us-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  color: #f5e090;
+  text-shadow: 2px 2px 0 #000, 0 0 18px rgba(245,196,24,0.35);
+}
+
+.us-subtitle {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #8c7040;
+  letter-spacing: 0.2em;
+  margin-top: 5px;
+}
+
+.us-right-info {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.us-players-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.us-players-count {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #d6b868;
+}
+
+.us-ready-badge {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.1em;
+}
+.us-ready-badge.not-ready { color: #e05050; }
+.us-ready-badge.all-ready { color: #60c060; }
+
+.us-ready-status {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  color: #8c7868;
+}
+.us-ready-status.is-one-ready { color: #e0a030; }
+.us-ready-status.is-all-ready { color: #60c060; }
+
+.us-settings-btn {
+  font-family: 'Press Start 2P', monospace;
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(180deg, #3a3228 0%, #201a10 100%);
+  border: 3px solid #1a1208;
+  box-shadow: 3px 3px 0 #0a0604;
+  color: #a89060;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s;
+}
+.us-settings-btn:hover { background: linear-gradient(180deg, #4a4238 0%, #302a20 100%); color: #f5c518; }
+
+/* ── PROGRESS BAR ── */
+.us-progress-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 8px 20px 6px;
+  background: rgba(0,0,0,0.35);
+  border-bottom: 2px solid #1a1208;
+  position: relative;
+  z-index: 10;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.us-progress-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.us-progress-step.done {
+  color: #60c870;
+}
+.us-progress-step.active {
+  color: #f5c518;
+  background: rgba(245,197,24,0.1);
+  border: 2px solid rgba(245,197,24,0.3);
+}
+.us-progress-step.locked {
+  color: #50483a;
+}
+
+.us-step-check {
+  font-size: 9px;
+  color: #60c870;
+}
+.us-step-num {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5c518;
+  color: #1a0f08;
+  font-size: 7px;
+  font-family: 'Press Start 2P', monospace;
+  flex-shrink: 0;
+}
+.us-step-label { color: inherit; }
+.us-lock-icon { color: #50483a; flex-shrink: 0; }
+
+.us-progress-divider {
+  width: 30px;
+  height: 2px;
+  background: #3a3020;
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+.us-tip-banner {
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.7);
+  border: 2px solid #3a3020;
+  padding: 4px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  z-index: 20;
+}
+.us-tip-icon { color: #f5c518; font-size: 10px; }
+#tipText {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #b0a070;
+  letter-spacing: 0.1em;
+}
+
+/* ── MAIN 3-COL BODY ── */
+.us-body {
+  display: grid;
+  grid-template-columns: 320px 1fr 320px;
+  gap: 0;
+  overflow: hidden;
+  min-height: 0;
+  padding-top: 16px; /* space for tip banner that overflows the progress bar */
+}
+
+/* ── PLAYER PANELS ── */
+.us-player-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3020 transparent;
+}
+
+.us-player1-panel {
+  background: rgba(20,36,60,0.55);
+  border-right: 2px solid #1a1208;
+}
+.us-player2-panel {
+  background: rgba(60,20,20,0.55);
+  border-left: 2px solid #1a1208;
+}
+
+/* scrollbar for webkit */
+.us-player-panel::-webkit-scrollbar { width: 4px; }
+.us-player-panel::-webkit-scrollbar-track { background: transparent; }
+.us-player-panel::-webkit-scrollbar-thumb { background: #3a3020; }
+
+.us-player-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid rgba(255,255,255,0.07);
+}
+
+.us-faction-icon { flex-shrink: 0; }
+
+.us-player-name-block { display: flex; flex-direction: column; gap: 4px; }
+
+.us-player-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #e6e0d0;
+}
+
+.us-player1-panel .us-player-name { color: #88c0f0; }
+.us-player2-panel .us-player-name { color: #f08080; }
+
+.us-player-ready {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.1em;
+}
+.us-player-ready.not-ready { color: #e05050; }
+.us-player-ready.is-ready  { color: #60c060; }
+
+/* ── SECTION LABELS ── */
+.us-selected-label,
+.us-available-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  letter-spacing: 0.18em;
+  color: #8c7868;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+.us-player1-panel .us-selected-label { color: #6890b0; }
+.us-player2-panel .us-selected-label { color: #b06868; }
+.us-selected-count {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #8c7868;
+}
+.us-player1-panel .us-selected-count { color: #6890b0; }
+.us-player2-panel .us-selected-count { color: #b06868; }
+
+/* ── UNIT GRIDS ── */
+.us-selected-grid,
+.us-available-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+/* ── UNIT CARD (shared) ── */
+.us-unit-card {
+  position: relative;
+  aspect-ratio: 1;
+  background: rgba(0,0,0,0.45);
+  border: 3px solid #2a2010;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: hidden;
+  transition: border-color 0.12s, background 0.12s;
+  user-select: none;
+}
+.us-unit-card:hover { border-color: #6a5830; background: rgba(40,30,10,0.6); }
+
+.us-unit-card.is-selected-card {
+  border-color: #f5c518;
+  background: rgba(50,40,0,0.6);
+  box-shadow: 0 0 0 1px #7a600c inset, 2px 2px 0 #110805;
+}
+.us-player2-panel .us-unit-card.is-selected-card {
+  border-color: #e05050;
+  background: rgba(50,10,10,0.6);
+  box-shadow: 0 0 0 1px #7a1010 inset, 2px 2px 0 #110805;
+}
+.us-player2-panel .us-unit-card,
+.us-player2-panel .us-unit-card:hover,
+.us-player2-panel .us-unit-card.is-selected-card:hover,
+.us-player2-panel .us-unit-card.us-add-slot:hover,
+.us-player-panel.is-locked .us-unit-card,
+.us-player-panel.is-locked .us-unit-card:hover {
+  cursor: default;
+}
+.us-player2-panel .us-unit-card:hover,
+.us-player-panel.is-locked .us-unit-card:hover {
+  border-color: #2a2010;
+  background: rgba(0,0,0,0.45);
+}
+.us-player2-panel .us-unit-card.is-selected-card:hover { border-color: #e05050; background: rgba(50,10,10,0.6); }
+.us-player1-panel.is-locked .us-unit-card.is-selected-card,
+.us-player1-panel.is-locked .us-unit-card.is-selected-card:hover {
+  border-color: #f5c518;
+  background: rgba(50,40,0,0.6);
+}
+.us-player2-panel .us-unit-card.us-add-slot:hover,
+.us-player-panel.is-locked .us-unit-card.us-add-slot:hover {
+  border-color: #3a3020;
+  background: transparent;
+}
+
+.us-unit-card.is-locked-card {
+  cursor: default;
+  opacity: 0.5;
+}
+.us-unit-card.is-locked-card:hover { border-color: #2a2010; background: rgba(0,0,0,0.45); }
+
+/* Add-slot card */
+.us-add-slot {
+  border: 3px dashed #3a3020;
+  background: transparent;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.us-add-icon {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 18px;
+  color: #3a3020;
+  line-height: 1;
+}
+
+/* Sprite inside card */
+.us-card-sprite {
+  width: 100%;
+  height: calc(100% - 20px);
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: auto 100%;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.us-card-colour {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.us-card-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 5px;
+  letter-spacing: 0.08em;
+  color: #c8b880;
+  text-align: center;
+  padding: 3px 2px;
+  line-height: 1.3;
+  width: 100%;
+  background: rgba(0,0,0,0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Remove X badge on selected cards */
+.us-card-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  background: #7b1c1c;
+  border: 2px solid #300;
+  color: #f08080;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+  line-height: 1;
+}
+.us-card-remove:hover { background: #a82020; color: #fff; }
+
+/* Lock badge on locked cards */
+.us-lock-badge {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  background: rgba(0,0,0,0.75);
+  border: 2px solid #2a2010;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  z-index: 5;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 5px;
+  color: #a89060;
+}
+
+/* ── CENTER PANEL ── */
+.us-center-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  background: rgba(0,0,0,0.2);
+  border-left: 2px solid #1a1208;
+  border-right: 2px solid #1a1208;
+  min-height: 0;
+}
+
+.us-map-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.2em;
+  color: #8c7868;
+  text-align: center;
+  padding: 10px 0 6px;
+  border-bottom: 2px solid #1a1208;
+  background: rgba(0,0,0,0.25);
+  flex-shrink: 0;
+}
+
+/* Absorbs leftover vertical space between the map (top) and the info /
+   team-preview rows (which should hug the action bar at the bottom). */
+.us-center-spacer {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.us-map-frame {
+  overflow: hidden;
+  position: relative;
+  background: transparent;
+  /* Map keeps the 1120×640 aspect ratio. We let the frame shrink (flex 0 1
+     auto, min-height: 0) so the info/team rows below it never get pushed
+     off-screen. Its width is constrained to height × aspect so we never
+     letterbox the image inside the frame. */
+  flex: 0 1 auto;
+  aspect-ratio: 1120 / 640;
+  min-height: 0;
+  width: 100%;
+  /* Cap width so width × (640/1120) never exceeds the center panel's own
+     height. max-height isn't enough alone — when aspect-ratio is set,
+     width drives height, so we also need to clamp width. */
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0 auto;
+}
+
+.us-map-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  display: block;
+}
+
+.us-map-info-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-top: 2px solid #1a1208;
+  flex-shrink: 0;
+}
+
+.us-map-info-box {
+  padding: 10px 12px;
+  border-right: 2px solid #1a1208;
+}
+
+.us-map-info-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #d6b868;
+  letter-spacing: 0.12em;
+  margin-bottom: 8px;
+}
+
+.us-map-info-desc {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #8c7868;
+  letter-spacing: 0.08em;
+  line-height: 1.8;
+}
+
+.us-difficulty-box {
+  padding: 10px 12px;
+}
+
+.us-diff-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #d6b868;
+  letter-spacing: 0.12em;
+  margin-bottom: 8px;
+}
+
+.us-diff-hard  { color: #e05050; }
+.us-diff-medium { color: #e09830; }
+.us-diff-recruit { color: #60c870; }
+
+.us-diff-stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.us-diff-stats li {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #8c7868;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  letter-spacing: 0.08em;
+}
+
+.us-diff-stat-val {
+  color: #e05050;
+  font-size: 6px;
+}
+.us-diff-stat-val.neutral { color: #d6b868; }
+
+.us-team-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.2em;
+  color: #8c7868;
+  text-align: center;
+  padding: 8px 0 6px;
+  border-top: 2px solid #1a1208;
+  background: rgba(0,0,0,0.25);
+  flex-shrink: 0;
+}
+
+.us-team-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  flex-wrap: wrap;
+  min-height: 44px;
+  background: rgba(0,0,0,0.2);
+  flex-shrink: 0;
+}
+
+.us-team-unit {
+  width: 32px;
+  height: 32px;
+  background: rgba(0,0,0,0.5);
+  border: 2px solid #2a2010;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+.us-team-unit-sprite {
+  width: 100%;
+  height: 100%;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: auto 100%;
+  image-rendering: pixelated;
+}
+.us-team-unit.is-p1 { border-color: #3a6090; }
+.us-team-unit.is-p2 { border-color: #903030; }
+.us-team-unit.is-unknown {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  color: #3a3020;
+  border: 2px dashed #2a2010;
+}
+
+.us-team-hint {
+  padding: 6px 10px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 5px;
+  color: #6a6050;
+  letter-spacing: 0.08em;
+  line-height: 1.6;
+  background: rgba(0,0,0,0.2);
+  border-top: 2px solid #1a1208;
+  flex-shrink: 0;
+}
+.us-info-icon { color: #6a6050; flex-shrink: 0; }
+
+/* ── ACTION BAR ── */
+.us-action-bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: rgba(0,0,0,0.55);
+  border-top: 2px solid #1a1208;
+  position: relative;
+  z-index: 10;
+}
+
+.us-back-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  padding: 12px 18px;
+  color: #e05050;
+  background: linear-gradient(180deg, #3a1010 0%, #200808 100%);
+  border: 4px solid #1a0808;
+  box-shadow: 4px 4px 0 #0a0202, inset 0 0 0 1px rgba(255,80,80,0.12);
+  cursor: pointer;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.6);
+  transition: background 0.12s, color 0.12s;
+}
+.us-back-btn:hover {
+  background: linear-gradient(180deg, #5a2020 0%, #380f0f 100%);
+  color: #f08080;
+}
+
+.us-confirm-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  padding: 12px 22px;
+  color: #1a0f08;
+  background: linear-gradient(180deg, #8dc840 0%, #5a9020 100%);
+  border: 4px solid #2a5010;
+  box-shadow: 4px 4px 0 #102008, inset 0 0 0 1px rgba(255,255,255,0.18);
+  cursor: pointer;
+  text-shadow: 1px 1px 0 rgba(255,255,255,0.2);
+  transition: background 0.12s, color 0.12s;
+}
+.us-confirm-btn:not(:disabled):hover {
+  background: linear-gradient(180deg, #aae050 0%, #70b030 100%);
+}
+.us-confirm-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: 2px 2px 0 #102008;
+}
+
+/* ── UNIT SPRITE ANIMATION ── */
+@keyframes us-sprite-walk {
+  from { background-position-x: 0; }
+}

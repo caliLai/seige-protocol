@@ -379,7 +379,8 @@ leaveBtn.addEventListener('click', async () => {
 startBtn.addEventListener('click', () => {
   if (!selectedSiege || startBtn.disabled) return;
   showAlert(`⚔ THE SIEGE OF ${selectedSiege.name} BEGINS…`, 'success');
-  setTimeout(() => smoothNavigate('/game/game.html'), 900);
+  sessionStorage.setItem('activeSiege', JSON.stringify(selectedSiege));
+  setTimeout(() => smoothNavigate('/unit-selection/unit-selection.html'), 900);
 });
 
 // Reconcile a single siege row into local state — used for optimistic

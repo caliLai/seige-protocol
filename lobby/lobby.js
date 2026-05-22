@@ -519,7 +519,8 @@ startBtn.addEventListener('click', async () => {
 // setup page doesn't have to guess.
 const navigateToSetup = (siegeId) => {
   sessionStorage.setItem('setupSiegeId', siegeId);
-  smoothNavigate('/siege-setup/siege-setup.html');
+  smoothNavigate('/unit-selection/unit-selection.html');
+  // smoothNavigate('/siege-setup/siege-setup.html');
 };
 
 // Reconcile a single siege row into local state — used for optimistic

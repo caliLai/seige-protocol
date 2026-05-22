@@ -100,14 +100,22 @@ const { data: { user } } = await supabase.auth.getUser();
 if (!user) window.location.href = '/login/login.html';
 
 // ── STATE ──
+// All selection / ready state lives on the `sieges` row in Supabase. We
+// mirror it locally to avoid an extra fetch on every render but the row
+// is the source of truth — every mutation goes through `updateSiege` and
+// the realtime channel reconciles back here. `host_units` / `ally_units`
+// are arrays of unit IDs; `host_ready` / `ally_ready` are booleans.
 let currentProfile = null;
 let unlockedSet    = new Set();
-let siege          = null;           // siege row from Supabase
+let siege          = null;
+let isHost         = false;
+let navigated      = false; // guard so the both-ready handler doesn't fire twice
 
-// per-player selection: array of unit IDs (max MAX_SELECTION)
-const p1Selection = [];
-// Placeholder P2 selection until multiplayer is wired up
-const p2Selection = ['Knight', 'Soldier', 'Archer', 'Wizard'];
+// Derived views — keep these as getters so they always read from `siege`.
+const mySelection    = () => (isHost ? siege?.host_units : siege?.ally_units) || [];
+const otherSelection = () => (isHost ? siege?.ally_units : siege?.host_units) || [];
+const myReady        = () => !!(isHost ? siege?.host_ready : siege?.ally_ready);
+const otherReady     = () => !!(isHost ? siege?.ally_ready : siege?.host_ready);
 
 // ── HELPERS ──
 const isUnlocked = (unit) => unit.starter || unlockedSet.has(unit.id);
@@ -142,21 +150,16 @@ const loadProfile = async () => {
   unlockedSet = new Set(currentProfile.unlocked_units ?? []);
 };
 
-const loadSiege = async () => {
-  // Read from sessionStorage first (set by lobby's startBtn handler)
-  const siegeJson = sessionStorage.getItem('activeSiege');
-  if (siegeJson) {
-    try { siege = JSON.parse(siegeJson); } catch {}
-  }
-  // Fall back: find by current user's engagement
-  if (!siege) {
-    const { data } = await supabase
-      .from('sieges')
-      .select('*')
-      .or(`host_id.eq.${user.id},ally_id.eq.${user.id}`)
-      .maybeSingle();
-    siege = data || null;
-  }
+const loadSiege = async (siegeId) => {
+  // Look up by id (handoff from lobby) or by the current user's active
+  // engagement with non-null started_at (direct-reload fallback).
+  let q = supabase.from('sieges').select('*');
+  q = siegeId
+    ? q.eq('id', siegeId)
+    : q.or(`host_id.eq.${user.id},ally_id.eq.${user.id}`).not('started_at', 'is', null);
+  const { data, error } = await q.maybeSingle();
+  if (error) { console.error('siege load failed', error); return null; }
+  return data || null;
 };
 
 // ── RENDER MAP / DIFFICULTY INFO ──
@@ -214,7 +217,7 @@ const buildColourBlock = (id) => {
 };
 
 // ── RENDER GRIDS ──
-const buildUnitCard = (unit, selArray, interactive) => {
+const buildUnitCard = (unit, interactive) => {
   const card = document.createElement('div');
   const unlocked = isUnlocked(unit);
 
@@ -236,19 +239,13 @@ const buildUnitCard = (unit, selArray, interactive) => {
   }
 
   if (interactive && unlocked) {
-    card.addEventListener('click', () => {
-      if (selArray.length >= MAX_SELECTION) return;
-      selArray.push(unit.id);
-      renderGrids();
-      renderTeamPreview();
-      updateReadyState();
-    });
+    card.addEventListener('click', () => addPick(unit.id));
   }
 
   return card;
 };
 
-const buildSelectedCard = (unitId, selArray, interactive) => {
+const buildSelectedCard = (unitId, interactive) => {
   const card = document.createElement('div');
   card.className = 'us-unit-card is-selected-card';
   card.dataset.unitId = unitId;
@@ -267,11 +264,7 @@ const buildSelectedCard = (unitId, selArray, interactive) => {
     removeBtn.title = 'Remove';
     removeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const idx = selArray.indexOf(unitId);
-      if (idx >= 0) selArray.splice(idx, 1);
-      renderGrids();
-      renderTeamPreview();
-      updateReadyState();
+      removePick(unitId);
     });
     card.appendChild(removeBtn);
   }
@@ -289,32 +282,36 @@ const buildAddSlot = () => {
   return slot;
 };
 
-const renderPlayerGrid = (selArray, selectedEl, availableEl, interactive, countEl) => {
+const renderPlayerGrid = (picks, selectedEl, availableEl, interactive, countEl) => {
   selectedEl.innerHTML = '';
   availableEl.innerHTML = '';
 
-  selArray.forEach(id => {
-    selectedEl.appendChild(buildSelectedCard(id, selArray, interactive));
+  picks.forEach(id => {
+    selectedEl.appendChild(buildSelectedCard(id, interactive));
   });
-  const emptySlots = MAX_SELECTION - selArray.length;
+  const emptySlots = MAX_SELECTION - picks.length;
   for (let i = 0; i < emptySlots; i++) {
     selectedEl.appendChild(buildAddSlot());
   }
 
-  countEl.textContent = `${selArray.length} / ${MAX_SELECTION}`;
+  countEl.textContent = `${picks.length} / ${MAX_SELECTION}`;
 
-  const available = UNITS.filter(u => !selArray.includes(u.id));
+  const available = UNITS.filter(u => !picks.includes(u.id));
   available.forEach(unit => {
-    availableEl.appendChild(buildUnitCard(unit, selArray, interactive));
+    availableEl.appendChild(buildUnitCard(unit, interactive));
   });
 };
 
 const renderGrids = () => {
-  // P1's cards become read-only once the user has locked in their picks.
-  renderPlayerGrid(p1Selection, p1SelectedEl, p1AvailableEl, !p1Confirmed, p1CountEl);
-  renderPlayerGrid(p2Selection, p2SelectedEl, p2AvailableEl, false,         p2CountEl);
-  // Visually mirror P2's read-only state on the P1 panel when locked.
-  p1SelectedEl.closest('.us-player-panel')?.classList.toggle('is-locked', p1Confirmed);
+  const mine  = mySelection();
+  const other = otherSelection();
+  // P1 (me) is interactive only while I haven't confirmed yet.
+  // P2 (other) is never interactive on my client.
+  const meInteractive = !myReady();
+  renderPlayerGrid(mine,  p1SelectedEl, p1AvailableEl, meInteractive, p1CountEl);
+  renderPlayerGrid(other, p2SelectedEl, p2AvailableEl, false,         p2CountEl);
+  // Visually lock the P1 panel once I've readied up (mirrors P2's look).
+  p1SelectedEl.closest('.us-player-panel')?.classList.toggle('is-locked', myReady());
 };
 
 // ── TEAM PREVIEW ──
@@ -322,8 +319,8 @@ const renderTeamPreview = () => {
   teamPreview.innerHTML = '';
 
   const allSelected = [
-    ...p1Selection.map(id => ({ id, player: 1 })),
-    ...p2Selection.map(id => ({ id, player: 2 })),
+    ...mySelection().map(id => ({ id, player: 1 })),
+    ...otherSelection().map(id => ({ id, player: 2 })),
   ];
 
   allSelected.forEach(({ id, player }) => {
@@ -333,7 +330,6 @@ const renderTeamPreview = () => {
     teamPreview.appendChild(wrap);
   });
 
-  // Placeholder question mark if nothing selected yet
   if (allSelected.length === 0) {
     const q = document.createElement('div');
     q.className = 'us-team-unit is-unknown';
@@ -343,31 +339,28 @@ const renderTeamPreview = () => {
 };
 
 // ── READY STATE ──
-let p1Confirmed = false;
-let p2Confirmed = false; // Placeholder until multiplayer is wired up
 const updateReadyState = () => {
-  p1ReadyEl.textContent = p1Confirmed ? 'Ready' : 'Not Ready';
-  p1ReadyEl.className   = `us-player-ready ${p1Confirmed ? 'is-ready' : 'not-ready'}`;
+  const me  = myReady();
+  const them = otherReady();
 
-  // P2 is a placeholder — always shows Not Ready until multiplayer is wired
-  p2ReadyEl.textContent = p2Confirmed ? 'Ready' : 'Not Ready';
-  p2ReadyEl.className   = `us-player-ready ${p2Confirmed ? 'is-ready' : 'not-ready'}`;
+  p1ReadyEl.textContent = me ? 'Ready' : 'Not Ready';
+  p1ReadyEl.className   = `us-player-ready ${me ? 'is-ready' : 'not-ready'}`;
 
-  // Ready count chip in the top bar
-  const readyCount = (p1Confirmed ? 1 : 0) + (p2Confirmed ? 1 : 0);
+  p2ReadyEl.textContent = them ? 'Ready' : 'Not Ready';
+  p2ReadyEl.className   = `us-player-ready ${them ? 'is-ready' : 'not-ready'}`;
+
+  const readyCount = (me ? 1 : 0) + (them ? 1 : 0);
   playersCountEl.textContent = `READY ${readyCount}/2`;
 
-  // Overall ready status — pull the display names live so they reflect
-  // whatever's currently shown in the player headers.
   const p1Name = p1NameEl.textContent || 'PLAYER 1';
   const p2Name = p2NameEl.textContent || 'PLAYER 2';
-  if (p1Confirmed && p2Confirmed) {
+  if (me && them) {
     readyStatusEl.textContent = 'BOTH PLAYERS READY! PREPARING BATTLE…';
     readyStatusEl.className = 'us-ready-status is-all-ready';
-  } else if (p1Confirmed && !p2Confirmed) {
+  } else if (me && !them) {
     readyStatusEl.textContent = `${p1Name} READY — WAITING FOR ${p2Name}…`;
     readyStatusEl.className = 'us-ready-status is-one-ready';
-  } else if (!p1Confirmed && p2Confirmed) {
+  } else if (!me && them) {
     readyStatusEl.textContent = `${p2Name} READY — WAITING FOR ${p1Name}…`;
     readyStatusEl.className = 'us-ready-status is-one-ready';
   } else {
@@ -375,14 +368,56 @@ const updateReadyState = () => {
     readyStatusEl.className = 'us-ready-status';
   }
 
-  // Enable confirm only while P1 hasn't locked in yet and has a selection.
-  // Once P1 confirms, the button stays disabled while waiting for P2.
-  confirmBtn.disabled = p1Selection.length === 0 || p1Confirmed;
+  // Enable confirm only while I have at least one pick AND I haven't
+  // readied up yet. The realtime UPDATE will disable it after the round
+  // trip lands.
+  confirmBtn.disabled = mySelection().length === 0 || me;
+};
 
-  // if multiplayer were wired, we'd also check here if P2 has confirmed and then navigate to battle
-  if (p1Confirmed && p2Confirmed) {
-    smoothNavigate('/game/game.html');
+const renderAll = () => {
+  renderGrids();
+  renderTeamPreview();
+  updateReadyState();
+};
+
+// ── ACTIONS ──
+// All mutations write to Supabase; the realtime echo re-renders both
+// sides. Optimistic local apply keeps clicks feeling instant.
+const updateSiege = async (patch) => {
+  if (!siege) return null;
+  const myIdCol = isHost ? 'host_id' : 'ally_id';
+  const { data, error } = await supabase
+    .from('sieges')
+    .update(patch)
+    .eq('id', siege.id)
+    .eq(myIdCol, user.id)
+    .select()
+    .maybeSingle();
+  if (error) {
+    console.error('siege update failed', error);
+    return null;
   }
+  if (data) applySiegeUpdate(data);
+  return data;
+};
+
+const addPick = (unitId) => {
+  if (!siege || myReady()) return;
+  const picks = [...mySelection()];
+  if (picks.includes(unitId)) return;
+  if (picks.length >= MAX_SELECTION) return;
+  picks.push(unitId);
+  const patch = { [isHost ? 'host_units' : 'ally_units']: picks };
+  applySiegeUpdate({ ...siege, ...patch });
+  updateSiege(patch);
+};
+
+const removePick = (unitId) => {
+  if (!siege || myReady()) return;
+  const picks = mySelection().filter(id => id !== unitId);
+  const patch = { [isHost ? 'host_units' : 'ally_units']: picks };
+  applySiegeUpdate({ ...siege, ...patch });
+  updateSiege(patch);
 };
 
 // ── NAVIGATION ──
@@ -392,20 +427,69 @@ backBtn.addEventListener('click', () => {
 });
 
 confirmBtn.addEventListener('click', () => {
-  if (confirmBtn.disabled) return;
-  p1Confirmed = true;
-  // Re-render P1's grid so the remove buttons and "add" click handlers
-  // disappear — selection is locked once confirmed.
-  renderGrids();
-  updateReadyState();
-  sessionStorage.setItem('selectedUnits', JSON.stringify(p1Selection));
-  // Navigation will be triggered once P2 confirms (multiplayer not yet wired).
+  if (confirmBtn.disabled || !siege || myReady()) return;
+  const readyKey = isHost ? 'host_ready' : 'ally_ready';
+  const patch = { [readyKey]: true };
+  applySiegeUpdate({ ...siege, ...patch });
+  updateSiege(patch);
+  sessionStorage.setItem('selectedUnits', JSON.stringify(mySelection()));
 });
 
+// ── REALTIME RECONCILIATION ──
+const applySiegeUpdate = (fresh) => {
+  if (!fresh || (siege && fresh.id !== siege.id)) return;
+  siege = fresh;
+  renderPlayerInfo();
+  renderAll();
+
+  // Both sides ready → both clients race to the game page.
+  if (siege.host_ready && siege.ally_ready && !navigated) {
+    navigated = true;
+    setTimeout(() => smoothNavigate('/game/game.html'), 800);
+  }
+};
+
 // ── INIT ──
-await Promise.all([loadProfile(), loadSiege()]);
-renderPlayerInfo();
-renderMapInfo();
-renderGrids();
-renderTeamPreview();
-updateReadyState();
+const handoffId = sessionStorage.getItem('setupSiegeId');
+sessionStorage.removeItem('setupSiegeId');
+
+await loadProfile();
+siege = await loadSiege(handoffId);
+// Brief retry to paper over PostgREST schema-cache lag right after a row
+// is created or started_at is flipped.
+if (!siege && handoffId) {
+  await new Promise(r => setTimeout(r, 400));
+  siege = await loadSiege(handoffId);
+}
+
+const bounceToLobby = (reason) => {
+  console.error('[unit-selection] returning to lobby:', reason);
+  smoothNavigate('/lobby/lobby.html');
+};
+
+if (!siege) {
+  bounceToLobby('siege not found');
+} else if (siege.host_id !== user.id && siege.ally_id !== user.id) {
+  bounceToLobby('user is neither host nor ally');
+} else {
+  isHost = siege.host_id === user.id;
+  renderPlayerInfo();
+  renderMapInfo();
+  renderAll();
+
+  // Subscribe to UPDATE/DELETE on this siege so opponent picks, ready
+  // toggles, and disbands reach this client live.
+  supabase
+    .channel(`unit-selection-${siege.id}`)
+    .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'sieges', filter: `id=eq.${siege.id}` },
+        (payload) => applySiegeUpdate(payload.new))
+    .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'sieges', filter: `id=eq.${siege.id}` },
+        () => {
+          if (navigated) return;
+          navigated = true;
+          bounceToLobby('siege deleted');
+        })
+    .subscribe();
+}

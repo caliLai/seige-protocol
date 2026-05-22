@@ -421,8 +421,29 @@ const removePick = (unitId) => {
 };
 
 // ── NAVIGATION ──
-backBtn.addEventListener('click', () => {
+backBtn.addEventListener('click', async () => {
   sessionStorage.setItem('skipDoorAnimation', '1');
+  sessionStorage.removeItem('selectedUnits');
+  // "Back to Lobby" cancels the whole setup phase — both players return
+  // to the pre-launch lobby state. We clear started_at (the column the
+  // lobby uses to auto-redirect into setup), both selection arrays, and
+  // both ready flags. The realtime echo carries the cancel to the
+  // opponent so they get kicked back to the lobby too.
+  if (siege) {
+    // Don't let the realtime UPDATE handler bounce me back into setup
+    // mid-cancel, and don't double-fire navigation.
+    navigated = true;
+    await supabase
+      .from('sieges')
+      .update({
+        started_at: null,
+        host_units: [],
+        ally_units: [],
+        host_ready: false,
+        ally_ready: false,
+      })
+      .eq('id', siege.id);
+  }
   smoothNavigate('/lobby/lobby.html');
 });
 
@@ -438,9 +459,18 @@ confirmBtn.addEventListener('click', () => {
 // ── REALTIME RECONCILIATION ──
 const applySiegeUpdate = (fresh) => {
   if (!fresh || (siege && fresh.id !== siege.id)) return;
+  const prevStartedAt = siege?.started_at;
   siege = fresh;
   renderPlayerInfo();
   renderAll();
+
+  // The other player cancelled setup ("Back to Lobby"). They cleared
+  // started_at — bounce me back to the lobby too so we both reset.
+  if (prevStartedAt && !siege.started_at && !navigated) {
+    navigated = true;
+    smoothNavigate('/lobby/lobby.html');
+    return;
+  }
 
   // Both sides ready → both clients race to the game page.
   if (siege.host_ready && siege.ally_ready && !navigated) {

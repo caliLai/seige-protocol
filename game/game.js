@@ -4,6 +4,13 @@ const gameCanvas = gameCanvasElement.getContext('2d');
 gameCanvasElement.width = 1120;
 gameCanvasElement.height = 640;
 
+let wave1Data = null;
+try {
+    wave1Data = JSON.parse(sessionStorage.getItem('wave1Siege') || 'null');
+} catch {
+    wave1Data = null;
+}
+
 const towers = [];
 let attackUnits = [];
 
@@ -15,7 +22,6 @@ let mapLoaded = false;
 
 const addGold = (amount) => {
     playerGold += amount;
-
     const goldDisplay = document.getElementById("goldDisplay");
     if (goldDisplay) {
         goldDisplay.innerText = "Gold: " + playerGold;
@@ -33,19 +39,69 @@ const showEndScreen = () => {
     document.getElementById("goldEarned").innerText = "Gold Earned: " + playerGold;
     document.getElementById("towersDestroyed").innerText = "Towers Destroyed: " + towersDestroyedCount;
     document.getElementById("unitsLost").innerText = "Units Lost: 0";
-
     document.getElementById("endScreen").style.display = "flex";
 };
 
 const checkWinCondition = () => {
     if (towers.length === 0 && !gameFinished) {
         gameFinished = true;
-
         addGold(100);
-
         cancelAnimationFrame(animationId);
         showEndScreen();
     }
+};
+
+const createUnitFromId = (unitId, position, laneOffset) => {
+    const id = String(unitId).toLowerCase();
+
+    let unit;
+    if (id === "archer") unit = new Archer(position);
+    else if (id === "knight") unit = new Knight(position);
+    else unit = new Unit(position);
+
+    unit.laneOffset = (typeof laneOffset === "number") ? laneOffset : 0;
+
+    return unit;
+};
+
+const pathStartDirection = () => {
+    const p0 = path[0];
+    const p1 = path[1] || path[0];
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: dx / len, y: dy / len };
+};
+
+const spawnWaveQueues = () => {
+    if (!wave1Data) return;
+
+    const hostQueue = wave1Data.host_wave1 || [];
+    const allyQueue = wave1Data.ally_wave1 || [];
+
+    const spawnGap = 220;
+    const spacing = 10;
+    const dir = pathStartDirection();
+
+    hostQueue.forEach((unitId, i) => {
+        setTimeout(() => {
+            const pos = { x: path[0].x, y: path[0].y };
+            const unit = createUnitFromId(unitId, pos, -14);
+            unit.position.x -= dir.x * (i * spacing);
+            unit.position.y -= dir.y * (i * spacing);
+            attackUnits.push(unit);
+        }, i * spawnGap);
+    });
+
+    allyQueue.forEach((unitId, i) => {
+        setTimeout(() => {
+            const pos = { x: path[0].x, y: path[0].y };
+            const unit = createUnitFromId(unitId, pos, 14);
+            unit.position.x -= dir.x * (i * spacing);
+            unit.position.y -= dir.y * (i * spacing);
+            attackUnits.push(unit);
+        }, i * spawnGap);
+    });
 };
 
 const animate = () => {
@@ -56,95 +112,72 @@ const animate = () => {
     gameCanvas.drawImage(backgroundImage, 0, 0);
 
     for (let i = 0; i < attackUnits.length && towers.length && !gameFinished; i++) {
-        let attackUnit = attackUnits[i];
-        let tower = towers[0];
+        const unit = attackUnits[i];
+        const tower = towers[0];
 
-        if (!attackUnit || !tower) continue;
+        if (!unit || !tower) continue;
 
-        const dx = tower.centre.x - attackUnit.centre.x;
-        const dy = tower.centre.y - attackUnit.centre.y;
+        const dx = tower.centre.x - unit.centre.x;
+        const dy = tower.centre.y - unit.centre.y;
         const distance = Math.hypot(dx, dy);
 
-        if (!tower.isDead && distance <= attackUnit.attackRadius) {
-            attackUnit.target = tower;
+        if (!tower.isDead && distance <= unit.attackRadius) {
+            unit.target = tower;
         } else {
             if (tower.isDead) {
                 towers.shift();
-
                 towersDestroyedCount++;
-                addGold(80);
-
                 checkWinCondition();
             }
-
-            attackUnit.target = null;
+            unit.target = null;
         }
     }
-    attackUnits = attackUnits.filter(unit => !unit.isDead);
 
-    attackUnits.forEach(unit => unit.updateFrame());
-    
+    attackUnits = attackUnits.filter(u => !u.isDead);
+
+    attackUnits.forEach(unit => {
+        unit.updateFrame();
+    });
+
     towers.forEach(tower => {
-        const target = attackUnits.find(unit => !unit.isDead);
+        const target = attackUnits.find(u => !u.isDead);
         tower.updateFrame(target);
     });
 };
 
-const startGame = () => {
-    if (!mapLoaded) {
-        alert("Map is still loading. Try again in a moment.");
-        return;
-    }
-
-    let selectedUnitType = document.querySelector('input[name="unitSelection"]:checked')?.value;
-
-    if (!selectedUnitType) {
-        alert("Select a unit first!");
-        return;
-    }
+const autoStartGame = () => {
+    if (!wave1Data) return;
 
     playerGold = 0;
     towersDestroyedCount = 0;
     gameFinished = false;
+    attackUnits = [];
 
-    document.getElementById("goldDisplay").innerText = "Gold: 0";
+    spawnWaveQueues();
 
-    const pathStart = { x: path[0].x, y: path[0].y };
-
-    let newUnit;
-
-    switch (selectedUnitType) {
-        case "archer":
-            newUnit = new Archer(pathStart);
-            break;
-        case "knight":
-            newUnit = new Knight(pathStart);
-            break;
-        case "unit":
-            newUnit = new Unit(pathStart);
-            break;
-        default:
-            throw new Error("Invalid unit type");
-    }
-
-    attackUnits.push(newUnit);
-
-    if (!animationId) {
-        animate();
-    }
+    if (!animationId) animate();
 };
 
-const nextWave = () => {
-    location.reload();
+const startGame = () => {
+    if (!mapLoaded) return;
+    if (wave1Data) {
+        autoStartGame();
+    }
 };
 
 const backgroundImage = new Image();
+
 backgroundImage.onload = () => {
     mapLoaded = true;
+
     initialiseTowers();
 
     gameCanvas.drawImage(backgroundImage, 0, 0);
-    towers.forEach(tower => tower.render());
+    towers.forEach(t => t.render());
+
+    autoStartGame();
 };
 
-backgroundImage.src = "../assets/maps/calista-map.png";
+backgroundImage.src = (wave1Data && wave1Data.map_src)
+    ? wave1Data.map_src.replace('/assets/', '../assets/')
+    : "../assets/maps/calista-map.png";

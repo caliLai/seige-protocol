@@ -15,6 +15,8 @@ class Unit extends Sprite {
 
     _target = null;
 
+    laneOffset = 0;
+
     constructor(position) {
         super(position);
     }
@@ -121,8 +123,34 @@ class Unit extends Sprite {
         const pathPoint = path[this.pathIndex];
         if (!pathPoint) return;
 
-        const dx = pathPoint.x - this.centre.x;
-        const dy = pathPoint.y - this.centre.y;
+        const laneOffset = (typeof this.laneOffset === 'number') ? this.laneOffset : 0;
+
+        let dirX = 0;
+        let dirY = 0;
+
+        const nextPoint = path[this.pathIndex + 1];
+        const prevPoint = path[this.pathIndex - 1];
+
+        if (nextPoint) {
+            dirX = nextPoint.x - pathPoint.x;
+            dirY = nextPoint.y - pathPoint.y;
+        } else if (prevPoint) {
+            dirX = pathPoint.x - prevPoint.x;
+            dirY = pathPoint.y - prevPoint.y;
+        } else {
+            dirX = 1;
+            dirY = 0;
+        }
+
+        const len = Math.hypot(dirX, dirY) || 1;
+        const perpX = -dirY / len;
+        const perpY = dirX / len;
+
+        const targetX = pathPoint.x + perpX * laneOffset;
+        const targetY = pathPoint.y + perpY * laneOffset;
+
+        const dx = targetX - this.centre.x;
+        const dy = targetY - this.centre.y;
 
         const distance = Math.hypot(dx, dy);
 

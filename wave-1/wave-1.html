@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Siege Protocol — Wave I Deployment</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/login/login-styles.css" />
+  <link rel="stylesheet" href="/start-screen/start-screen-styles.css" />
+  <link rel="stylesheet" href="/lobby/lobby-styles.css" />
+  <link rel="stylesheet" href="/siege-setup/siege-setup-styles.css" />
+  <link rel="stylesheet" href="/wave-1/wave-1-styles.css" />
+</head>
+<body>
+
+  <div class="game-frame stone-bg lobby-frame setup-frame wave1-frame">
+    <div class="scanlines-overlay"></div>
+
+    <!-- ═══ HEADER ═══ -->
+    <div class="lobby-header">
+      <button id="leaveBtn" type="button" class="px-btn lobby-back-btn setup-leave-btn">☠ LEAVE SIEGE</button>
+      <div class="lobby-title-block">
+        <div class="lobby-title">⚔ WAVE I — MUSTER THE QUEUE ⚔</div>
+        <div class="lobby-subtitle" id="siegeNameSub">— ORDER THY SPAWN —</div>
+      </div>
+      <div class="setup-header-right">
+        <div class="setup-map-chip" aria-label="Battle map">
+          <img id="mapImage" class="setup-map-image" src="/assets/maps/calista-map.png" alt="Battle map" />
+          <div class="setup-map-caption">
+            <span id="mapName">CALISTA HIGHLANDS</span>
+            <span class="map-caption-divider">·</span>
+            <span id="roomDifficulty" class="diff-badge diff-recruit">RECRUIT</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ MAIN BODY ═══ -->
+    <div class="setup-body wave1-body">
+
+      <!-- LEFT — current user -->
+      <section class="setup-column setup-column-self wave1-column" aria-label="Thy queue">
+        <div class="setup-col-header">
+          <div class="setup-col-banner setup-col-banner-self">⚜ THINE OWN BANNER ⚜</div>
+          <div class="setup-col-name" id="selfName">…</div>
+          <div class="setup-col-role" id="selfRole">HOST</div>
+        </div>
+
+        <div class="wave1-gold-row">
+          <div class="wave1-gold-label">▶ COFFERS</div>
+          <div class="wave1-gold-value" id="selfGoldValue">0</div>
+          <div class="wave1-gold-cap">/ <span id="selfGoldCap">0</span></div>
+        </div>
+
+        <div class="setup-slot-hint" id="selfHint">SPEND THY GOLD TO BUILD THE QUEUE</div>
+
+        <div class="wave1-queue-label">▶ THY SPAWN QUEUE</div>
+        <div class="wave1-queue" id="selfQueue" role="list" aria-label="Thy spawn queue">
+          <!-- Filled by JS -->
+        </div>
+
+        <div class="setup-pool-label">▶ THY CHOSEN TYPES</div>
+        <div class="wave1-types" id="selfTypes" role="list" aria-label="Thy unit types">
+          <!-- Filled by JS -->
+        </div>
+
+        <button type="button" id="readyBtn" class="px-btn setup-ready-btn" disabled>
+          ⚔ LOCK IN WAVE I ⚔
+        </button>
+      </section>
+
+      <!-- VERSUS BANNER -->
+      <div class="setup-vs" aria-hidden="true">
+        <div class="setup-vs-line"></div>
+        <div class="setup-vs-mark">⚔ VS ⚔</div>
+        <div class="setup-vs-line"></div>
+      </div>
+
+      <!-- RIGHT — the other player -->
+      <section class="setup-column setup-column-other wave1-column" aria-label="Thine ally">
+        <div class="setup-col-header">
+          <div class="setup-col-banner setup-col-banner-other">⚜ ALLIED BANNER ⚜</div>
+          <div class="setup-col-name" id="otherName">…</div>
+          <div class="setup-col-role" id="otherRole">ALLY</div>
+        </div>
+
+        <div class="wave1-gold-row">
+          <div class="wave1-gold-label">▶ COFFERS</div>
+          <div class="wave1-gold-value" id="otherGoldValue">0</div>
+          <div class="wave1-gold-cap">/ <span id="otherGoldCap">0</span></div>
+        </div>
+
+        <div class="setup-slot-hint" id="otherHint">AWAITING THEIR QUEUE…</div>
+
+        <div class="wave1-queue-label">▶ THEIR SPAWN QUEUE</div>
+        <div class="wave1-queue wave1-queue-readonly" id="otherQueue" role="list" aria-label="Their spawn queue">
+          <!-- Filled by JS -->
+        </div>
+
+        <div class="setup-pool-label">▶ THEIR CHOSEN TYPES</div>
+        <div class="wave1-types wave1-types-readonly" id="otherTypes" role="list" aria-label="Their unit types">
+          <!-- Filled by JS -->
+        </div>
+
+        <div class="setup-ready-indicator" id="otherReady">
+          <span class="setup-ready-dot"></span>
+          <span class="setup-ready-text">NOT READY</span>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Both-ready countdown overlay -->
+    <div id="bothReadyBanner" class="setup-both-ready hidden" aria-hidden="true">
+      <span>⚔ WAVE I MARCHES — TO BATTLE! ⚔</span>
+    </div>
+
+    <!-- Floating alert -->
+    <div id="alertBanner" class="alert-banner lobby-alert" role="alert" aria-live="polite"></div>
+
+    <!-- Leave confirmation overlay -->
+    <div id="leaveOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="leaveTitle" aria-hidden="true">
+      <div class="confirm-card confirm-card-danger">
+        <div class="confirm-card-inner-border"></div>
+        <div class="confirm-card-corner tl"></div>
+        <div class="confirm-card-corner tr"></div>
+        <div class="confirm-card-corner bl"></div>
+        <div class="confirm-card-corner br"></div>
+        <div class="confirm-card-content">
+          <div id="leaveTitle" class="confirm-title">☠ ABANDON THE SIEGE? ☠</div>
+          <div class="divider confirm-divider">
+            <div class="dash-line"></div>
+            <span class="divider-icon">⚔</span>
+            <div class="dash-line"></div>
+          </div>
+          <p class="confirm-body">
+            LEAVING NOW DISBANDS THE SIEGE FOR BOTH HOSTS.
+            BOTH OF YE WILL RETURN TO THE WAR ROOM.
+          </p>
+          <div class="confirm-actions">
+            <button type="button" id="leaveCancelBtn" class="px-btn confirm-cancel-btn">◀ STAY</button>
+            <button type="button" id="leaveConfirmBtn" class="px-btn confirm-danger-btn">
+              <span id="leaveConfirmText">☠ DISBAND ☠</span>
+              <span id="leaveConfirmLoading" class="btn-loading">█ DISBANDING… █</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Frame edges -->
+    <div class="frame-edge frame-edge-top"></div>
+    <div class="frame-edge frame-edge-left"></div>
+    <div class="frame-edge frame-edge-right"></div>
+  </div>
+
+  <script type="module" src="/wave-1/wave-1.js"></script>
+</body>
+</html>

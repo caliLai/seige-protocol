@@ -20,7 +20,7 @@ let gameFinished = false;
 let towersDestroyedCount = 0;
 let mapLoaded = false;
 
-const SIEGE_ID = sessionStorage.getItem('gameSiegeId') || new URLSearchParams(location.search).get('siege');
+const SIEGE_ID = sessionStorage.getItem('wave1SiegeId');
 const remoteUnits = new Map();
 let posChannel = null;
 let lastPositionSentAt = 0;

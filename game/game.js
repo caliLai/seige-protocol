@@ -14,7 +14,6 @@ gameCanvasElement.height = 640;
 
 const towers = [];
 let attackUnits = [];
-
 let playerGold = 0;
 let animationId = null;
 let gameFinished = false;
@@ -22,11 +21,31 @@ let towersDestroyedCount = 0;
 let mapLoaded = false;
 
 const SIEGE_ID = sessionStorage.getItem('gameSiegeId') || new URLSearchParams(location.search).get('siege');
-const CLIENT_ID = 'c_' + Math.random().toString(36).slice(2, 9);
 const remoteUnits = new Map();
 let posChannel = null;
 let lastPositionSentAt = 0;
 const POSITION_THROTTLE_MS = 120;
+
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) window.location.href = '/login/login.html';
+
+const getPathStart = () => ({ x: path[0].x, y: path[0].y });
+
+const unitFactory = (unitType) => {
+	switch (unitType) {
+		case "archer":
+			return new Archer(getPathStart(), gameCanvas);
+			break;
+		case "knight":
+			return new Knight(getPathStart(), gameCanvas);
+			break;
+		case "unit":
+			return new Unit(getPathStart(), gameCanvas);
+			break;
+		default:
+			throw new Error("Invalid unit type");
+  	}
+}
 
 const addGold = (amount) => {
     playerGold += amount;
@@ -52,78 +71,19 @@ const showEndScreen = () => {
     document.getElementById("endScreen").style.display = "flex";
 };
 
-const clampNumber = (value, min, max) => Math.min(max, Math.max(min, value));
-
-const renderRemoteUnits = () => {
-    const now = Date.now();
-    for (const [id, remote] of remoteUnits.entries()) {
-        if (now - remote.lastSeen > 15000) {
-            remoteUnits.delete(id);
-            continue;
-        }
-        gameCanvas.beginPath();
-        gameCanvas.fillStyle = 'crimson';
-        gameCanvas.arc(remote.x, remote.y, 10, 0, Math.PI * 2);
-        gameCanvas.fill();
-        gameCanvas.fillStyle = 'white';
-        gameCanvas.font = '10px sans-serif';
-        gameCanvas.fillText(id.slice(-4), remote.x - 8, remote.y - 12);
-    }
-};
-
-const sendPosition = (unit) => {
-    if (!posChannel || !unit?._unitId) return;
-    const now = performance.now();
-    if (now - lastPositionSentAt < POSITION_THROTTLE_MS) return;
-    lastPositionSentAt = now;
-    posChannel.send({
-        type: 'broadcast',
-        event: 'unit-pos',
-        payload: {
-            clientId: CLIENT_ID,
-            unitId: unit._unitId,
-            x: clampNumber(unit.centre.x, 0, gameCanvasElement.width),
-            y: clampNumber(unit.centre.y, 0, gameCanvasElement.height),
-            ts: Date.now(),
-        },
-    });
-};
-
-const handleUnitCreated = (payload) => {
-    if (!payload || payload.clientId === CLIENT_ID) return;
-    if (remoteUnits.has(payload.unitId)) return;
-    remoteUnits.set(payload.unitId, {
-        unitId: payload.unitId,
-        x: payload.x,
-        y: payload.y,
-        lastSeen: Date.now(),
-    });
-};
-
-const handleUnitPos = (payload) => {
-    if (!payload || payload.clientId === CLIENT_ID) return;
-    const remote = remoteUnits.get(payload.unitId);
-    if (!remote) return;
-    remote.x = (remote.x + payload.x) / 2;
-    remote.y = (remote.y + payload.y) / 2;
-    remote.lastSeen = Date.now();
-};
-
-const handleUnitRemoved = (payload) => {
-    if (!payload) return;
-    remoteUnits.delete(payload.unitId);
-};
-
 const initRealtime = async () => {
-    if (!SIEGE_ID) alert("No siege ID found. Create or join a siege to play.");
-    posChannel = supabase.channel(`game-${SIEGE_ID}`);
-    await posChannel.subscribe(async (status) => {
-		if (status === 'SUBSCRIBED') {
-			console.log("Subscribed to channel for siege", SIEGE_ID);
-		}});
-    posChannel.on('broadcast', { event: 'unit-created' }, payload => handleUnitCreated(payload));
-    posChannel.on('broadcast', { event: 'unit-pos' }, payload => handleUnitPos(payload));
-    posChannel.on('broadcast', { event: 'unit-removed' }, payload => handleUnitRemoved(payload));
+    if (!SIEGE_ID) {
+		alert("No siege ID found. Create or join a siege to play.");
+		return;
+	}    
+	posChannel = supabase.channel(`game-${SIEGE_ID}`);
+    posChannel.on('broadcast', { event: 'unit-created' }, payload => handleUnitCreated(payload)).subscribe();
+	//for the time being, i don't think its necessary to broadcast or listen for position updates of a unit
+	//since everything is following the same path and speed
+    //posChannel.on('broadcast', { event: 'unit-pos' }, payload => handleUnitPos(payload)).subscribe();
+
+	// probably also not necessary but like. just in case ig.
+    //posChannel.on('broadcast', { event: 'unit-removed' }, payload => handleUnitRemoved(payload)).subscribe();
 };
 
 const checkWinCondition = () => {
@@ -173,17 +133,15 @@ const animate = () => {
 
     attackUnits.forEach(unit => {
         unit.updateFrame();
-        sendPosition(unit);
     });
     
     towers.forEach(tower => {
         const target = attackUnits.find(unit => !unit.isDead);
         tower.updateFrame(target);
     });
-    renderRemoteUnits();
 };
 
-const startGame = () => {
+const deployUnit = () => {
     if (!mapLoaded) {
         alert("Map is still loading. Try again in a moment.");
         return;
@@ -195,52 +153,34 @@ const startGame = () => {
         alert("Select a unit first!");
         return;
     }
+    let newUnit = unitFactory(selectedUnitType);
 
-    playerGold = 0;
-    towersDestroyedCount = 0;
-    gameFinished = false;
-
-    document.getElementById("goldDisplay").innerText = "Gold: 0";
-
-    const pathStart = { x: path[0].x, y: path[0].y };
-
-    let newUnit;
-
-    switch (selectedUnitType) {
-        case "archer":
-            newUnit = new Archer(pathStart, gameCanvas);
-            break;
-        case "knight":
-            newUnit = new Knight(pathStart, gameCanvas);
-            break;
-        case "unit":
-            newUnit = new Unit(pathStart, gameCanvas);
-            break;
-        default:
-            throw new Error("Invalid unit type");
-    }
-
-    newUnit._unitId = `u_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     attackUnits.push(newUnit);
-
+	
+	// broadcast the new unit to other clients
+    let unitId = `u_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     if (posChannel) {
         posChannel.send({
             type: 'broadcast',
             event: 'unit-created',
             payload: {
-                clientId: CLIENT_ID,
-                unitId: newUnit._unitId,
-                type: selectedUnitType,
-                x: newUnit.centre.x,
-                y: newUnit.centre.y,
-                ts: Date.now(),
+				unitId: unitId,
+                clientId: user.id,
+				type: selectedUnitType
             },
         });
     }
+};
 
-    if (!animationId) {
-        animate();
-    }
+const handleUnitCreated = (payload) => {
+	if (!payload || payload.payload.clientId === user.id) return;
+	console.log(payload)
+	attackUnits.push(unitFactory(payload.payload.type));
+};
+
+const handleUnitRemoved = (payload) => {
+  if (!payload) return;
+  remoteUnits.delete(payload.unitId);
 };
 
 const nextWave = () => {
@@ -259,5 +199,6 @@ backgroundImage.onload = () => {
 backgroundImage.src = "../assets/maps/calista-map.png";
 
 initRealtime();
-window.startGame = startGame;
+window.deployUnit = deployUnit;
 window.nextWave = nextWave;
+animate();

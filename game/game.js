@@ -21,10 +21,7 @@ let towersDestroyedCount = 0;
 let mapLoaded = false;
 
 const SIEGE_ID = sessionStorage.getItem('wave1SiegeId');
-const remoteUnits = new Map();
 let posChannel = null;
-let lastPositionSentAt = 0;
-const POSITION_THROTTLE_MS = 120;
 
 const { data: { user } } = await supabase.auth.getUser();
 if (!user) window.location.href = '/login/login.html';
@@ -178,10 +175,10 @@ const handleUnitCreated = (payload) => {
 	attackUnits.push(unitFactory(payload.payload.type));
 };
 
-const handleUnitRemoved = (payload) => {
-  if (!payload) return;
-  remoteUnits.delete(payload.unitId);
-};
+// const handleUnitRemoved = (payload) => {
+//   if (!payload) return;
+//   remoteUnits.delete(payload.unitId);
+// };
 
 const nextWave = () => {
     location.reload();

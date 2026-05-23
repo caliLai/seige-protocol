@@ -106,12 +106,19 @@ const loadIdleMeta = (unitId) => {
 
 // Drive an animated idle on a sprite element. Stops any prior animation
 // on the same element so re-rendering doesn't leak timers.
-const animateSprite = async (spriteEl, unitId, stageSize) => {
+const animateSprite = async (spriteEl, unitId, stageSize, scaleMultiplier = 3.0) => {
   const prev = spriteTimers.get(spriteEl);
   if (prev) clearInterval(prev);
   const meta = await loadIdleMeta(unitId);
   if (!spriteEl.isConnected) return;
-  const scale = (stageSize - 6) / Math.max(meta.frameWidth, meta.frameHeight);
+  // Sprite frames pack the character into the center of the frame with
+  // transparent padding for attack FX. Scale to a visual box larger than
+  // the stage so the character reads at full size — stages use
+  // overflow: visible to let the padding spill. If stageSize is null,
+  // measure the parent stage at runtime (used when the stage is fluid,
+  // like the pool cells which size from the grid).
+  const effectiveStage = stageSize ?? (spriteEl.parentElement?.getBoundingClientRect().width || 48);
+  const scale = (effectiveStage * scaleMultiplier) / Math.max(meta.frameWidth, meta.frameHeight);
   spriteEl.style.width = `${meta.frameWidth}px`;
   spriteEl.style.height = `${meta.frameHeight}px`;
   spriteEl.style.backgroundSize = `${meta.sheetWidth}px ${meta.frameHeight}px`;
@@ -213,7 +220,9 @@ const renderPool = (containerEl, units, picks, interactive) => {
       <div class="setup-pool-name">${escapeHtml(unit.id.toUpperCase())}</div>
     `;
     const spriteEl = card.querySelector('.setup-pool-sprite');
-    animateSprite(spriteEl, unit.id, 48);
+    // null stageSize => measure the actual stage (which now fills the card),
+    // so the sprite scales with the card regardless of grid column width.
+    animateSprite(spriteEl, unit.id, null, 1.6);
     if (interactive && !isPicked) {
       card.addEventListener('click', () => addPick(unit.id));
     }

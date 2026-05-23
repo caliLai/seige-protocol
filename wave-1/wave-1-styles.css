@@ -4,6 +4,27 @@
    counter, an ordered queue strip, and unit-type cards with costs.
    ════════════════════════════════════════ */
 
+/* ── FRAME OVERRIDE ──
+   The shared .game-frame is a fixed 1120×640 window with overflow:hidden
+   (sized for the lobby/login screens). Wave-1 columns hold the queue,
+   the 3 type cards, AND the ready button — too tall for 640px, which
+   clipped the ready button below the frame. Let the wave-1 frame grow
+   to fit its content instead. */
+.wave1-frame {
+  height: auto;
+  min-height: 640px;
+  overflow: visible;
+}
+
+/* The shared .setup-body uses overflow:hidden so siege-setup's pool can
+   scroll internally. Wave-1 has no internal scroll surface — let it
+   grow with the (now-elastic) frame. */
+.wave1-body {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
 /* ── GOLD ROW ── */
 .wave1-gold-row {
   display: flex;
@@ -44,17 +65,34 @@
   color: #f5c518;
   text-shadow: 1px 1px 0 #000;
 }
+.wave1-queue-count {
+  margin-left: 6px;
+  color: #a89880;
+  letter-spacing: 0.12em;
+}
+.wave1-queue-count.is-full {
+  color: #c04040;
+}
 .wave1-queue {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
   padding: 8px;
   min-height: 80px;
+  /* One row only — scroll horizontally when the queue exceeds the column
+     width. flex: 0 0 auto keeps the queue from being shrunk by sibling
+     items in the column. */
+  flex: 0 0 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   background: linear-gradient(180deg, #1a1408 0%, #0d0a07 100%);
   border: 3px dashed #4a4540;
   box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.10);
 }
+.wave1-queue::-webkit-scrollbar { height: 8px; }
+.wave1-queue::-webkit-scrollbar-track { background: #1a0f08; border: 1px solid #000; }
+.wave1-queue::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #7a600c, #4a3500); border: 1px solid #000; }
 .wave1-queue.has-items { border-style: solid; border-color: #1a1510; }
 .wave1-queue-empty {
   width: 100%;
@@ -70,6 +108,7 @@
 
 .wave1-queue-item {
   position: relative;
+  flex-shrink: 0;
   width: 56px;
   height: 64px;
   display: flex;
@@ -90,13 +129,16 @@
   box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(255, 80, 60, 0.35), 0 0 8px rgba(255, 80, 60, 0.25);
 }
 .wave1-queue-item .wave1-queue-stage {
-  width: 40px;
-  height: 40px;
+  /* Fill the tile so the sprite has the whole cell to scale against.
+     overflow: visible lets the transparent FX padding spill outside the
+     tile so the character itself reads at the tile's full size. */
+  flex: 1;
+  width: 100%;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  overflow: visible;
 }
 .wave1-queue-item .wave1-queue-sprite {
   position: absolute;
@@ -128,6 +170,7 @@
 .setup-column-self .wave1-queue:not(.wave1-queue-readonly) .wave1-queue-item:hover .wave1-queue-remove { opacity: 1; }
 
 .wave1-queue-arrow {
+  flex-shrink: 0;
   font-family: 'Press Start 2P', monospace;
   font-size: 10px;
   color: #7a600c;
@@ -148,6 +191,10 @@
 
 .wave1-type-card {
   position: relative;
+  /* Grid items default to min-width: auto, which lets overflowing children
+     (our upscaled sprites) widen the cell. Pin to 0 so the card stays at
+     its 1fr column width. */
+  min-width: 0;
   aspect-ratio: 1 / 1;
   display: flex;
   flex-direction: column;
@@ -161,16 +208,17 @@
   cursor: pointer;
   font-family: 'Press Start 2P', monospace;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
-  overflow: hidden;
 }
 .wave1-type-card .wave1-type-stage {
-  width: 56px;
-  height: 56px;
+  /* Fill the card so the sprite scales with the grid cell, not a fixed
+     56px box. overflow: visible lets the transparent FX padding spill. */
+  flex: 1;
+  width: 100%;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  overflow: visible;
 }
 .wave1-type-card .wave1-type-sprite {
   position: absolute;

@@ -483,12 +483,14 @@ const applySiegeUpdate = (fresh) => {
     // spawn. The siege row remains the source of truth.
     navigated = true;
     sessionStorage.setItem('wave1Siege', JSON.stringify({
-      id: siege.id,
-      host_wave1: siege.host_wave1 || [],
-      ally_wave1: siege.ally_wave1 || [],
-      difficulty: siege.difficulty,
-      map: siege.map,
-    }));
+    id: siege.id,
+    host_wave1: siege.host_wave1 || [],
+    ally_wave1: siege.ally_wave1 || [],
+    difficulty: siege.difficulty,
+    map: siege.map,
+    map_src: siege.map_src || '/assets/maps/calista-map.png'
+  }));
+
     bothReadyBanner.classList.remove('hidden');
     bothReadyBanner.setAttribute('aria-hidden', 'false');
     setTimeout(() => smoothNavigate('/game/game.html'), 1100);

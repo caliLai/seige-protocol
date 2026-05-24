@@ -18,8 +18,13 @@ export class Unit extends Sprite {
 
     _target = null;
 
+    laneOffset = 0;
+    pathRef = null;
+
     constructor(position, gameCanvas) {
         super(position, gameCanvas);
+        this.pathRef = null;
+        this.laneOffset = 0;
     }
 
     set target(newTarget) {
@@ -33,7 +38,6 @@ export class Unit extends Sprite {
     render() {
         this.gameCanvas.fillStyle = 'red';
         this.gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
-
         this.drawHealthBar();
     }
 
@@ -121,15 +125,46 @@ export class Unit extends Sprite {
     }
 
     calculateAndUpdatePathMovement() {
-        const pathPoint = path[this.pathIndex];
+        const activePath =
+            (this.pathRef && Array.isArray(this.pathRef) && this.pathRef.length)
+                ? this.pathRef
+                : path;
+
+        const pathPoint = activePath[this.pathIndex];
         if (!pathPoint) return;
 
-        const dx = pathPoint.x - this.centre.x;
-        const dy = pathPoint.y - this.centre.y;
+        const laneOffset = (typeof this.laneOffset === 'number') ? this.laneOffset : 0;
+
+        let dirX = 0;
+        let dirY = 0;
+
+        const nextPoint = activePath[this.pathIndex + 1];
+        const prevPoint = activePath[this.pathIndex - 1];
+
+        if (nextPoint) {
+            dirX = nextPoint.x - pathPoint.x;
+            dirY = nextPoint.y - pathPoint.y;
+        } else if (prevPoint) {
+            dirX = pathPoint.x - prevPoint.x;
+            dirY = pathPoint.y - prevPoint.y;
+        } else {
+            dirX = 1;
+            dirY = 0;
+        }
+
+        const len = Math.hypot(dirX, dirY) || 1;
+        const perpX = -dirY / len;
+        const perpY = dirX / len;
+
+        const targetX = pathPoint.x + perpX * laneOffset;
+        const targetY = pathPoint.y + perpY * laneOffset;
+
+        const dx = targetX - this.centre.x;
+        const dy = targetY - this.centre.y;
 
         const distance = Math.hypot(dx, dy);
 
-        if (distance < 2 && this.pathIndex < path.length - 1) {
+        if (distance < 2 && this.pathIndex < activePath.length - 1) {
             this.pathIndex++;
             return;
         }

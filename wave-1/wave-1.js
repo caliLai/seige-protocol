@@ -12,6 +12,12 @@ import { UNITS_BY_ID, idleSpriteUrl, deployCost, deployCostById } from '/lib/uni
 const STARTING_GOLD = { recruit: 300, veteran: 250, elite: 200 };
 const goldForDifficulty = (d) => STARTING_GOLD[d] ?? 250;
 
+// Hard cap on queue length by difficulty — easier modes let you spawn more
+// units, harder modes squeeze you into a smaller wave. Gold gates which
+// units; this caps the count.
+const QUEUE_CAP = { recruit: 10, veteran: 8, elite: 6 };
+const queueCapForDifficulty = (d) => QUEUE_CAP[d] ?? 8;
+
 // ── DOM REFS ──
 const leaveBtn = document.getElementById('leaveBtn');
 const mapImage = document.getElementById('mapImage');
@@ -23,6 +29,7 @@ const selfNameEl = document.getElementById('selfName');
 const selfRoleEl = document.getElementById('selfRole');
 const selfHintEl = document.getElementById('selfHint');
 const selfQueueEl = document.getElementById('selfQueue');
+const selfQueueCountEl = document.getElementById('selfQueueCount');
 const selfTypesEl = document.getElementById('selfTypes');
 const selfGoldValueEl = document.getElementById('selfGoldValue');
 const selfGoldCapEl = document.getElementById('selfGoldCap');
@@ -32,6 +39,7 @@ const otherNameEl = document.getElementById('otherName');
 const otherRoleEl = document.getElementById('otherRole');
 const otherHintEl = document.getElementById('otherHint');
 const otherQueueEl = document.getElementById('otherQueue');
+const otherQueueCountEl = document.getElementById('otherQueueCount');
 const otherTypesEl = document.getElementById('otherTypes');
 const otherGoldValueEl = document.getElementById('otherGoldValue');
 const otherGoldCapEl = document.getElementById('otherGoldCap');
@@ -53,6 +61,7 @@ let mySelf = { profile: null, userId: null, username: 'KNIGHT' };
 let myOther = { profile: null, userId: null, username: 'KNIGHT' };
 let navigated = false;
 let startingGold = 250;
+let queueCap = 8;
 
 // ── HELPERS ──
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => (
@@ -116,12 +125,18 @@ const loadIdleMeta = (unitId) => {
   });
 };
 
-const animateSprite = async (spriteEl, unitId, stageSize) => {
+const animateSprite = async (spriteEl, unitId, stageSize, scaleMultiplier = 2.4) => {
   const prev = spriteTimers.get(spriteEl);
   if (prev) clearInterval(prev);
   const meta = await loadIdleMeta(unitId);
   if (!spriteEl.isConnected) return;
-  const scale = (stageSize - 6) / Math.max(meta.frameWidth, meta.frameHeight);
+  // Sprite frames pack the character into the center of the frame with
+  // transparent padding for attack FX. Scale to a visual box larger than
+  // the stage so the character itself reads at full size — stages use
+  // overflow: visible to let the padding spill. If stageSize is null,
+  // measure the parent stage at runtime (used when the stage is fluid).
+  const effectiveStage = stageSize ?? (spriteEl.parentElement?.getBoundingClientRect().width || 48);
+  const scale = (effectiveStage * scaleMultiplier) / Math.max(meta.frameWidth, meta.frameHeight);
   spriteEl.style.width = `${meta.frameWidth}px`;
   spriteEl.style.height = `${meta.frameHeight}px`;
   spriteEl.style.backgroundSize = `${meta.sheetWidth}px ${meta.frameHeight}px`;
@@ -205,7 +220,8 @@ const renderQueue = (containerEl, queue, interactive) => {
       </div>
     `;
     const spriteEl = tile.querySelector('.wave1-queue-sprite');
-    animateSprite(spriteEl, id, 40);
+    // null stageSize => measure the actual stage (now fills the tile).
+    animateSprite(spriteEl, id, null, 1.8);
     if (interactive) tile.addEventListener('click', () => removeFromQueue(idx));
     containerEl.appendChild(tile);
   });
@@ -214,7 +230,7 @@ const renderQueue = (containerEl, queue, interactive) => {
 // Renders the 3 unit-type cards picked in siege-setup. On the self side,
 // clicking adds the type to the queue if the player can afford it.
 // Starter units in the catalog have cost 0 — those are always addable.
-const renderTypes = (containerEl, types, interactive, remainingGold) => {
+const renderTypes = (containerEl, types, interactive, remainingGold, queueFull = false) => {
   containerEl.innerHTML = '';
   if (!types.length) {
     containerEl.innerHTML = `<div class="setup-pool-empty">NO TYPES SELECTED</div>`;
@@ -224,7 +240,7 @@ const renderTypes = (containerEl, types, interactive, remainingGold) => {
     const unit = UNITS_BY_ID.get(id);
     if (!unit) continue;
     const cost = deployCost(unit);
-    const canAfford = interactive ? cost <= remainingGold : true;
+    const canAfford = interactive ? cost <= remainingGold && !queueFull : true;
     const card = document.createElement('div');
     card.className = `wave1-type-card${canAfford ? '' : ' is-disabled'}`;
     card.setAttribute('role', 'listitem');
@@ -238,7 +254,9 @@ const renderTypes = (containerEl, types, interactive, remainingGold) => {
       <div class="wave1-type-name">${escapeHtml(id.toUpperCase())}</div>
     `;
     const spriteEl = card.querySelector('.wave1-type-sprite');
-    animateSprite(spriteEl, id, 56);
+    // null stageSize => measure the actual stage (which now fills the card),
+    // matching the siege-setup pool approach.
+    animateSprite(spriteEl, id, null, 1.6);
     if (interactive && canAfford) {
       card.addEventListener('click', () => addToQueue(id));
     }
@@ -309,7 +327,14 @@ const render = () => {
   renderGold(otherGoldValueEl, otherGoldCapEl, otherGoldValueEl.parentElement, otherSpent, startingGold);
   renderQueue(selfQueueEl, myQueue, true);
   renderQueue(otherQueueEl, otherQueue, false);
-  renderTypes(selfTypesEl, myTypes, true, myRemaining);
+  const renderQueueCount = (el, len) => {
+    if (!el) return;
+    el.textContent = `(${len}/${queueCap})`;
+    el.classList.toggle('is-full', len >= queueCap);
+  };
+  renderQueueCount(selfQueueCountEl, myQueue.length);
+  renderQueueCount(otherQueueCountEl, otherQueue.length);
+  renderTypes(selfTypesEl, myTypes, true, myRemaining, myQueue.length >= queueCap);
   renderTypes(otherTypesEl, otherTypes, false, 0);
   renderReadyControls();
 };
@@ -346,6 +371,10 @@ const addToQueue = (unitId) => {
   const myTypes = siege[isHost ? 'host_units' : 'ally_units'] || [];
   if (!myTypes.includes(unitId)) return;
 
+  if (queue.length >= queueCap) {
+    showAlert(`✗ QUEUE FULL (${queueCap} MAX)`, 'error');
+    return;
+  }
   const spent = queueCost(queue);
   if (spent + deployCost(unit) > startingGold) {
     showAlert('✗ NOT ENOUGH GOLD', 'error');
@@ -501,6 +530,7 @@ if (!siege) {
 } else {
   isHost = siege.host_id === user.id;
   startingGold = goldForDifficulty(siege.difficulty);
+  queueCap = queueCapForDifficulty(siege.difficulty);
 
   const myUid = user.id;
   const otherUid = isHost ? siege.ally_id : siege.host_id;

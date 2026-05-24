@@ -11,9 +11,6 @@ try {
     wave1Data = null;
 }
 
-const pathHost = path;
-const pathAlly = [...path].reverse();
-
 const towers = [];
 let attackUnits = [];
 
@@ -63,13 +60,14 @@ const createUnitFromId = (unitId, position, laneOffset) => {
     else unit = new Unit(position);
 
     unit.laneOffset = (typeof laneOffset === "number") ? laneOffset : 0;
+    unit.pathRef = path;
 
     return unit;
 };
 
-const pathStartDirectionFrom = (p) => {
-    const p0 = p[0];
-    const p1 = p[1] || p[0];
+const pathStartDirection = () => {
+    const p0 = path[0];
+    const p1 = path[1] || path[0];
     const dx = p1.x - p0.x;
     const dy = p1.y - p0.y;
     const len = Math.hypot(dx, dy) || 1;
@@ -80,34 +78,42 @@ const spawnWaveQueues = () => {
     if (!wave1Data) return;
 
     const hostQueue = wave1Data.host_wave1 || [];
-    const allyQueue = wave1Data.ally_wave1 || [];
+
+    let allyQueue = wave1Data.ally_wave1 || [];
+
+    // ✅ DEV MODE: if no ally, copy host
+    if (!allyQueue.length) {
+        allyQueue = [...hostQueue];
+    }
 
     const spawnGap = 220;
     const spacing = 10;
-
-    const dirHost = pathStartDirectionFrom(pathHost);
-    const dirAlly = pathStartDirectionFrom(pathAlly);
+    const dir = pathStartDirection();
 
     hostQueue.forEach((unitId, i) => {
         setTimeout(() => {
-            const pos = { x: pathHost[0].x, y: pathHost[0].y };
+            const pos = { x: path[0].x, y: path[0].y };
+
             const unit = createUnitFromId(unitId, pos, -14);
             unit.team = "host";
-            unit.pathRef = pathHost;
-            unit.position.x -= dirHost.x * (i * spacing);
-            unit.position.y -= dirHost.y * (i * spacing);
+
+            unit.position.x -= dir.x * (i * spacing);
+            unit.position.y -= dir.y * (i * spacing);
+
             attackUnits.push(unit);
         }, i * spawnGap);
     });
 
     allyQueue.forEach((unitId, i) => {
         setTimeout(() => {
-            const pos = { x: pathAlly[0].x, y: pathAlly[0].y };
+            const pos = { x: path[0].x, y: path[0].y };
+
             const unit = createUnitFromId(unitId, pos, 14);
             unit.team = "ally";
-            unit.pathRef = pathAlly;
-            unit.position.x -= dirAlly.x * (i * spacing);
-            unit.position.y -= dirAlly.y * (i * spacing);
+
+            unit.position.x -= dir.x * (i * spacing);
+            unit.position.y -= dir.y * (i * spacing);
+
             attackUnits.push(unit);
         }, i * spawnGap);
     });
@@ -122,11 +128,9 @@ const animate = () => {
 
     for (let i = 0; i < attackUnits.length && towers.length && !gameFinished; i++) {
         const unit = attackUnits[i];
+        const tower = towers[0];
 
-        if (!unit) continue;
-
-        const tower = (unit.team === "ally") ? towers[towers.length - 1] : towers[0];
-        if (!tower) continue;
+        if (!unit || !tower) continue;
 
         const dx = tower.centre.x - unit.centre.x;
         const dy = tower.centre.y - unit.centre.y;
@@ -136,9 +140,7 @@ const animate = () => {
             unit.target = tower;
         } else {
             if (tower.isDead) {
-                if (unit.team === "ally") towers.pop();
-                else towers.shift();
-
+                towers.shift();
                 towersDestroyedCount++;
                 checkWinCondition();
             }

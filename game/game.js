@@ -86,43 +86,6 @@ const showEndScreen = () => {
     document.getElementById("endScreen").style.display = "flex";
 };
 
-const removeDestroyedTowers = () => {
-    let removed = 0;
-
-    for (let i = towers.length - 1; i >= 0; i--) {
-        if (!towers[i].isDead) continue;
-        towers.splice(i, 1);
-        removed++;
-    }
-
-    if (removed > 0) {
-        towersDestroyedCount += removed;
-        checkWinCondition();
-    }
-};
-
-const findNearestLivingTowerInRange = (unit) => {
-    if (!unit) return null;
-
-    let nearestTower = null;
-    let nearestDistance = Infinity;
-
-    for (const tower of towers) {
-        if (!tower || tower.isDead) continue;
-
-        const dx = tower.centre.x - unit.centre.x;
-        const dy = tower.centre.y - unit.centre.y;
-        const distance = Math.hypot(dx, dy);
-
-        if (distance <= unit.attackRadius && distance < nearestDistance) {
-            nearestDistance = distance;
-            nearestTower = tower;
-        }
-    }
-
-    return nearestTower;
-};
-
 const initRealtime = async () => {
     if (!SIEGE_ID) {
         alert("No siege ID found. Create or join a siege to play.");

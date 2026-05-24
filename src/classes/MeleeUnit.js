@@ -4,6 +4,21 @@ import { Unit } from "./Unit.js";
 export class MeleeUnit extends Unit {
     isRecenteringToPath = false;
 
+    set target(newTarget) {
+        const hadTarget = !!this._target;
+        const clearingTarget = hadTarget && !newTarget;
+
+        if (clearingTarget && this.isAttacking) {
+            this.isRecenteringToPath = true;
+        }
+
+        super.target = newTarget;
+    }
+
+    get target() {
+        return super.target;
+    }
+
     updateWalkAnimation() {
         if (!this.isMoving) {
             this.currentWalkFrame = 0;

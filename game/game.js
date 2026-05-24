@@ -2,7 +2,14 @@ import { supabase } from '/lib/supabase.js';
 import { path } from '../src/data/path.js';
 import { towerLocations } from '../src/data/towerLocations.js';
 import { Archer } from '../src/classes/Archer.js';
+import { Soldier } from '../src/classes/Soldier.js';
 import { Knight } from '../src/classes/Knight.js';
+import { Orc } from '../src/classes/Orc.js';
+import { Swordsman } from '../src/classes/Swordsman.js';
+import { Slime } from '../src/classes/Slime.js';
+import { Skeleton } from '../src/classes/Skeleton.js';
+import { SkeletonArcher } from '../src/classes/SkeletonArcher.js';
+import { ArmoredAxeman } from '../src/classes/ArmoredAxeman.js';
 import { Tower } from '../src/classes/Tower.js';
 import { Unit } from '../src/classes/Unit.js';
 
@@ -13,7 +20,7 @@ gameCanvasElement.width = 1120;
 gameCanvasElement.height = 640;
 
 const towers = [];
-let attackUnit = null;
+let attackUnits = [];
 
 const SHOW_PATH_MARKERS = false;
 
@@ -32,19 +39,30 @@ if (!user) window.location.href = '/login/login.html';
 const getPathStart = () => ({ x: path[0].x, y: path[0].y });
 
 const unitFactory = (unitType) => {
-	switch (unitType) {
-		case "archer":
-			return new Archer(getPathStart(), gameCanvas);
-			break;
-		case "knight":
-			return new Knight(getPathStart(), gameCanvas);
-			break;
-		case "unit":
-			return new Unit(getPathStart(), gameCanvas);
-			break;
-		default:
-			throw new Error("Invalid unit type");
-  	}
+    switch (unitType) {
+        case "archer":
+            return new Archer(getPathStart(), gameCanvas);
+        case "soldier":
+            return new Soldier(getPathStart(), gameCanvas);
+        case "knight":
+            return new Knight(getPathStart(), gameCanvas);
+        case "orc":
+            return new Orc(getPathStart(), gameCanvas);
+        case "swordsman":
+            return new Swordsman(getPathStart(), gameCanvas);
+        case "slime":
+            return new Slime(getPathStart(), gameCanvas);
+        case "skeleton":
+            return new Skeleton(getPathStart(), gameCanvas);
+        case "skeleton-archer":
+            return new SkeletonArcher(getPathStart(), gameCanvas);
+        case "armored-axeman":
+            return new ArmoredAxeman(getPathStart(), gameCanvas);
+        case "unit":
+            return new Unit(getPathStart(), gameCanvas);
+        default:
+            throw new Error("Invalid unit type");
+    }
 }
 
 const addGold = (amount) => {
@@ -144,16 +162,16 @@ const drawPathDebugOverlay = () => {
 
 const initRealtime = async () => {
     if (!SIEGE_ID) {
-		alert("No siege ID found. Create or join a siege to play.");
-		return;
-	}    
-	posChannel = supabase.channel(`game-${SIEGE_ID}`);
+        alert("No siege ID found. Create or join a siege to play.");
+        return;
+    }
+    posChannel = supabase.channel(`game-${SIEGE_ID}`);
     posChannel.on('broadcast', { event: 'unit-created' }, payload => handleUnitCreated(payload)).subscribe();
-	//for the time being, i don't think its necessary to broadcast or listen for position updates of a unit
-	//since everything is following the same path and speed
+    //for the time being, i don't think its necessary to broadcast or listen for position updates of a unit
+    //since everything is following the same path and speed
     //posChannel.on('broadcast', { event: 'unit-pos' }, payload => handleUnitPos(payload)).subscribe();
 
-	// probably also not necessary but like. just in case ig.
+    // probably also not necessary but like. just in case ig.
     //posChannel.on('broadcast', { event: 'unit-removed' }, payload => handleUnitRemoved(payload)).subscribe();
 };
 
@@ -205,7 +223,7 @@ const animate = () => {
     attackUnits.forEach(unit => {
         unit.updateFrame();
     });
-    
+
     towers.forEach(tower => {
         const target = attackUnits.find(unit => !unit.isDead);
         tower.updateFrame(target);
@@ -227,26 +245,26 @@ const deployUnit = () => {
     let newUnit = unitFactory(selectedUnitType);
 
     attackUnits.push(newUnit);
-	
-	// broadcast the new unit to other clients
+
+    // broadcast the new unit to other clients
     let unitId = `u_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     if (posChannel) {
         posChannel.send({
             type: 'broadcast',
             event: 'unit-created',
             payload: {
-				unitId: unitId,
+                unitId: unitId,
                 clientId: user.id,
-				type: selectedUnitType
+                type: selectedUnitType
             },
         });
     }
 };
 
 const handleUnitCreated = (payload) => {
-	if (!payload || payload.payload.clientId === user.id) return;
-	console.log(payload)
-	attackUnits.push(unitFactory(payload.payload.type));
+    if (!payload || payload.payload.clientId === user.id) return;
+    console.log(payload)
+    attackUnits.push(unitFactory(payload.payload.type));
 };
 
 // const handleUnitRemoved = (payload) => {

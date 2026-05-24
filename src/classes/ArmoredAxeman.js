@@ -1,4 +1,6 @@
-class ArmoredAxeman extends MeleeUnit {
+import { MeleeUnit } from "./MeleeUnit.js";
+
+export class ArmoredAxeman extends MeleeUnit {
     role = 'Heavy Melee';
 
     width = 54;
@@ -40,8 +42,8 @@ class ArmoredAxeman extends MeleeUnit {
     static walkImage = null;
     static walkImageLoaded = false;
 
-    constructor(position) {
-        super(position);
+    constructor(position, gameCanvas) {
+        super(position, gameCanvas);
         ArmoredAxeman.loadAssets();
     }
 
@@ -110,7 +112,7 @@ class ArmoredAxeman extends MeleeUnit {
             const drawY = this.position.y - (this.drawHeight - this.height) / 2;
 
             if (this.facingDirection >= 0) {
-                gameCanvas.drawImage(
+                this.gameCanvas.drawImage(
                     spriteSheet,
                     sx,
                     sy,
@@ -122,10 +124,10 @@ class ArmoredAxeman extends MeleeUnit {
                     this.drawHeight
                 );
             } else {
-                gameCanvas.save();
-                gameCanvas.translate(drawX + this.drawWidth / 2, 0);
-                gameCanvas.scale(-1, 1);
-                gameCanvas.drawImage(
+                this.gameCanvas.save();
+                this.gameCanvas.translate(drawX + this.drawWidth / 2, 0);
+                this.gameCanvas.scale(-1, 1);
+                this.gameCanvas.drawImage(
                     spriteSheet,
                     sx,
                     sy,
@@ -136,8 +138,10 @@ class ArmoredAxeman extends MeleeUnit {
                     this.drawWidth,
                     this.drawHeight
                 );
-                gameCanvas.restore();
+                this.gameCanvas.restore();
             }
+
+            this.drawHealthBar();
 
             return;
         }

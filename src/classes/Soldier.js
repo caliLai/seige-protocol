@@ -1,4 +1,6 @@
-class Soldier extends Unit {
+import { Unit } from "./Unit.js";
+
+export class Soldier extends Unit {
     role = 'Versatile Ranged';
 
     width = 50;
@@ -46,8 +48,8 @@ class Soldier extends Unit {
     static projectileImage = null;
     static projectileImageLoaded = false;
 
-    constructor(position) {
-        super(position);
+    constructor(position, gameCanvas) {
+        super(position, gameCanvas);
         Soldier.loadAssets();
     }
 
@@ -132,7 +134,7 @@ class Soldier extends Unit {
             const sw = frameSize;
             const sh = frameSize;
 
-            gameCanvas.drawImage(
+            this.gameCanvas.drawImage(
                 spriteSheet,
                 sx,
                 sy,
@@ -143,6 +145,9 @@ class Soldier extends Unit {
                 this.drawWidth,
                 this.drawHeight
             );
+
+            this.drawHealthBar();
+
             return;
         }
 
@@ -225,20 +230,20 @@ class Soldier extends Unit {
                 const centerY = projectile.y + this.projectileSize / 2;
                 const angle = Math.atan2(projectile.vy, projectile.vx) + this.projectileRotationOffset;
 
-                gameCanvas.save();
-                gameCanvas.translate(centerX, centerY);
-                gameCanvas.rotate(angle);
-                gameCanvas.drawImage(
+                this.gameCanvas.save();
+                this.gameCanvas.translate(centerX, centerY);
+                this.gameCanvas.rotate(angle);
+                this.gameCanvas.drawImage(
                     Soldier.projectileImage,
                     -this.projectileDrawSize / 2,
                     -this.projectileDrawSize / 2,
                     this.projectileDrawSize,
                     this.projectileDrawSize
                 );
-                gameCanvas.restore();
+                this.gameCanvas.restore();
             } else {
-                gameCanvas.fillStyle = '#ff2b2b';
-                gameCanvas.fillRect(projectile.x, projectile.y, this.projectileSize, this.projectileSize);
+                this.gameCanvas.fillStyle = '#ff2b2b';
+                this.gameCanvas.fillRect(projectile.x, projectile.y, this.projectileSize, this.projectileSize);
             }
 
             const target = projectile.target;

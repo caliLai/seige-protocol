@@ -1,4 +1,6 @@
-class Slime extends MeleeUnit {
+import { MeleeUnit } from "./MeleeUnit.js";
+
+export class Slime extends MeleeUnit {
     role = 'Melee Brawler';
 
     width = 48;
@@ -30,7 +32,6 @@ class Slime extends MeleeUnit {
     currentWalkFrame = 0;
     lastWalkFrameAt = 0;
     facingDirection = 1;
-    showDebugAttackRadius = true;
 
     static idleImage = null;
     static idleImageLoaded = false;
@@ -41,8 +42,8 @@ class Slime extends MeleeUnit {
     static walkImage = null;
     static walkImageLoaded = false;
 
-    constructor(position) {
-        super(position);
+    constructor(position, gameCanvas) {
+        super(position, gameCanvas);
         Slime.loadAssets();
     }
 
@@ -83,18 +84,6 @@ class Slime extends MeleeUnit {
     }
 
     render() {
-        if (this.showDebugAttackRadius) {
-            gameCanvas.save();
-            gameCanvas.beginPath();
-            gameCanvas.arc(this.centre.x, this.centre.y, this.attackRadius, 0, Math.PI * 2);
-            gameCanvas.fillStyle = 'rgba(46, 204, 113, 0.12)';
-            gameCanvas.fill();
-            gameCanvas.strokeStyle = 'rgba(46, 204, 113, 0.45)';
-            gameCanvas.lineWidth = 1;
-            gameCanvas.stroke();
-            gameCanvas.restore();
-        }
-
         if (Slime.idleImageLoaded) {
             const usingAttackSheet = this.isAttacking && Slime.attackImageLoaded;
             const usingWalkSheet = !usingAttackSheet && this.isMoving && Slime.walkImageLoaded;
@@ -123,7 +112,7 @@ class Slime extends MeleeUnit {
             const drawY = this.position.y - (this.drawHeight - this.height) / 2;
 
             if (this.facingDirection >= 0) {
-                gameCanvas.drawImage(
+                this.gameCanvas.drawImage(
                     spriteSheet,
                     sx,
                     sy,
@@ -135,10 +124,10 @@ class Slime extends MeleeUnit {
                     this.drawHeight
                 );
             } else {
-                gameCanvas.save();
-                gameCanvas.translate(drawX + this.drawWidth / 2, 0);
-                gameCanvas.scale(-1, 1);
-                gameCanvas.drawImage(
+                this.gameCanvas.save();
+                this.gameCanvas.translate(drawX + this.drawWidth / 2, 0);
+                this.gameCanvas.scale(-1, 1);
+                this.gameCanvas.drawImage(
                     spriteSheet,
                     sx,
                     sy,
@@ -149,8 +138,11 @@ class Slime extends MeleeUnit {
                     this.drawWidth,
                     this.drawHeight
                 );
-                gameCanvas.restore();
+                this.gameCanvas.restore();
             }
+
+            this.drawHealthBar();
+
             return;
         }
 

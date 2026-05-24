@@ -1,4 +1,7 @@
-class MeleeUnit extends Unit {
+import { path } from "../data/path.js";
+import { Unit } from "./Unit.js";
+
+export class MeleeUnit extends Unit {
     isRecenteringToPath = false;
 
     updateWalkAnimation() {

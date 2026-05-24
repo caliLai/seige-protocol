@@ -1,4 +1,6 @@
-class Orc extends MeleeUnit {
+import { MeleeUnit } from "./MeleeUnit.js";
+
+export class Orc extends MeleeUnit {
     role = 'Bruiser';
 
     width = 54;
@@ -29,6 +31,7 @@ class Orc extends MeleeUnit {
     isMoving = false;
     currentWalkFrame = 0;
     lastWalkFrameAt = 0;
+    facingDirection = 1;
 
     static idleImage = null;
     static idleImageLoaded = false;
@@ -39,8 +42,8 @@ class Orc extends MeleeUnit {
     static walkImage = null;
     static walkImageLoaded = false;
 
-    constructor(position) {
-        super(position);
+    constructor(position, gameCanvas) {
+        super(position, gameCanvas);
         Orc.loadAssets();
     }
 
@@ -105,17 +108,41 @@ class Orc extends MeleeUnit {
             const sw = frameSize;
             const sh = frameSize;
 
-            gameCanvas.drawImage(
-                spriteSheet,
-                sx,
-                sy,
-                sw,
-                sh,
-                this.position.x - (this.drawWidth - this.width) / 2,
-                this.position.y - (this.drawHeight - this.height) / 2,
-                this.drawWidth,
-                this.drawHeight
-            );
+            const drawX = this.position.x - (this.drawWidth - this.width) / 2;
+            const drawY = this.position.y - (this.drawHeight - this.height) / 2;
+
+            if (this.facingDirection >= 0) {
+                this.gameCanvas.drawImage(
+                    spriteSheet,
+                    sx,
+                    sy,
+                    sw,
+                    sh,
+                    drawX,
+                    drawY,
+                    this.drawWidth,
+                    this.drawHeight
+                );
+            } else {
+                this.gameCanvas.save();
+                this.gameCanvas.translate(drawX + this.drawWidth / 2, 0);
+                this.gameCanvas.scale(-1, 1);
+                this.gameCanvas.drawImage(
+                    spriteSheet,
+                    sx,
+                    sy,
+                    sw,
+                    sh,
+                    -this.drawWidth / 2,
+                    drawY,
+                    this.drawWidth,
+                    this.drawHeight
+                );
+                this.gameCanvas.restore();
+            }
+
+            this.drawHealthBar();
+
             return;
         }
 

@@ -474,7 +474,6 @@ const applySiegeUpdate = (fresh) => {
 
 // ── INIT ──
 const handoffId = sessionStorage.getItem('wave1SiegeId');
-sessionStorage.removeItem('wave1SiegeId');
 
 siege = await loadSiege(handoffId);
 if (!siege && handoffId) {

@@ -1,5 +1,6 @@
-class Sprite {
+export class Sprite {
     position;
+	gameCanvas;
 
     width = 0;
     height = 0;
@@ -7,8 +8,9 @@ class Sprite {
     maxHealth = 0;
     health = 0;
 
-    constructor(position = { x: 0, y: 0 }) {
+    constructor(position = { x: 0, y: 0 }, gameCanvas) {
         this.position = position;
+        this.gameCanvas = gameCanvas;
     }
 
     get centre() {

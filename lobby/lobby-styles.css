@@ -5,6 +5,11 @@
 .lobby-frame {
   display: grid;
   grid-template-rows: auto 1fr;
+  /* Pin the single column to the full content width so the body doesn't
+     shrink to its max-content. Without this, the lobby pane jitters left
+     when slot text shortens (e.g. "AWAITING THEE…" → a real username on
+     join). minmax(0, …) lets children with min-width:0 actually shrink. */
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   justify-items: stretch;
   gap: 0;
@@ -186,6 +191,38 @@
   background: linear-gradient(180deg, #5a544c 0%, #2e2924 100%);
   border-color: #c49a12;
   box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.5), 0 0 14px 2px rgba(245, 197, 24, 0.18);
+}
+
+/* Persistent "this is your engagement" tint on the room card so the user
+   can find their own siege at a glance, even when browsing other tabs. */
+.room-card.is-mine {
+  border-color: #c49a12;
+  box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.30);
+}
+.room-card.is-mine.is-selected {
+  box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.55), 0 0 16px 3px rgba(245, 197, 24, 0.28);
+}
+
+/* Tiny chip next to occupancy: "★ THINE" for host, "⚜ JOINED" for ally. */
+.room-mine-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 5px;
+  letter-spacing: 0.16em;
+  border: 1px solid #1a1510;
+  box-shadow: 1px 1px 0 #0a0604;
+}
+.room-mine-host {
+  color: #1a1510;
+  background: linear-gradient(180deg, #f5c518 0%, #c49a12 100%);
+}
+.room-mine-ally {
+  color: #e0ecff;
+  background: linear-gradient(180deg, #4a6aa8 0%, #243860 100%);
+  border-color: #14223c;
 }
 
 .room-name {

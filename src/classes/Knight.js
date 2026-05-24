@@ -1,4 +1,6 @@
-class Knight extends MeleeUnit {
+import { Unit } from "./Unit.js";
+
+export class Knight extends Unit {
     role = 'Frontline Bruiser';
 
     width = 52;
@@ -29,7 +31,6 @@ class Knight extends MeleeUnit {
     isMoving = false;
     currentWalkFrame = 0;
     lastWalkFrameAt = 0;
-    facingDirection = 1;
 
     static idleImage = null;
     static idleImageLoaded = false;
@@ -40,8 +41,8 @@ class Knight extends MeleeUnit {
     static walkImage = null;
     static walkImageLoaded = false;
 
-    constructor(position) {
-        super(position);
+    constructor(position, gameCanvas) {
+        super(position, gameCanvas);
         Knight.loadAssets();
     }
 
@@ -81,6 +82,19 @@ class Knight extends MeleeUnit {
         return Math.max(1, Math.floor(Knight.walkImage.width / Knight.walkImage.height));
     }
 
+    updateWalkAnimation() {
+        if (!this.isMoving) {
+            this.currentWalkFrame = 0;
+            return;
+        }
+
+        const now = performance.now();
+        if (now - this.lastWalkFrameAt < this.walkFrameDurationMs) return;
+
+        this.lastWalkFrameAt = now;
+        this.currentWalkFrame = (this.currentWalkFrame + 1) % this.walkFrameCount;
+    }
+
     render() {
         if (Knight.idleImageLoaded) {
             const usingAttackSheet = this.isAttacking && Knight.attackImageLoaded;
@@ -106,42 +120,74 @@ class Knight extends MeleeUnit {
             const sw = frameSize;
             const sh = frameSize;
 
-            const drawX = this.position.x - (this.drawWidth - this.width) / 2;
-            const drawY = this.position.y - (this.drawHeight - this.height) / 2;
+            this.gameCanvas.drawImage(
+                spriteSheet,
+                sx,
+                sy,
+                sw,
+                sh,
+                this.position.x - (this.drawWidth - this.width) / 2,
+                this.position.y - (this.drawHeight - this.height) / 2,
+                this.drawWidth,
+                this.drawHeight
+            );
 
-            if (this.facingDirection >= 0) {
-                gameCanvas.drawImage(
-                    spriteSheet,
-                    sx,
-                    sy,
-                    sw,
-                    sh,
-                    drawX,
-                    drawY,
-                    this.drawWidth,
-                    this.drawHeight
-                );
-            } else {
-                gameCanvas.save();
-                gameCanvas.translate(drawX + this.drawWidth / 2, 0);
-                gameCanvas.scale(-1, 1);
-                gameCanvas.drawImage(
-                    spriteSheet,
-                    sx,
-                    sy,
-                    sw,
-                    sh,
-                    -this.drawWidth / 2,
-                    drawY,
-                    this.drawWidth,
-                    this.drawHeight
-                );
-                gameCanvas.restore();
-            }
+            this.drawHealthBar();
+
             return;
         }
 
         super.render();
+    }
+
+    attack() {
+        if (!this.target || this.target.isDead) {
+            this.isAttacking = false;
+            this.hasAppliedHit = false;
+            this.currentAttackFrame = 0;
+            return;
+        }
+
+        const now = performance.now();
+
+        if (!this.isAttacking) {
+            if (now - this.lastAttackAt < this.attackCooldownMs) return;
+
+            this.isAttacking = true;
+            this.hasAppliedHit = false;
+            this.currentAttackFrame = 0;
+            this.lastAttackFrameAt = now;
+            this.lastAttackAt = now;
+            return;
+        }
+
+        if (now - this.lastAttackFrameAt < this.attackFrameDurationMs) return;
+
+        this.lastAttackFrameAt = now;
+        this.currentAttackFrame++;
+
+        if (!this.hasAppliedHit && this.currentAttackFrame >= this.attackReleaseFrame) {
+            if (!this.target.isDead) {
+                this.target.takeDamage(this.attackStrength);
+            }
+            this.hasAppliedHit = true;
+        }
+
+        if (this.currentAttackFrame >= this.attackFrameCount - 1) {
+            this.isAttacking = false;
+            this.hasAppliedHit = false;
+            this.currentAttackFrame = 0;
+        }
+    }
+
+    calculateAndUpdatePathMovement() {
+        const beforeX = this.position.x;
+        const beforeY = this.position.y;
+
+        super.calculateAndUpdatePathMovement();
+
+        const movedDistance = Math.hypot(this.position.x - beforeX, this.position.y - beforeY);
+        this.isMoving = movedDistance > 0.001;
     }
 
 }

@@ -1,6 +1,6 @@
-const path = [ 
+export const path = [ 
 	{
-		"x":-89,
+		"x":-100,
 		"y":153
 	}, 
 	{

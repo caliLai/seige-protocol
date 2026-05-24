@@ -1,7 +1,7 @@
-// todo: should different types of units inherit from this class?
-// also we should probably make an interface. But also this is javascript
-// so maybe it doesn't really matter
-class Unit extends Sprite {
+import { Sprite } from "./Sprite.js";
+import { path } from "../data/path.js";
+
+export class Unit extends Sprite {
     width = 50;
     height = 50;
     pathIndex = 0;
@@ -9,7 +9,7 @@ class Unit extends Sprite {
 
     attackRadius = 100;
     attackStrength = 8;
-    attackCooldownMs = 250; //how often a unit fires
+    attackCooldownMs = 250;
     lastAttackAt = 0;
 
     projectileSpeed = 4;
@@ -18,8 +18,8 @@ class Unit extends Sprite {
 
     _target = null;
 
-    constructor(position) {
-        super(position);
+    constructor(position, gameCanvas) {
+        super(position, gameCanvas);
     }
 
     set target(newTarget) {
@@ -31,8 +31,41 @@ class Unit extends Sprite {
     }
 
     render() {
-        gameCanvas.fillStyle = 'red';
-        gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
+        this.gameCanvas.fillStyle = 'red';
+        this.gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
+
+        this.drawHealthBar();
+    }
+
+    drawHealthBar() {
+        if (this.maxHealth <= 0) return;
+
+        const barWidth = this.width;
+        const barHeight = 5;
+
+        const x = this.position.x;
+        const y = this.position.y - 8;
+
+        this.gameCanvas.fillStyle = "#3a3a3a";
+        this.gameCanvas.fillRect(x, y, barWidth, barHeight);
+
+        const hpRatio = this.health / this.maxHealth;
+
+        if (hpRatio > 0.6) this.gameCanvas.fillStyle = "limegreen";
+        else if (hpRatio > 0.3) this.gameCanvas.fillStyle = "yellow";
+        else this.gameCanvas.fillStyle = "#ff3b30";
+
+        this.gameCanvas.fillRect(x, y, barWidth * hpRatio, barHeight);
+
+        this.gameCanvas.strokeStyle = "black";
+        this.gameCanvas.strokeRect(x, y, barWidth, barHeight);
+    }
+
+    takeDamage(amount) {
+        this.health -= amount;
+        if (this.health <= 0) {
+            this.health = 0;
+        }
     }
 
     attack() {
@@ -47,6 +80,7 @@ class Unit extends Sprite {
             x: this.centre.x - this.projectileSize / 2,
             y: this.centre.y - this.projectileSize / 2,
         };
+
         const to = this.target.centre;
         const angle = Math.atan2(to.y - this.centre.y, to.x - this.centre.x);
 
@@ -65,19 +99,19 @@ class Unit extends Sprite {
             projectile.x += projectile.vx;
             projectile.y += projectile.vy;
 
-            gameCanvas.fillStyle = '#ff2b2b';
-            gameCanvas.fillRect(projectile.x, projectile.y, this.projectileSize, this.projectileSize);
+            this.gameCanvas.fillStyle = '#ff2b2b';
+            this.gameCanvas.fillRect(projectile.x, projectile.y, this.projectileSize, this.projectileSize);
 
             const target = projectile.target;
             if (!target || target.isDead) return false;
 
             const projectileCenterX = projectile.x + this.projectileSize / 2;
             const projectileCenterY = projectile.y + this.projectileSize / 2;
+
             const dx = target.centre.x - projectileCenterX;
             const dy = target.centre.y - projectileCenterY;
-            const distance = Math.hypot(dx, dy);
 
-            if (distance <= this.projectileSize + 4) {
+            if (Math.hypot(dx, dy) <= this.projectileSize + 4) {
                 target.takeDamage(projectile.damage);
                 return false;
             }
@@ -88,7 +122,6 @@ class Unit extends Sprite {
 
     calculateAndUpdatePathMovement() {
         const pathPoint = path[this.pathIndex];
-
         if (!pathPoint) return;
 
         const dx = pathPoint.x - this.centre.x;
@@ -102,8 +135,8 @@ class Unit extends Sprite {
         }
 
         const angle = Math.atan2(dy, dx);
-
         const frameStep = this.moveSpeedPxPerSecond / 60;
+
         this.position.x += Math.cos(angle) * frameStep;
         this.position.y += Math.sin(angle) * frameStep;
     }
@@ -116,6 +149,8 @@ class Unit extends Sprite {
     }
 
     updateFrame() {
+        if (this.isDead) return;
+
         this.render();
 
         if (this.target) {

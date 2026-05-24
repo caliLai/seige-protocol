@@ -1,0 +1,482 @@
+/* ════════════════════════════════════════
+   SIEGE SETUP — pick 3 units per side, ready up
+   Inherits stone-bg + frame from lobby, adds a
+   two-column "VS" layout with animated unit cards.
+   ════════════════════════════════════════ */
+
+.setup-frame {
+  /* Frame layout matches lobby. Override header height so the map chip
+     fits on the right without squashing the title block. */
+  grid-template-rows: auto 1fr;
+}
+
+/* ── HEADER ── */
+.lobby-header.lobby-header,
+.setup-frame .lobby-header {
+  /* Tighter top margin than the lobby — title is large and the map chip
+     already adds vertical mass. */
+  margin-top: 2px;
+  margin-bottom: 14px;
+}
+
+.setup-leave-btn {
+  /* The leave button reuses lobby-back-btn but recolors to danger red so
+     it reads as a destructive action, not a navigation back. */
+  background: linear-gradient(180deg, #8a2a2a 0%, #4d1212 100%) !important;
+  color: #ffd6c0 !important;
+  border-color: #1a0606 !important;
+  box-shadow: 4px 4px 0 #0a0202, inset 0 0 0 1px rgba(255, 120, 100, 0.25) !important;
+}
+.setup-leave-btn:hover {
+  background: linear-gradient(180deg, #a83838 0%, #661818 100%) !important;
+  color: #fff !important;
+  box-shadow: 4px 4px 0 #0a0202, 0 0 18px 4px rgba(255, 80, 60, 0.55) !important;
+}
+
+.setup-header-right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.setup-map-chip {
+  position: relative;
+  width: 168px;
+  height: 96px;
+  border: 3px solid #1a1510;
+  background: #0a0604;
+  box-shadow: 3px 3px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.18);
+  overflow: hidden;
+}
+.setup-map-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+  display: block;
+}
+.setup-map-caption {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: rgba(10, 6, 4, 0.78);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  letter-spacing: 0.14em;
+  color: #f0d9a0;
+  text-shadow: 1px 1px 0 #000;
+}
+
+/* ── BODY ── */
+.setup-body {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 18px;
+  /* min-height:0 lets the columns shrink to the frame's available height
+     so the pool's overflow:auto actually kicks in instead of pushing the
+     whole column past the frame edge. */
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── COLUMNS ── */
+.setup-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 14px;
+  background: linear-gradient(180deg, #2e2924 0%, #14110d 100%);
+  border: 4px solid #1a1510;
+  box-shadow: 4px 4px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+  min-width: 0;
+  min-height: 0;
+}
+
+.setup-col-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 2px dashed #4a4540;
+}
+.setup-col-banner {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-shadow: 1px 1px 0 #000;
+}
+.setup-col-banner-self  { color: #f5c518; }
+.setup-col-banner-other { color: #c0c0d0; }
+.setup-col-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: #fff7d6;
+  text-shadow: 2px 2px 0 #000;
+}
+.setup-col-role {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  letter-spacing: 0.22em;
+  color: #8c7040;
+}
+.setup-column-other .setup-col-role { color: #6e7488; }
+
+/* ── SLOT HINT ── */
+.setup-slot-hint {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  letter-spacing: 0.2em;
+  color: #a89880;
+  text-align: center;
+  padding: 4px 0 2px;
+  text-shadow: 1px 1px 0 #000;
+}
+.setup-slot-hint.is-complete {
+  color: #5fc24a;
+  text-shadow: 1px 1px 0 #000, 0 0 6px rgba(95, 194, 74, 0.45);
+}
+
+/* ── PICK SLOTS ── */
+.setup-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.setup-slot {
+  position: relative;
+  /* Fixed height (not aspect-ratio) so slots stay compact even when the
+     column gets wide. Sprite still fits comfortably in the 72px stage. */
+  height: 108px;
+  background: linear-gradient(180deg, #1f1a14 0%, #0d0a07 100%);
+  border: 3px dashed #4a4540;
+  box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: default;
+  overflow: hidden;
+}
+.setup-slot.is-filled {
+  border-style: solid;
+  border-color: #1a1510;
+  background: linear-gradient(180deg, #3a3228 0%, #14110d 100%);
+  box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.22), 0 0 8px rgba(245, 197, 24, 0.08);
+}
+.setup-column-self .setup-slot.is-filled { cursor: pointer; }
+.setup-column-self .setup-slot.is-filled:hover {
+  border-color: #c04040;
+  box-shadow: inset 0 0 0 1px rgba(255, 80, 60, 0.35), 0 0 10px rgba(255, 80, 60, 0.25);
+}
+
+.setup-slot-empty-mark {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 26px;
+  color: #4a4540;
+  text-shadow: 1px 1px 0 #000;
+  user-select: none;
+}
+.setup-slot-empty-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 5px;
+  letter-spacing: 0.2em;
+  color: #4a4540;
+  text-shadow: 1px 1px 0 #000;
+}
+.setup-slot-sprite-stage {
+  width: 72px;
+  height: 72px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.setup-slot-sprite {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  image-rendering: pixelated;
+  transform-origin: center;
+}
+.setup-slot-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 5px;
+  letter-spacing: 0.14em;
+  color: #f0d9a0;
+  text-shadow: 1px 1px 0 #000;
+  text-align: center;
+  padding: 0 2px;
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  right: 4px;
+}
+.setup-slot-remove {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #c04040;
+  background: rgba(10, 6, 4, 0.7);
+  padding: 2px 4px;
+  border: 1px solid #1a0606;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+.setup-column-self .setup-slot.is-filled:hover .setup-slot-remove { opacity: 1; }
+
+/* ── POOL ── */
+.setup-pool-label {
+  margin-top: 4px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.2em;
+  color: #f5c518;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.setup-pool {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 8px;
+  background: linear-gradient(180deg, #1a1408 0%, #0d0a07 100%);
+  border: 3px solid #1a0f08;
+  box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+  /* flex:1 + min-height:0 means the pool fills whatever vertical space
+     the column has left after slots/header/ready button, and scrolls
+     internally instead of pushing the column past the frame. */
+  flex: 1;
+  min-height: 80px;
+  overflow-y: auto;
+}
+.setup-pool::-webkit-scrollbar { width: 8px; }
+.setup-pool::-webkit-scrollbar-track { background: #1a0f08; border: 1px solid #000; }
+.setup-pool::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #7a600c, #4a3500); border: 1px solid #000; }
+
+.setup-pool-empty {
+  grid-column: 1 / -1;
+  padding: 24px 8px;
+  text-align: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.18em;
+  color: #6e6760;
+  text-shadow: 1px 1px 0 #000;
+  line-height: 1.7;
+}
+
+.setup-pool-card {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 4px 2px 4px;
+  background: linear-gradient(180deg, #3a3228 0%, #1f1a14 100%);
+  border: 2px solid #1a1510;
+  box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+  cursor: pointer;
+  font-family: 'Press Start 2P', monospace;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  overflow: hidden;
+}
+.setup-pool-card .setup-pool-sprite-stage {
+  width: 48px;
+  height: 48px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.setup-pool-card .setup-pool-sprite {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  image-rendering: pixelated;
+  transform-origin: center;
+}
+.setup-pool-card .setup-pool-name {
+  font-size: 5px;
+  letter-spacing: 0.10em;
+  color: #f0d9a0;
+  text-align: center;
+  line-height: 1.3;
+  text-shadow: 1px 1px 0 #000;
+  padding: 0 1px;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.setup-pool-card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.30), 0 0 10px rgba(245, 197, 24, 0.18);
+}
+.setup-pool-card.is-picked {
+  /* Already in one of the user's slots; "Require distinct" rules forbid
+     adding it again, so dim and lock. */
+  cursor: not-allowed;
+  opacity: 0.4;
+  filter: grayscale(0.6);
+}
+.setup-pool-card.is-picked::after {
+  content: '✓';
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 8px;
+  color: #5fc24a;
+  text-shadow: 1px 1px 0 #000;
+}
+.setup-pool-card.is-picked:hover {
+  transform: none;
+  box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+}
+
+.setup-pool-readonly .setup-pool-card { cursor: default; }
+.setup-pool-readonly .setup-pool-card:hover { transform: none; box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10); }
+
+/* ── VS DIVIDER ── */
+.setup-vs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 4px;
+  min-width: 36px;
+}
+.setup-vs-line {
+  flex: 1;
+  width: 3px;
+  background: repeating-linear-gradient(
+    to bottom,
+    #4a4540 0 6px,
+    transparent 6px 12px
+  );
+}
+.setup-vs-mark {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: #f5c518;
+  text-shadow: 2px 2px 0 #000, 0 0 8px rgba(245, 197, 24, 0.4);
+  white-space: nowrap;
+  padding: 8px 6px;
+  background: #14110d;
+  border: 2px solid #1a1510;
+  box-shadow: 2px 2px 0 #0a0604;
+}
+
+/* ── READY CONTROLS ── */
+.setup-ready-btn {
+  margin-top: 4px;
+  width: 100%;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  padding: 14px 10px;
+  color: #fff7d6;
+  background: linear-gradient(180deg, #7a600c 0%, #4a3500 100%);
+  border: 4px solid #1a1510;
+  box-shadow: 4px 4px 0 #0a0604, inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: color 0.12s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.setup-ready-btn:not(:disabled):hover {
+  background: linear-gradient(180deg, #a37e10 0%, #6a4a00 100%);
+  color: #fff5a0;
+  box-shadow: 4px 4px 0 #0a0604, 0 0 18px 4px rgba(245, 197, 24, 0.45);
+  text-shadow: 0 0 8px rgba(245, 197, 24, 0.8), 1px 1px 0 rgba(0, 0, 0, 0.4);
+}
+.setup-ready-btn:disabled {
+  cursor: not-allowed;
+  background: linear-gradient(180deg, #3a3228 0%, #1f1a14 100%);
+  color: #6e6760;
+  box-shadow: 4px 4px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.06);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+}
+.setup-ready-btn.is-ready {
+  background: linear-gradient(180deg, #2f7a2a 0%, #144a10 100%);
+  color: #d0ffc0;
+  box-shadow: 4px 4px 0 #0a0604, 0 0 18px 4px rgba(95, 194, 74, 0.45);
+  text-shadow: 0 0 8px rgba(95, 194, 74, 0.8), 1px 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.setup-ready-indicator {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 10px;
+  background: linear-gradient(180deg, #1f1a14 0%, #14110d 100%);
+  border: 3px solid #1a1510;
+  box-shadow: 3px 3px 0 #0a0604, inset 0 0 0 1px rgba(220, 220, 220, 0.10);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: #8c8780;
+  text-shadow: 1px 1px 0 #000;
+}
+.setup-ready-dot {
+  width: 12px;
+  height: 12px;
+  background: #4a4540;
+  border: 1px solid #000;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.setup-ready-indicator.is-ready {
+  background: linear-gradient(180deg, #2f7a2a 0%, #144a10 100%);
+  color: #d0ffc0;
+  border-color: #0a3a08;
+  box-shadow: 3px 3px 0 #0a0604, 0 0 14px rgba(95, 194, 74, 0.35);
+  text-shadow: 0 0 6px rgba(95, 194, 74, 0.6), 1px 1px 0 #000;
+}
+.setup-ready-indicator.is-ready .setup-ready-dot {
+  background: #5fc24a;
+  box-shadow: 0 0 8px rgba(95, 194, 74, 0.8), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+/* ── BOTH READY BANNER ── */
+.setup-both-ready {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 30;
+  padding: 16px 28px;
+  background: linear-gradient(180deg, #2f7a2a 0%, #144a10 100%);
+  border: 4px solid #0a3a08;
+  box-shadow: 6px 6px 0 #000, 0 0 28px rgba(95, 194, 74, 0.55);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: #fff7d6;
+  text-shadow: 2px 2px 0 #000, 0 0 8px rgba(95, 194, 74, 0.6);
+  animation: setup-both-ready-pulse 0.85s ease-in-out infinite alternate;
+}
+.setup-both-ready.hidden { display: none; }
+
+@keyframes setup-both-ready-pulse {
+  from { transform: translateX(-50%) scale(1.0); }
+  to   { transform: translateX(-50%) scale(1.04); }
+}

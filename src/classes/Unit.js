@@ -1,4 +1,7 @@
-class Unit extends Sprite {
+import { Sprite } from "./Sprite.js";
+import { path } from "../data/path.js";
+
+export class Unit extends Sprite {
     width = 50;
     height = 50;
     pathIndex = 0;
@@ -18,9 +21,10 @@ class Unit extends Sprite {
     laneOffset = 0;
     pathRef = null;
 
-    constructor(position) {
-        super(position);
+    constructor(position, gameCanvas) {
+        super(position, gameCanvas);
         this.pathRef = null;
+        this.laneOffset = 0;
     }
 
     set target(newTarget) {
@@ -32,9 +36,8 @@ class Unit extends Sprite {
     }
 
     render() {
-        gameCanvas.fillStyle = 'red';
-        gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
-
+        this.gameCanvas.fillStyle = 'red';
+        this.gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
         this.drawHealthBar();
     }
 
@@ -47,19 +50,19 @@ class Unit extends Sprite {
         const x = this.position.x;
         const y = this.position.y - 8;
 
-        gameCanvas.fillStyle = "#3a3a3a";
-        gameCanvas.fillRect(x, y, barWidth, barHeight);
+        this.gameCanvas.fillStyle = "#3a3a3a";
+        this.gameCanvas.fillRect(x, y, barWidth, barHeight);
 
         const hpRatio = this.health / this.maxHealth;
 
-        if (hpRatio > 0.6) gameCanvas.fillStyle = "limegreen";
-        else if (hpRatio > 0.3) gameCanvas.fillStyle = "yellow";
-        else gameCanvas.fillStyle = "#ff3b30";
+        if (hpRatio > 0.6) this.gameCanvas.fillStyle = "limegreen";
+        else if (hpRatio > 0.3) this.gameCanvas.fillStyle = "yellow";
+        else this.gameCanvas.fillStyle = "#ff3b30";
 
-        gameCanvas.fillRect(x, y, barWidth * hpRatio, barHeight);
+        this.gameCanvas.fillRect(x, y, barWidth * hpRatio, barHeight);
 
-        gameCanvas.strokeStyle = "black";
-        gameCanvas.strokeRect(x, y, barWidth, barHeight);
+        this.gameCanvas.strokeStyle = "black";
+        this.gameCanvas.strokeRect(x, y, barWidth, barHeight);
     }
 
     takeDamage(amount) {
@@ -100,8 +103,8 @@ class Unit extends Sprite {
             projectile.x += projectile.vx;
             projectile.y += projectile.vy;
 
-            gameCanvas.fillStyle = '#ff2b2b';
-            gameCanvas.fillRect(projectile.x, projectile.y, this.projectileSize, this.projectileSize);
+            this.gameCanvas.fillStyle = '#ff2b2b';
+            this.gameCanvas.fillRect(projectile.x, projectile.y, this.projectileSize, this.projectileSize);
 
             const target = projectile.target;
             if (!target || target.isDead) return false;
@@ -122,7 +125,10 @@ class Unit extends Sprite {
     }
 
     calculateAndUpdatePathMovement() {
-        const activePath = (this.pathRef && Array.isArray(this.pathRef) && this.pathRef.length) ? this.pathRef : path;
+        const activePath =
+            (this.pathRef && Array.isArray(this.pathRef) && this.pathRef.length)
+                ? this.pathRef
+                : path;
 
         const pathPoint = activePath[this.pathIndex];
         if (!pathPoint) return;

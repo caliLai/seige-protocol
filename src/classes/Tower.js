@@ -1,4 +1,6 @@
-class Tower extends Sprite {
+import { Sprite } from "./Sprite.js";
+
+export class Tower extends Sprite {
     width = 50;
     height = 50;
 
@@ -25,8 +27,8 @@ class Tower extends Sprite {
     static image = null;
     static loaded = false;
 
-    constructor(position) {
-        super(position);
+    constructor(position, gameCanvas) {
+        super(position, gameCanvas);
         Tower.loadAssets();
     }
 
@@ -45,7 +47,7 @@ class Tower extends Sprite {
         //early return pattern (review feedback)
         if (!Tower.image || !Tower.loaded) return;
 
-        gameCanvas.drawImage(
+        this.gameCanvas.drawImage(
             Tower.image,
             this.position.x - (this.drawWidth - this.width) / 2,
             this.position.y - (this.drawHeight - this.height),
@@ -60,19 +62,19 @@ class Tower extends Sprite {
         const x = this.position.x;
         const y = this.position.y - 10;
 
-        gameCanvas.fillStyle = "#3a3a3a";
-        gameCanvas.fillRect(x, y, this.width, 6);
+        this.gameCanvas.fillStyle = "#3a3a3a";
+        this.gameCanvas.fillRect(x, y, this.width, 6);
 
         const hpRatio = this.health / this.maxHealth;
 
-        if (hpRatio > 0.6) gameCanvas.fillStyle = "limegreen";
-        else if (hpRatio > 0.3) gameCanvas.fillStyle = "yellow";
-        else gameCanvas.fillStyle = "#ff3b30";
+        if (hpRatio > 0.6) this.gameCanvas.fillStyle = "limegreen";
+        else if (hpRatio > 0.3) this.gameCanvas.fillStyle = "yellow";
+        else this.gameCanvas.fillStyle = "#ff3b30";
 
-        gameCanvas.fillRect(x, y, this.width * hpRatio, 6);
+        this.gameCanvas.fillRect(x, y, this.width * hpRatio, 6);
 
-        gameCanvas.strokeStyle = "black";
-        gameCanvas.strokeRect(x, y, this.width, 6);
+        this.gameCanvas.strokeStyle = "black";
+        this.gameCanvas.strokeRect(x, y, this.width, 6);
     }
 
     takeDamage(amount) {
@@ -139,8 +141,8 @@ class Tower extends Sprite {
             p.x += p.vx;
             p.y += p.vy;
 
-            gameCanvas.fillStyle = "yellow";
-            gameCanvas.fillRect(p.x, p.y, this.projectileSize, this.projectileSize);
+            this.gameCanvas.fillStyle = "yellow";
+            this.gameCanvas.fillRect(p.x, p.y, this.projectileSize, this.projectileSize);
 
             const target = p.target;
             if (!target || target.isDead) return false;

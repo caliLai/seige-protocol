@@ -1,4 +1,6 @@
-class Knight extends Unit {
+import { Unit } from "./Unit.js";
+
+export class Knight extends Unit {
     role = 'Frontline Bruiser';
 
     width = 52;
@@ -39,8 +41,8 @@ class Knight extends Unit {
     static walkImage = null;
     static walkImageLoaded = false;
 
-    constructor(position) {
-        super(position);
+    constructor(position, gameCanvas) {
+        super(position, gameCanvas);
         Knight.loadAssets();
     }
 
@@ -115,7 +117,7 @@ class Knight extends Unit {
 
             const sx = frameIndex * frameSize;
 
-            gameCanvas.drawImage(
+            this.gameCanvas.drawImage(
                 spriteSheet,
                 sx,
                 0,

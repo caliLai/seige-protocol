@@ -1,3 +1,11 @@
+import { supabase } from '/lib/supabase.js';
+import { path } from '../src/data/path.js';
+import { towerLocations } from '../src/data/towerLocations.js';
+import { Archer } from '../src/classes/Archer.js';
+import { Knight } from '../src/classes/Knight.js';
+import { Tower } from '../src/classes/Tower.js';
+import { Unit } from '../src/classes/Unit.js';
+
 const gameCanvasElement = document.getElementById('gameCanvas');
 const gameCanvas = gameCanvasElement.getContext('2d');
 
@@ -13,12 +21,19 @@ try {
 
 const towers = [];
 let attackUnits = [];
-
 let playerGold = 0;
 let animationId = null;
 let gameFinished = false;
 let towersDestroyedCount = 0;
 let mapLoaded = false;
+
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) window.location.href = '/login/login.html';
+
+const SIEGE_ID = (wave1Data && wave1Data.id) ? String(wave1Data.id) : sessionStorage.getItem('wave1SiegeId');
+let posChannel = null;
+
+const getPathStart = () => ({ x: path[0].x, y: path[0].y });
 
 const addGold = (amount) => {
     playerGold += amount;
@@ -31,7 +46,7 @@ const addGold = (amount) => {
 const initialiseTowers = () => {
     towers.length = 0;
     for (let location of towerLocations) {
-        towers.push(new Tower(location));
+        towers.push(new Tower(location, gameCanvas));
     }
 };
 
@@ -51,13 +66,22 @@ const checkWinCondition = () => {
     }
 };
 
+const unitFactory = (unitType) => {
+    const t = String(unitType || '').toLowerCase();
+    const start = getPathStart();
+    if (t === "archer") return new Archer(start, gameCanvas);
+    if (t === "knight") return new Knight(start, gameCanvas);
+    if (t === "unit") return new Unit(start, gameCanvas);
+    return new Unit(start, gameCanvas);
+};
+
 const createUnitFromId = (unitId, position, laneOffset) => {
-    const id = String(unitId).toLowerCase();
+    const id = String(unitId || '').toLowerCase();
 
     let unit;
-    if (id === "archer") unit = new Archer(position);
-    else if (id === "knight") unit = new Knight(position);
-    else unit = new Unit(position);
+    if (id === "archer") unit = new Archer(position, gameCanvas);
+    else if (id === "knight") unit = new Knight(position, gameCanvas);
+    else unit = new Unit(position, gameCanvas);
 
     unit.laneOffset = (typeof laneOffset === "number") ? laneOffset : 0;
     unit.pathRef = path;
@@ -78,10 +102,8 @@ const spawnWaveQueues = () => {
     if (!wave1Data) return;
 
     const hostQueue = wave1Data.host_wave1 || [];
-
     let allyQueue = wave1Data.ally_wave1 || [];
 
-    // ✅ DEV MODE: if no ally, copy host
     if (!allyQueue.length) {
         allyQueue = [...hostQueue];
     }
@@ -93,13 +115,10 @@ const spawnWaveQueues = () => {
     hostQueue.forEach((unitId, i) => {
         setTimeout(() => {
             const pos = { x: path[0].x, y: path[0].y };
-
             const unit = createUnitFromId(unitId, pos, -14);
             unit.team = "host";
-
             unit.position.x -= dir.x * (i * spacing);
             unit.position.y -= dir.y * (i * spacing);
-
             attackUnits.push(unit);
         }, i * spawnGap);
     });
@@ -107,16 +126,56 @@ const spawnWaveQueues = () => {
     allyQueue.forEach((unitId, i) => {
         setTimeout(() => {
             const pos = { x: path[0].x, y: path[0].y };
-
             const unit = createUnitFromId(unitId, pos, 14);
             unit.team = "ally";
-
             unit.position.x -= dir.x * (i * spacing);
             unit.position.y -= dir.y * (i * spacing);
-
             attackUnits.push(unit);
         }, i * spawnGap);
     });
+};
+
+const handleUnitCreated = (msg) => {
+    const payload = msg && msg.payload ? msg.payload : null;
+    if (!payload) return;
+    if (payload.clientId === user.id) return;
+    attackUnits.push(unitFactory(payload.type));
+};
+
+const initRealtime = async () => {
+    if (!SIEGE_ID) return;
+    posChannel = supabase.channel(`game-${SIEGE_ID}`);
+    posChannel.on('broadcast', { event: 'unit-created' }, (msg) => handleUnitCreated(msg)).subscribe();
+};
+
+const deployUnit = () => {
+    if (!mapLoaded) {
+        alert("Map is still loading. Try again in a moment.");
+        return;
+    }
+
+    const selectedUnitType = document.querySelector('input[name="unitSelection"]:checked')?.value;
+    if (!selectedUnitType) {
+        alert("Select a unit first!");
+        return;
+    }
+
+    const newUnit = unitFactory(selectedUnitType);
+    attackUnits.push(newUnit);
+
+    const unitId = `u_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+    if (posChannel) {
+        posChannel.send({
+            type: 'broadcast',
+            event: 'unit-created',
+            payload: {
+                unitId: unitId,
+                clientId: user.id,
+                type: String(selectedUnitType || '').toLowerCase()
+            },
+        });
+    }
 };
 
 const animate = () => {
@@ -169,8 +228,6 @@ const autoStartGame = () => {
     attackUnits = [];
 
     spawnWaveQueues();
-
-    if (!animationId) animate();
 };
 
 const startGame = () => {
@@ -178,6 +235,10 @@ const startGame = () => {
     if (wave1Data) {
         autoStartGame();
     }
+};
+
+const nextWave = () => {
+    location.reload();
 };
 
 const backgroundImage = new Image();
@@ -190,9 +251,20 @@ backgroundImage.onload = () => {
     gameCanvas.drawImage(backgroundImage, 0, 0);
     towers.forEach(t => t.render());
 
-    autoStartGame();
+    if (wave1Data) {
+        autoStartGame();
+    }
+
+    if (!animationId) {
+        animate();
+    }
 };
 
-backgroundImage.src = (wave1Data && wave1Data.map_src)
-    ? wave1Data.map_src.replace('/assets/', '../assets/')
-    : "../assets/maps/calista-map.png";
+const mapSrc = (wave1Data && wave1Data.map_src) ? wave1Data.map_src : "/assets/maps/calista-map.png";
+backgroundImage.src = mapSrc;
+
+await initRealtime();
+
+window.deployUnit = deployUnit;
+window.startGame = startGame;
+window.nextWave = nextWave;

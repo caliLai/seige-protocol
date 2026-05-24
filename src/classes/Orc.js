@@ -1,4 +1,4 @@
-class Orc extends Unit {
+class Orc extends MeleeUnit {
     role = 'Bruiser';
 
     width = 54;
@@ -80,19 +80,6 @@ class Orc extends Unit {
         return Math.max(1, Math.floor(Orc.walkImage.width / Orc.walkImage.height));
     }
 
-    updateWalkAnimation() {
-        if (!this.isMoving) {
-            this.currentWalkFrame = 0;
-            return;
-        }
-
-        const now = performance.now();
-        if (now - this.lastWalkFrameAt < this.walkFrameDurationMs) return;
-
-        this.lastWalkFrameAt = now;
-        this.currentWalkFrame = (this.currentWalkFrame + 1) % this.walkFrameCount;
-    }
-
     render() {
         if (Orc.idleImageLoaded) {
             const usingAttackSheet = this.isAttacking && Orc.attackImageLoaded;
@@ -135,53 +122,4 @@ class Orc extends Unit {
         super.render();
     }
 
-    attack() {
-        if (!this.target || this.target.isDead) {
-            this.isAttacking = false;
-            this.hasAppliedHit = false;
-            this.currentAttackFrame = 0;
-            return;
-        }
-
-        const now = performance.now();
-
-        if (!this.isAttacking) {
-            if (now - this.lastAttackAt < this.attackCooldownMs) return;
-
-            this.isAttacking = true;
-            this.hasAppliedHit = false;
-            this.currentAttackFrame = 0;
-            this.lastAttackFrameAt = now;
-            this.lastAttackAt = now;
-            return;
-        }
-
-        if (now - this.lastAttackFrameAt < this.attackFrameDurationMs) return;
-
-        this.lastAttackFrameAt = now;
-        this.currentAttackFrame++;
-
-        if (!this.hasAppliedHit && this.currentAttackFrame >= this.attackReleaseFrame) {
-            if (!this.target.isDead) {
-                this.target.takeDamage(this.attackStrength);
-            }
-            this.hasAppliedHit = true;
-        }
-
-        if (this.currentAttackFrame >= this.attackFrameCount - 1) {
-            this.isAttacking = false;
-            this.hasAppliedHit = false;
-            this.currentAttackFrame = 0;
-        }
-    }
-
-    calculateAndUpdatePathMovement() {
-        const beforeX = this.position.x;
-        const beforeY = this.position.y;
-
-        super.calculateAndUpdatePathMovement();
-
-        const movedDistance = Math.hypot(this.position.x - beforeX, this.position.y - beforeY);
-        this.isMoving = movedDistance > 0.001;
-    }
 }

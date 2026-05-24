@@ -1,25 +1,25 @@
-class Slime extends MeleeUnit {
-    role = 'Melee Brawler';
+class ArmoredAxeman extends MeleeUnit {
+    role = 'Heavy Melee';
 
-    width = 48;
-    height = 48;
-    drawWidth = 112;
-    drawHeight = 112;
+    width = 54;
+    height = 54;
+    drawWidth = 132;
+    drawHeight = 132;
 
-    maxHealth = 90;
-    health = 90;
+    maxHealth = 140;
+    health = 140;
     shield = 0;
-    armor = 0;
-    cost = 0;
+    armor = 4;
+    cost = 100;
 
-    moveSpeedPxPerSecond = 46;
+    moveSpeedPxPerSecond = 44;
 
-    attackRadius = 80;
-    attackStrength = 12;
-    attackCooldownMs = 1000 / 1.35;
+    attackRadius = 86;
+    attackStrength = 25;
+    attackCooldownMs = 1000 / 1.0;
 
-    attackFrameDurationMs = 70;
-    attackReleaseFrame = 4;
+    attackFrameDurationMs = 75;
+    attackReleaseFrame = 5;
     isAttacking = false;
     hasAppliedHit = false;
     currentAttackFrame = 0;
@@ -30,7 +30,6 @@ class Slime extends MeleeUnit {
     currentWalkFrame = 0;
     lastWalkFrameAt = 0;
     facingDirection = 1;
-    showDebugAttackRadius = true;
 
     static idleImage = null;
     static idleImageLoaded = false;
@@ -43,61 +42,49 @@ class Slime extends MeleeUnit {
 
     constructor(position) {
         super(position);
-        Slime.loadAssets();
+        ArmoredAxeman.loadAssets();
     }
 
     static loadAssets() {
-        if (!Slime.idleImage) {
-            Slime.idleImage = new Image();
-            Slime.idleImage.onload = () => {
-                Slime.idleImageLoaded = true;
+        if (!ArmoredAxeman.idleImage) {
+            ArmoredAxeman.idleImage = new Image();
+            ArmoredAxeman.idleImage.onload = () => {
+                ArmoredAxeman.idleImageLoaded = true;
             };
-            Slime.idleImage.src = "/assets/Slime/Slime/Slime-Idle.png";
+            ArmoredAxeman.idleImage.src = "/assets/Armored Axeman/Armored Axeman/Armored Axeman-Idle.png";
         }
 
-        if (!Slime.attackImage) {
-            Slime.attackImage = new Image();
-            Slime.attackImage.onload = () => {
-                Slime.attackImageLoaded = true;
+        if (!ArmoredAxeman.attackImage) {
+            ArmoredAxeman.attackImage = new Image();
+            ArmoredAxeman.attackImage.onload = () => {
+                ArmoredAxeman.attackImageLoaded = true;
             };
-            Slime.attackImage.src = "/assets/Slime/Slime/Slime-Attack01.png";
+            ArmoredAxeman.attackImage.src = "/assets/Armored Axeman/Armored Axeman/Armored Axeman-Attack01.png";
         }
 
-        if (!Slime.walkImage) {
-            Slime.walkImage = new Image();
-            Slime.walkImage.onload = () => {
-                Slime.walkImageLoaded = true;
+        if (!ArmoredAxeman.walkImage) {
+            ArmoredAxeman.walkImage = new Image();
+            ArmoredAxeman.walkImage.onload = () => {
+                ArmoredAxeman.walkImageLoaded = true;
             };
-            Slime.walkImage.src = "/assets/Slime/Slime/Slime-Walk.png";
+            ArmoredAxeman.walkImage.src = "/assets/Armored Axeman/Armored Axeman/Armored Axeman-Walk.png";
         }
     }
 
     get attackFrameCount() {
-        if (!Slime.attackImageLoaded) return 1;
-        return Math.max(1, Math.floor(Slime.attackImage.width / Slime.attackImage.height));
+        if (!ArmoredAxeman.attackImageLoaded) return 1;
+        return Math.max(1, Math.floor(ArmoredAxeman.attackImage.width / ArmoredAxeman.attackImage.height));
     }
 
     get walkFrameCount() {
-        if (!Slime.walkImageLoaded) return 1;
-        return Math.max(1, Math.floor(Slime.walkImage.width / Slime.walkImage.height));
+        if (!ArmoredAxeman.walkImageLoaded) return 1;
+        return Math.max(1, Math.floor(ArmoredAxeman.walkImage.width / ArmoredAxeman.walkImage.height));
     }
 
     render() {
-        if (this.showDebugAttackRadius) {
-            gameCanvas.save();
-            gameCanvas.beginPath();
-            gameCanvas.arc(this.centre.x, this.centre.y, this.attackRadius, 0, Math.PI * 2);
-            gameCanvas.fillStyle = 'rgba(46, 204, 113, 0.12)';
-            gameCanvas.fill();
-            gameCanvas.strokeStyle = 'rgba(46, 204, 113, 0.45)';
-            gameCanvas.lineWidth = 1;
-            gameCanvas.stroke();
-            gameCanvas.restore();
-        }
-
-        if (Slime.idleImageLoaded) {
-            const usingAttackSheet = this.isAttacking && Slime.attackImageLoaded;
-            const usingWalkSheet = !usingAttackSheet && this.isMoving && Slime.walkImageLoaded;
+        if (ArmoredAxeman.idleImageLoaded) {
+            const usingAttackSheet = this.isAttacking && ArmoredAxeman.attackImageLoaded;
+            const usingWalkSheet = !usingAttackSheet && this.isMoving && ArmoredAxeman.walkImageLoaded;
 
             if (usingWalkSheet) {
                 this.updateWalkAnimation();
@@ -106,8 +93,8 @@ class Slime extends MeleeUnit {
             }
 
             const spriteSheet = usingAttackSheet
-                ? Slime.attackImage
-                : (usingWalkSheet ? Slime.walkImage : Slime.idleImage);
+                ? ArmoredAxeman.attackImage
+                : (usingWalkSheet ? ArmoredAxeman.walkImage : ArmoredAxeman.idleImage);
 
             const frameSize = spriteSheet.height;
             const frameIndex = usingAttackSheet
@@ -151,10 +138,10 @@ class Slime extends MeleeUnit {
                 );
                 gameCanvas.restore();
             }
+
             return;
         }
 
         super.render();
     }
-
 }

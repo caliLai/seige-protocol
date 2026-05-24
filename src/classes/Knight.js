@@ -1,4 +1,4 @@
-class Knight extends Unit {
+class Knight extends MeleeUnit {
     role = 'Frontline Bruiser';
 
     width = 52;
@@ -81,19 +81,6 @@ class Knight extends Unit {
         return Math.max(1, Math.floor(Knight.walkImage.width / Knight.walkImage.height));
     }
 
-    updateWalkAnimation() {
-        if (!this.isMoving) {
-            this.currentWalkFrame = 0;
-            return;
-        }
-
-        const now = performance.now();
-        if (now - this.lastWalkFrameAt < this.walkFrameDurationMs) return;
-
-        this.lastWalkFrameAt = now;
-        this.currentWalkFrame = (this.currentWalkFrame + 1) % this.walkFrameCount;
-    }
-
     render() {
         if (Knight.idleImageLoaded) {
             const usingAttackSheet = this.isAttacking && Knight.attackImageLoaded;
@@ -157,63 +144,4 @@ class Knight extends Unit {
         super.render();
     }
 
-    attack() {
-        if (!this.target || this.target.isDead) {
-            this.isAttacking = false;
-            this.hasAppliedHit = false;
-            this.currentAttackFrame = 0;
-            return;
-        }
-
-        const targetDx = this.target.centre.x - this.centre.x;
-        if (Math.abs(targetDx) > 0.001) {
-            this.facingDirection = targetDx >= 0 ? 1 : -1;
-        }
-
-        const now = performance.now();
-
-        if (!this.isAttacking) {
-            if (now - this.lastAttackAt < this.attackCooldownMs) return;
-
-            this.isAttacking = true;
-            this.hasAppliedHit = false;
-            this.currentAttackFrame = 0;
-            this.lastAttackFrameAt = now;
-            this.lastAttackAt = now;
-            return;
-        }
-
-        if (now - this.lastAttackFrameAt < this.attackFrameDurationMs) return;
-
-        this.lastAttackFrameAt = now;
-        this.currentAttackFrame++;
-
-        if (!this.hasAppliedHit && this.currentAttackFrame >= this.attackReleaseFrame) {
-            if (!this.target.isDead) {
-                this.target.takeDamage(this.attackStrength);
-            }
-            this.hasAppliedHit = true;
-        }
-
-        if (this.currentAttackFrame >= this.attackFrameCount - 1) {
-            this.isAttacking = false;
-            this.hasAppliedHit = false;
-            this.currentAttackFrame = 0;
-        }
-    }
-
-    calculateAndUpdatePathMovement() {
-        const beforeX = this.position.x;
-        const beforeY = this.position.y;
-
-        super.calculateAndUpdatePathMovement();
-
-        const deltaX = this.position.x - beforeX;
-        if (Math.abs(deltaX) > 0.001) {
-            this.facingDirection = deltaX >= 0 ? 1 : -1;
-        }
-
-        const movedDistance = Math.hypot(this.position.x - beforeX, this.position.y - beforeY);
-        this.isMoving = movedDistance > 0.001;
-    }
 }

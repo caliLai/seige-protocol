@@ -21,9 +21,6 @@ gameCanvasElement.height = 640;
 
 const towers = [];
 let attackUnits = [];
-
-const SHOW_PATH_MARKERS = false;
-
 let playerGold = 0;
 let animationId = null;
 let gameFinished = false;
@@ -124,40 +121,6 @@ const findNearestLivingTowerInRange = (unit) => {
     }
 
     return nearestTower;
-};
-
-// Just for debugging
-const drawPathDebugOverlay = () => {
-    if (!SHOW_PATH_MARKERS || !Array.isArray(path) || path.length === 0) return;
-
-    gameCanvas.save();
-
-    gameCanvas.beginPath();
-    gameCanvas.moveTo(path[0].x, path[0].y);
-    for (let i = 1; i < path.length; i++) {
-        gameCanvas.lineTo(path[i].x, path[i].y);
-    }
-    gameCanvas.strokeStyle = 'rgba(0, 170, 255, 0.6)';
-    gameCanvas.lineWidth = 2;
-    gameCanvas.stroke();
-
-    gameCanvas.font = '11px monospace';
-    gameCanvas.textAlign = 'left';
-    gameCanvas.textBaseline = 'middle';
-
-    for (let i = 0; i < path.length; i++) {
-        const p = path[i];
-
-        gameCanvas.beginPath();
-        gameCanvas.arc(p.x, p.y, 3, 0, Math.PI * 2);
-        gameCanvas.fillStyle = i === 0 ? 'rgba(46, 204, 113, 0.95)' : 'rgba(0, 170, 255, 0.95)';
-        gameCanvas.fill();
-
-        gameCanvas.fillStyle = 'rgba(18, 18, 18, 0.95)';
-        gameCanvas.fillText(String(i), p.x + 6, p.y);
-    }
-
-    gameCanvas.restore();
 };
 
 const initRealtime = async () => {
@@ -283,7 +246,6 @@ backgroundImage.onload = () => {
 
     gameCanvas.drawImage(backgroundImage, 0, 0);
     towers.forEach(tower => tower.updateFrame());
-    drawPathDebugOverlay();
 };
 
 backgroundImage.src = "../assets/maps/calista-map.png";

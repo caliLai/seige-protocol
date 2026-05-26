@@ -16,6 +16,15 @@ import { Unit } from '/src/classes/Unit.js';
 import { sim } from '/src/runtime/sim.js';
 import { contribution, resetContribution, creditTowerKill } from '/src/runtime/contribution.js';
 
+let blastImage = new Image();
+let blastLoaded = false;
+
+blastImage.onload = () => {
+  blastLoaded = true;
+};
+
+blastImage.src = "../assets/effects/blast.png";
+
 // ── DIFFICULTY KNOBS ──
 const STARTING_GOLD = { recruit: 300, veteran: 250, elite: 200 };
 const QUEUE_CAP = { recruit: 10, veteran: 8, elite: 6 };
@@ -92,6 +101,7 @@ let battleStarted = false;
 let towersDestroyedCount = 0;
 let totalTowers = 0;
 let unitsDeployedCount = 0;
+let explosions = [];
 // Single end-of-match guard (used for both victory and defeat) so the
 // spawn timeline, settle timer, and overlay flips all key off the same
 // flag instead of victory-only logic.
@@ -101,6 +111,9 @@ let matchEnded = false;
 // fail one wave per remaining attempt. Derived from current_wave /
 // total_waves on the siege row so there's no separate column to keep in
 // sync. Defeat triggers when this hits 0 (failure on the last wave).
+
+
+
 const livesRemaining = () => {
   const current = siege?.current_wave ?? 1;
   const total = siege?.total_waves ?? 15;
@@ -141,6 +154,84 @@ const smoothNavigate = (url) => {
   setTimeout(() => { window.location.href = url; }, 400);
 };
 
+const spawnExplosion = (x, y) => {
+  explosions.push({
+    x,
+    y,
+    age: 0,
+    maxAge: 650, // ms
+    radius: 18,
+    sparks: Array.from({ length: 12 }, (_, i) => {
+      const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.3;
+      const speed = 1.5 + Math.random() * 2.5;
+      return {
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 250 + Math.random() * 250,
+      };
+    }),
+  });
+};
+
+const updateAndRenderExplosions = () => {
+  if (!explosions.length) return;
+
+  const dt = sim.dt || 16;
+
+  explosions = explosions.filter((ex) => {
+    ex.age += dt;
+    const progress = Math.min(1, ex.age / ex.maxAge);
+
+    // Main blast ring
+    const blastRadius = ex.radius + progress * 40;
+    const alpha = 1 - progress;
+
+    gameCanvas.save();
+    gameCanvas.globalAlpha = alpha;
+    if (blastLoaded) {
+      gameCanvas.drawImage(
+        blastImage,
+        ex.x - 40,
+        ex.y - 40,
+        80,
+        80
+      );
+    }
+
+    // Outer orange ring
+    gameCanvas.beginPath();
+    gameCanvas.arc(ex.x, ex.y, blastRadius, 0, Math.PI * 2);
+    gameCanvas.fillStyle = 'rgba(255,140,0,0.35)';
+    gameCanvas.fill();
+
+    // Inner bright core
+    gameCanvas.beginPath();
+    gameCanvas.arc(ex.x, ex.y, blastRadius * 0.55, 0, Math.PI * 2);
+    gameCanvas.fillStyle = 'rgba(255,220,80,0.7)';
+    gameCanvas.fill();
+
+    // Small white hot centre
+    gameCanvas.beginPath();
+    gameCanvas.arc(ex.x, ex.y, blastRadius * 0.22, 0, Math.PI * 2);
+    gameCanvas.fillStyle = 'rgba(255,255,255,0.9)';
+    gameCanvas.fill();
+
+    // Sparks
+    ex.sparks.forEach((spark) => {
+      const sparkProgress = Math.min(1, ex.age / spark.life);
+      const sx = ex.x + spark.vx * ex.age * 0.06;
+      const sy = ex.y + spark.vy * ex.age * 0.06;
+
+      gameCanvas.globalAlpha = Math.max(0, 0.9 - sparkProgress);
+      gameCanvas.fillStyle = sparkProgress < 0.5 ? '#ffd54a' : '#ff7a00';
+      gameCanvas.fillRect(sx - 2, sy - 2, 4, 4);
+    });
+
+    gameCanvas.restore();
+
+    return ex.age < ex.maxAge;
+  });
+};
 const returnToLobby = () => smoothNavigate('/lobby/lobby.html');
 
 // ── AUTH GATE ──
@@ -705,8 +796,14 @@ if (defeatLobbyBtn) defeatLobbyBtn.addEventListener('click', () => disbandAndLea
 // reward. Host writes both gold columns so the row reflects the shared
 // payout (game-flow §10 — both players bank tower-kill gold).
 battleEvents.addEventListener('tower-destroyed', (e) => {
-  const { lastAttackerTeam, reward } = e.detail;
+  const { lastAttackerTeam, reward, x, y } = e.detail;
+
+  if (typeof x === 'number' && typeof y === 'number') {
+    spawnExplosion(x, y);
+  }
+
   if (lastAttackerTeam) creditTowerKill(lastAttackerTeam);
+
   if (isHost && reward) {
     const next = {
       host_gold: Math.max(0, (siege.host_gold ?? 0) + reward),
@@ -795,7 +892,10 @@ const animate = () => {
           towerIndex: towersDestroyedCount - 1,
           lastAttackerTeam: dead?.lastAttackerTeam ?? null,
           reward: dead?.reward ?? 0,
+          x: dead?.centre?.x ?? dead?.position?.x ?? 0,
+          y: dead?.centre?.y ?? dead?.position?.y ?? 0,
         });
+
         if (towers.length === 0) checkWaveOutcome();
       }
       unit.target = null;
@@ -808,7 +908,7 @@ const animate = () => {
     const target = attackUnits.find(u => !u.isDead);
     tower.updateFrame(target);
   });
-
+  updateAndRenderExplosions();
   // Continuously check whether the wave has resolved so failure feedback
   // is instant. The settle timer in spawnWaveQueues() is still kept as a
   // belt-and-braces fallback in case unitsDeployedCount somehow undercounts.

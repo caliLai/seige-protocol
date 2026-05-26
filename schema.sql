@@ -41,7 +41,6 @@ CREATE TABLE public.sieges (
     CHECK (phase IN ('lobby','setup','prep','battle','complete')),
   current_wave int NOT NULL DEFAULT 1 CHECK (current_wave >= 1),
   total_waves int NOT NULL DEFAULT 15 CHECK (total_waves BETWEEN 1 AND 50),
-  team_lives int NOT NULL DEFAULT 12 CHECK (team_lives >= 0),
   host_gold int NOT NULL DEFAULT 0 CHECK (host_gold >= 0),
   ally_gold int NOT NULL DEFAULT 0 CHECK (ally_gold >= 0),
   host_queue ARRAY NOT NULL DEFAULT '{}'::text[],

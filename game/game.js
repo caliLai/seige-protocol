@@ -12,6 +12,8 @@ const gameCanvas = gameCanvasElement.getContext('2d');
 gameCanvasElement.width = 1120;
 gameCanvasElement.height = 640;
 
+const playerStats = {};
+
 let wave1Data = null;
 try {
   wave1Data = JSON.parse(sessionStorage.getItem('wave1Siege') || 'null');
@@ -21,7 +23,6 @@ try {
 
 const towers = [];
 let attackUnits = [];
-let playerGold = 0;
 let animationId = null;
 let gameFinished = false;
 let towersDestroyedCount = 0;
@@ -38,6 +39,8 @@ let posChannel = null;
 
 let hostId = null;
 let allyId = null;
+let hostName = "Host";
+let allyName = "Ally";
 
 const loadSiegeOwners = async () => {
   if (!SIEGE_ID) return;
@@ -54,14 +57,63 @@ const loadSiegeOwners = async () => {
   }
 };
 
+const loadPlayerNames = async () => {
+  const ids = [hostId, allyId].filter(Boolean);
+  if (!ids.length) return;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('user_id, full_name, username')
+    .in('user_id', ids);
+
+  if (error || !data) return;
+
+  const hostProfile = data.find(p => p.user_id === hostId);
+  const allyProfile = data.find(p => p.user_id === allyId);
+
+  hostName = hostProfile?.full_name || hostProfile?.username || "Host";
+  allyName = allyProfile?.full_name || allyProfile?.username || "Ally";
+};
+
+const ensurePlayerStat = (playerId) => {
+  if (!playerId) return;
+  if (!playerStats[playerId]) {
+    playerStats[playerId] = { gold: 0 };
+  }
+};
+
+const getDisplayLabels = () => {
+  const isHostUser = user.id === hostId;
+
+  const myName = isHostUser ? hostName : allyName;
+  const otherName = isHostUser ? allyName : hostName;
+
+  const myId = user.id;
+  const otherId = isHostUser ? allyId : hostId;
+
+  return { myName, otherName, myId, otherId };
+};
+
 const getPathStart = () => ({ x: path[0].x, y: path[0].y });
 
 const addGold = (amount) => {
-  playerGold += amount;
+  if (!amount) return;
+  ensurePlayerStat(user.id);
+  playerStats[user.id].gold += amount;
+  syncGoldDisplays();
+};
+
+const syncGoldDisplays = () => {
+  const { myName, otherName, myId, otherId } = getDisplayLabels();
+
+  const myGold = playerStats[myId]?.gold || 0;
+  const otherGold = playerStats[otherId]?.gold || 0;
+
   const goldDisplay = document.getElementById("goldDisplay");
-  if (goldDisplay) {
-    goldDisplay.innerText = "Gold: " + playerGold;
-  }
+  const otherGoldDisplay = document.getElementById("otherGoldDisplay");
+
+  if (goldDisplay) goldDisplay.innerText = `${myName}: ${myGold}`;
+  if (otherGoldDisplay) otherGoldDisplay.innerText = `${otherName}: ${otherGold}`;
 };
 
 window.addGold = addGold;
@@ -69,16 +121,42 @@ window.addGold = addGold;
 window.awardTowerReward = async (winnerId, amount) => {
   if (!winnerId || !amount) return;
 
-  // Only the winning player's own client should persist the reward.
-  // This avoids both clients writing the same tower reward to the DB.
-  if (winnerId !== user.id) return;
+  // Host is the single authority for rewards
+  if (user.id !== hostId) return;
 
-  addGold(amount);
+  ensurePlayerStat(winnerId);
+  playerStats[winnerId].gold += amount;
 
+  console.log(
+    "Tower reward winner:",
+    winnerId,
+    "hostId:",
+    hostId,
+    "allyId:",
+    allyId,
+    "amount:",
+    amount
+  );
+
+  syncGoldDisplays();
+
+  // Persist once from host
   await supabase.rpc('increment_points', {
     user_id_input: winnerId,
     amount_input: amount
   });
+
+  // Broadcast to the other client so both UIs stay in sync
+  if (posChannel) {
+    await posChannel.send({
+      type: 'broadcast',
+      event: 'tower-reward',
+      payload: {
+        winnerId: winnerId,
+        amount: amount
+      }
+    });
+  }
 };
 
 const initialiseTowers = () => {
@@ -89,9 +167,16 @@ const initialiseTowers = () => {
 };
 
 const showEndScreen = () => {
-  document.getElementById("goldEarned").innerText = "Gold Earned: " + playerGold;
-  document.getElementById("towersDestroyed").innerText = "Towers Destroyed: " + towersDestroyedCount;
-  document.getElementById("unitsLost").innerText = "Units Lost: 0";
+  const panelText = document.getElementById("results");
+
+  const hostGold = playerStats[hostId]?.gold || 0;
+  const allyGold = playerStats[allyId]?.gold || 0;
+
+  panelText.innerHTML = `
+    <strong>${hostName}</strong>: ${hostGold} gold<br/>
+    <strong>${allyName}</strong>: ${allyGold} gold
+  `;
+
   document.getElementById("endScreen").style.display = "flex";
 };
 
@@ -99,10 +184,12 @@ const checkWinCondition = () => {
   if (towers.length === 0 && !gameFinished) {
     gameFinished = true;
 
-    addGold(100);
-
     cancelAnimationFrame(animationId);
-    showEndScreen();
+
+    // ✅ Give time for final reward sync
+    setTimeout(() => {
+      showEndScreen();
+    }, 300);
   }
 };
 
@@ -154,15 +241,16 @@ const spawnWaveQueues = () => {
   const hostQueue = wave1Data.host_wave1 || [];
   let allyQueue = wave1Data.ally_wave1 || [];
 
-  // Dev mode fallback so one player can still test both lanes
+  // Solo/dev fallback only if ally queue is empty
   if (!allyQueue.length) {
     allyQueue = [...hostQueue];
   }
 
-  const spawnGap = 220;
+  const spawnGap = 300;
   const spacing = 10;
   const dir = pathStartDirection();
 
+  // Important: by the time this runs, hostId/allyId must already be loaded
   const hostOwner = hostId || user.id;
   const allyOwner = allyId || user.id;
 
@@ -197,13 +285,38 @@ const handleUnitCreated = (msg) => {
   attackUnits.push(remoteUnit);
 };
 
+const handleTowerReward = (msg) => {
+  const payload = msg?.payload;
+  if (!payload) return;
+
+  const { winnerId, amount } = payload;
+  if (!winnerId || !amount) return;
+
+  // Host already applied reward locally, so only non-host clients should apply the broadcast
+  if (user.id === hostId) return;
+
+  ensurePlayerStat(winnerId);
+  playerStats[winnerId].gold += amount;
+
+  console.log("Received tower reward:", winnerId, amount);
+
+  syncGoldDisplays();
+};
+
 const initRealtime = async () => {
   if (!SIEGE_ID) return;
 
   posChannel = supabase.channel(`game-${SIEGE_ID}`);
+
   posChannel.on('broadcast', { event: 'unit-created' }, (msg) => {
     handleUnitCreated(msg);
-  }).subscribe();
+  });
+
+  posChannel.on('broadcast', { event: 'tower-reward' }, (msg) => {
+    handleTowerReward(msg);
+  });
+
+  await posChannel.subscribe();
 };
 
 const deployUnit = () => {
@@ -280,9 +393,8 @@ const animate = () => {
 const autoStartGame = () => {
   if (!wave1Data) return;
 
-  playerGold = 0;
-  towersDestroyedCount = 0;
   gameFinished = false;
+  towersDestroyedCount = 0;
   attackUnits = [];
 
   spawnWaveQueues();
@@ -318,14 +430,25 @@ backgroundImage.onload = () => {
   }
 };
 
+// IMPORTANT: load owners/names/stats FIRST, then start image/game
+await loadSiegeOwners();
+await loadPlayerNames();
+
+if (hostId) {
+  playerStats[hostId] = { gold: 0 };
+}
+if (allyId) {
+  playerStats[allyId] = { gold: 0 };
+}
+
+syncGoldDisplays();
+await initRealtime();
+
 const mapSrc = (wave1Data && wave1Data.map_src)
   ? wave1Data.map_src
   : "/assets/maps/calista-map.png";
 
 backgroundImage.src = mapSrc;
-
-await loadSiegeOwners();
-await initRealtime();
 
 window.deployUnit = deployUnit;
 window.startGame = startGame;

@@ -988,7 +988,6 @@ const applySiegeUpdate = (fresh) => {
   }
   const prevPhase = siege?.phase;
   siege = fresh;
-  render();
 
   // Phase flipped back to 'prep' — wave failed and the host bumped
   // current_wave. Drop the battle-running state so the queue UI re-enables
@@ -996,6 +995,11 @@ const applySiegeUpdate = (fresh) => {
   // or the towers array — map state persists across waves so the next wave
   // continues the assault on whatever's left standing. unitsDeployedCount
   // resets per wave so the new wave's expected-total check works.
+  //
+  // Flip state BEFORE rendering so renderTypes() / renderReadyControls()
+  // see the post-prep `battleStarted = false` and enable the queue UI.
+  // Pre-this fix, render() ran first with the stale `battleStarted = true`
+  // and the ally's type cards stayed disabled until the next echo.
   if (siege.phase === 'prep' && prevPhase !== 'prep') {
     battleStarted = false;
     waveJudged = false;
@@ -1004,6 +1008,8 @@ const applySiegeUpdate = (fresh) => {
     unitsDeployedCount = 0;
     updateWaveProgress();
   }
+  render();
+
   // End-of-match overlay if the host wrote outcome from the other client.
   if (siege.outcome && !matchEnded) {
     showEndOverlay(siege.outcome);

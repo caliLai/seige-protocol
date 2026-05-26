@@ -1,4 +1,5 @@
 import { Sprite } from "./Sprite.js";
+import { creditDamage } from "../runtime/contribution.js";
 
 export class Tower extends Sprite {
     width = 50;
@@ -19,6 +20,11 @@ export class Tower extends Sprite {
     lastAttackAt = 0;
 
     target = null;
+
+    // Team that landed the last hit on this tower. battle.js reads this
+    // when the tower dies so the killing-blow side gets towers_destroyed
+    // credit and the per-side gold reward.
+    lastAttackerTeam = null;
 
     projectiles = [];
     projectileSpeed = 5;
@@ -77,17 +83,16 @@ export class Tower extends Sprite {
         this.gameCanvas.strokeRect(x, y, this.width, 6);
     }
 
-    takeDamage(amount) {
-        // no flag check needed anymore
+    takeDamage(amount, attacker) {
         this.health -= amount;
-
-        if (this.health <= 0) {
-            console.log("Tower destroyed! +" + this.reward + " gold");
-
-            if (typeof addGold === "function") {
-                addGold(this.reward);
-            }
+        if (attacker?.team) {
+            this.lastAttackerTeam = attacker.team;
+            creditDamage(attacker.team, amount);
         }
+        // Death detection + gold payout happens in battle.js animate(),
+        // which reads lastAttackerTeam and fires the 'tower-destroyed'
+        // event so per-side gold and towers_destroyed credit go through
+        // a single hook point.
     }
 
     findTarget(unit) {

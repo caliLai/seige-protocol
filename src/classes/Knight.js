@@ -165,7 +165,8 @@ export class Knight extends Unit {
 
         if (!this.hasAppliedHit && this.currentAttackFrame >= this.attackReleaseFrame) {
             if (!this.target.isDead) {
-                this.target.takeDamage(this.attackStrength);
+                // Pass `this` so the tower can credit the team.
+                this.target.takeDamage(this.attackStrength, this);
             }
             this.hasAppliedHit = true;
         }

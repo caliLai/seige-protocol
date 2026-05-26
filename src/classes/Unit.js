@@ -1,5 +1,6 @@
 import { Sprite } from "./Sprite.js";
 import { path } from "../data/path.js";
+import { sim } from "../runtime/sim.js";
 
 export class Unit extends Sprite {
     width = 50;
@@ -116,7 +117,8 @@ export class Unit extends Sprite {
             const dy = target.centre.y - projectileCenterY;
 
             if (Math.hypot(dx, dy) <= this.projectileSize + 4) {
-                target.takeDamage(projectile.damage);
+                // Pass `this` so Tower.takeDamage can credit the team.
+                target.takeDamage(projectile.damage, this);
                 return false;
             }
 
@@ -170,10 +172,12 @@ export class Unit extends Sprite {
         }
 
         const angle = Math.atan2(dy, dx);
-        const frameStep = this.moveSpeedPxPerSecond / 60;
+        // Wall-clock movement so 60Hz and 144Hz monitors agree on speed.
+        // sim.dt is ms since last frame; / 1000 converts speed (px/s) → px this frame.
+        const step = this.moveSpeedPxPerSecond * sim.dt / 1000;
 
-        this.position.x += Math.cos(angle) * frameStep;
-        this.position.y += Math.sin(angle) * frameStep;
+        this.position.x += Math.cos(angle) * step;
+        this.position.y += Math.sin(angle) * step;
     }
 
     resetAttackState() {

@@ -439,14 +439,19 @@ const applySiegeUpdate = (fresh) => {
   siege = fresh;
   render();
 
-  // Both sides ready → both clients race to battle.html. Wave queue is now
-  // built in the in-game HUD, so we skip the separate wave-1 page.
+  // Both sides ready → both clients race to battle.html. Wave queue is
+  // built in the in-game HUD on /battle.
   const bothReady = !!siege.host_ready && !!siege.ally_ready;
   if (bothReady && !navigated) {
     navigated = true;
     bothReadyBanner.classList.remove('hidden');
     bothReadyBanner.setAttribute('aria-hidden', 'false');
-    sessionStorage.setItem('wave1SiegeId', siege.id);
+    sessionStorage.setItem('battleSiegeId', siege.id);
+    // Host advances phase to 'prep' so the lobby browser stops showing
+    // this siege. Ally just rides realtime — no double-write race.
+    if (siege.host_id === user.id && siege.phase !== 'prep' && siege.phase !== 'battle') {
+      updateSiege({ phase: 'prep' });
+    }
     setTimeout(() => smoothNavigate('/battle/battle.html'), 1100);
     return;
   }
@@ -498,6 +503,13 @@ if (!siege) {
   myOther = { profile: themProfile, userId: otherUid, username: themProfile?.username || (isHost ? siege.ally_username : siege.host_username) || 'KNIGHT' };
 
   render();
+
+  // Advance phase to 'setup' on first entry (host only). The default after
+  // migration 004 is 'lobby'; lobby browser filters that out so once we
+  // flip it here the room stops appearing as joinable.
+  if (isHost && siege.phase === 'lobby') {
+    updateSiege({ phase: 'setup' });
+  }
 
   // ── REALTIME ──
   // Listen for opponent picks/ready as well as DELETE (disband) and any

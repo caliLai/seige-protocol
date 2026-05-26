@@ -9,7 +9,6 @@
   <link rel="stylesheet" href="/start-screen/start-screen-styles.css" />
   <link rel="stylesheet" href="/lobby/lobby-styles.css" />
   <link rel="stylesheet" href="/siege-setup/siege-setup-styles.css" />
-  <link rel="stylesheet" href="/wave-1/wave-1-styles.css" />
   <link rel="stylesheet" href="/battle/battle.css" />
 </head>
 <body>
@@ -24,7 +23,7 @@
         <div class="game-player-info">
           <div class="game-player-name" id="selfName">KNIGHT</div>
           <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-gold">◆</span><span class="game-stat-label">BATTLE GOLD</span><span class="game-stat-val game-gold-val" id="selfGold">0</span></div>
-          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-shard">◇</span><span class="game-stat-label">ROSTER SHARDS</span><span class="game-stat-val game-shard-val" id="selfShards">0</span></div>
+          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-shard">◇</span><span class="game-stat-label">POINTS</span><span class="game-stat-val game-shard-val" id="selfPoints">0</span></div>
         </div>
       </div>
 
@@ -48,7 +47,7 @@
         <div class="game-player-info">
           <div class="game-player-name" id="otherName">ALLY</div>
           <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-gold">◆</span><span class="game-stat-label">BATTLE GOLD</span><span class="game-stat-val game-gold-val" id="otherGold">0</span></div>
-          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-shard">◇</span><span class="game-stat-label">ROSTER SHARDS</span><span class="game-stat-val game-shard-val" id="otherShards">0</span></div>
+          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-shard">◇</span><span class="game-stat-label">POINTS</span><span class="game-stat-val game-shard-val" id="otherPoints">0</span></div>
         </div>
         <div class="game-top-controls">
           <button type="button" class="px-btn game-ctrl-btn" id="speedBtn">x1</button>
@@ -160,7 +159,7 @@
     <!-- ═══ FOOTER LEGEND ═══ -->
     <div class="game-legend">
       <span><span class="game-coin">◆</span> <b>BATTLE GOLD</b> — USED TO PURCHASE UNITS AND IN-GAME ITEMS DURING BATTLE.</span>
-      <span><span class="game-shard">◇</span> <b>ROSTER SHARDS</b> — USED IN THE ROSTER TO UNLOCK NEW UNIT TYPES.</span>
+      <span><span class="game-shard">◇</span> <b>POINTS</b> — USED IN THE ROSTER TO UNLOCK NEW UNIT TYPES.</span>
     </div>
 
     <!-- Floating alert -->
@@ -188,8 +187,8 @@
             </div>
             <div class="game-victory-reward">
               <div class="game-victory-reward-ico game-shard">◇</div>
-              <div class="game-victory-reward-val" id="rewardShards">+ 80</div>
-              <div class="game-victory-reward-label">ROSTER SHARDS</div>
+              <div class="game-victory-reward-val" id="rewardPoints">+ 80</div>
+              <div class="game-victory-reward-label">POINTS</div>
             </div>
             <div class="game-victory-reward">
               <div class="game-victory-reward-ico game-badge">⛨</div>
@@ -206,6 +205,51 @@
 
           <div class="game-victory-actions">
             <button type="button" id="victoryLobbyBtn" class="px-btn setup-ready-btn">↩ RETURN TO WAR ROOM</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Defeat overlay (mirrors victory, red theme) -->
+    <div id="defeatOverlay" class="game-victory-overlay game-defeat-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="defeatTitle" aria-hidden="true">
+      <div class="game-victory-card game-defeat-card">
+        <div class="game-victory-corner game-defeat-corner tl"></div>
+        <div class="game-victory-corner game-defeat-corner tr"></div>
+        <div class="game-victory-corner game-defeat-corner bl"></div>
+        <div class="game-victory-corner game-defeat-corner br"></div>
+        <div class="game-victory-content">
+          <div id="defeatTitle" class="game-victory-title game-defeat-title">☠ DEFEAT ☠</div>
+          <div class="game-victory-divider">
+            <div class="dash-line"></div><span class="divider-icon">☠</span><div class="dash-line"></div>
+          </div>
+          <div class="game-victory-body">THE FORTRESS STANDS.<br/>THE TEAM FALTERS.</div>
+
+          <div class="game-victory-rewards">
+            <div class="game-victory-reward">
+              <div class="game-victory-reward-ico game-coin">◆</div>
+              <div class="game-victory-reward-val" id="rewardGoldDefeat">+ 0</div>
+              <div class="game-victory-reward-label">BATTLE GOLD</div>
+            </div>
+            <div class="game-victory-reward">
+              <div class="game-victory-reward-ico game-shard">◇</div>
+              <div class="game-victory-reward-val" id="rewardPointsDefeat">+ 0</div>
+              <div class="game-victory-reward-label">POINTS</div>
+            </div>
+            <div class="game-victory-reward">
+              <div class="game-victory-reward-ico game-badge">⛨</div>
+              <div class="game-victory-reward-val" id="rewardBadgesDefeat">+ 0</div>
+              <div class="game-victory-reward-label">HONOUR BADGES</div>
+            </div>
+          </div>
+
+          <div class="game-victory-stats">
+            <div class="game-victory-stat"><span>TOWERS DESTROYED</span><span id="statTowersDefeat">—</span></div>
+            <div class="game-victory-stat"><span>LIVES REMAINING</span><span id="statLivesDefeat">—</span></div>
+            <div class="game-victory-stat"><span>UNITS DEPLOYED</span><span id="statUnitsDefeat">—</span></div>
+          </div>
+
+          <div class="game-victory-actions">
+            <button type="button" id="defeatLobbyBtn" class="px-btn setup-ready-btn">↩ RETURN TO WAR ROOM</button>
           </div>
         </div>
       </div>

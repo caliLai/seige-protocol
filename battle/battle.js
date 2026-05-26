@@ -1,7 +1,6 @@
 /* ═══════════════════════════════════════════════
    GAME PAGE
-   Absorbs wave-1's queue/gold/ready handshake into the
-   in-game HUD: both players build their wave from the
+   Both players build their wave from the
    3 unit types they locked in during siege-setup, hit
    "Lock In" → spawning begins on the canvas.
    ═══════════════════════════════════════════════ */
@@ -14,8 +13,10 @@ import { Archer } from '/src/classes/Archer.js';
 import { Knight } from '/src/classes/Knight.js';
 import { Tower } from '/src/classes/Tower.js';
 import { Unit } from '/src/classes/Unit.js';
+import { sim } from '/src/runtime/sim.js';
+import { contribution, resetContribution, creditTowerKill } from '/src/runtime/contribution.js';
 
-// ── DIFFICULTY KNOBS (mirrors wave-1.js) ──
+// ── DIFFICULTY KNOBS ──
 const STARTING_GOLD = { recruit: 300, veteran: 250, elite: 200 };
 const QUEUE_CAP = { recruit: 10, veteran: 8, elite: 6 };
 const goldForDifficulty = (d) => STARTING_GOLD[d] ?? 250;
@@ -32,8 +33,8 @@ const selfNameEl = document.getElementById('selfName');
 const otherNameEl = document.getElementById('otherName');
 const selfGoldEl = document.getElementById('selfGold');
 const otherGoldEl = document.getElementById('otherGold');
-const selfShardsEl = document.getElementById('selfShards');
-const otherShardsEl = document.getElementById('otherShards');
+const selfPointsEl = document.getElementById('selfPoints');
+const otherPointsEl = document.getElementById('otherPoints');
 const livesLabelEl = document.getElementById('livesLabel');
 
 const victoryOverlay = document.getElementById('victoryOverlay');
@@ -41,6 +42,14 @@ const victoryLobbyBtn = document.getElementById('victoryLobbyBtn');
 const statTowersEl = document.getElementById('statTowers');
 const statLivesEl = document.getElementById('statLives');
 const statUnitsEl = document.getElementById('statUnits');
+const rewardPointsEl = document.getElementById('rewardPoints');
+
+const defeatOverlay = document.getElementById('defeatOverlay');
+const defeatLobbyBtn = document.getElementById('defeatLobbyBtn');
+const statTowersDefeatEl = document.getElementById('statTowersDefeat');
+const statLivesDefeatEl = document.getElementById('statLivesDefeat');
+const statUnitsDefeatEl = document.getElementById('statUnitsDefeat');
+const rewardPointsDefeatEl = document.getElementById('rewardPointsDefeat');
 
 const selfTypesEl = document.getElementById('selfTypes');
 const otherTypesEl = document.getElementById('otherTypes');
@@ -68,6 +77,12 @@ let isHost = false;
 let startingGold = 250;
 let queueCap = 8;
 
+// Profiles loaded once at battle entry — used for the POINTS counter in
+// the HUD. Not refreshed mid-match (points only change via the payout RPC
+// at game end and will re-load on next page visit).
+let mySelf = { profile: null };
+let myOther = { profile: null };
+
 // Battle runtime
 const towers = [];
 let attackUnits = [];
@@ -77,12 +92,33 @@ let battleStarted = false;
 let towersDestroyedCount = 0;
 let totalTowers = 0;
 let unitsDeployedCount = 0;
-let victoryShown = false;
+// Single end-of-match guard (used for both victory and defeat) so the
+// spawn timeline, settle timer, and overlay flips all key off the same
+// flag instead of victory-only logic.
+let matchEnded = false;
 
-// Shared team lives — how many failed waves the team can absorb before
-// losing. A wave fails when both queues run out and towers still stand.
-const MAX_LIVES = 12;
-let teamLives = MAX_LIVES;
+// "Lives" in the HUD represents wave-attempts remaining — the team can
+// fail one wave per remaining attempt. Derived from current_wave /
+// total_waves on the siege row so there's no separate column to keep in
+// sync. Defeat triggers when this hits 0 (failure on the last wave).
+const livesRemaining = () => {
+  const current = siege?.current_wave ?? 1;
+  const total = siege?.total_waves ?? 15;
+  return Math.max(0, total - current + 1);
+};
+const livesMax = () => siege?.total_waves ?? 15;
+
+// ── SIMULATION EVENT BUS ──
+// Single hook point for discrete combat events. Local listeners drive HUD
+// + state writes; the multiplayer sync layer (added by coworker) will
+// attach a second listener that broadcasts each event to the other client
+// so neither needs to know about the other.
+//   'tower-destroyed' detail: { towerIndex, lastAttackerTeam, reward }
+//   'wave-failed'     detail: { wave, towersRemaining }
+//   'wave-completed'  detail: { wave, towersRemaining: 0 }
+//   'battle-ended'    detail: { outcome: 'victory' | 'defeat' }
+export const battleEvents = new EventTarget();
+const emit = (name, detail) => battleEvents.dispatchEvent(new CustomEvent(name, { detail }));
 
 // ── HELPERS ──
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => (
@@ -111,7 +147,7 @@ const returnToLobby = () => smoothNavigate('/lobby/lobby.html');
 const { data: { user } } = await supabase.auth.getUser();
 if (!user) window.location.href = '/login/login.html';
 
-// ── SPRITE STRIP ANIMATION (same approach as wave-1) ──
+// ── SPRITE STRIP ANIMATION ──
 const FRAME_DURATION_MS = 130;
 const spriteMetaCache = new Map();
 const spriteTimers = new WeakMap();
@@ -164,10 +200,10 @@ const animateSprite = async (spriteEl, unitId, scaleMultiplier = 1.6) => {
 const loadProfile = async (userId) => {
   const { data } = await supabase
     .from('profiles')
-    .select('user_id, username')
+    .select('user_id, username, points')
     .eq('user_id', userId)
     .maybeSingle();
-  return data || { user_id: userId, username: 'KNIGHT' };
+  return data || { user_id: userId, username: 'KNIGHT', points: 0 };
 };
 
 const loadSiege = async (siegeId) => {
@@ -254,21 +290,48 @@ const renderWaveTrack = (current, total) => {
 };
 
 // ── RENDER: ready controls ──
+// Both players see the same canonical states, just from their own POV:
+// the action button on the left side and the status indicator on the
+// right side both render off the same siege.host_queue_ready /
+// ally_queue_ready columns, so flipping ready on one client always
+// reflects on the other via the postgres_changes echo.
 const renderReadyControls = () => {
   const mySide = isHost ? 'host' : 'ally';
   const otherSide = isHost ? 'ally' : 'host';
-  const myQueue = siege[`${mySide}_wave1`] || [];
-  const myReady = !!siege[`${mySide}_wave1_ready`];
-  const otherReady = !!siege[`${otherSide}_wave1_ready`];
+  const myQueue = siege[`${mySide}_queue`] || [];
+  const otherQueue = siege[`${otherSide}_queue`] || [];
+  const myReady = !!siege[`${mySide}_queue_ready`];
+  const otherReady = !!siege[`${otherSide}_queue_ready`];
 
-  readyBtn.disabled = myQueue.length === 0 || battleStarted;
-  readyBtn.classList.toggle('is-ready', myReady);
-  readyBtn.textContent = battleStarted
-    ? '⚔ BATTLE IN PROGRESS ⚔'
-    : (myReady ? '⊘ STAND DOWN' : '⚔ LOCK IN WAVE ⚔');
+  // My button:
+  //   - "BATTLE IN PROGRESS" while the wave is actually running
+  //   - "QUEUE UNITS FIRST" disabled if I haven't queued anything
+  //   - "STAND DOWN" if I've locked in (re-press to unready)
+  //   - "LOCK IN WAVE" otherwise
+  readyBtn.disabled = battleStarted || myQueue.length === 0;
+  readyBtn.classList.toggle('is-ready', myReady && !battleStarted);
+  if (battleStarted) {
+    readyBtn.textContent = '⚔ BATTLE IN PROGRESS ⚔';
+  } else if (myQueue.length === 0) {
+    readyBtn.textContent = '◇ QUEUE UNITS FIRST ◇';
+  } else if (myReady) {
+    readyBtn.textContent = '⊘ STAND DOWN';
+  } else {
+    readyBtn.textContent = '⚔ LOCK IN WAVE ⚔';
+  }
 
-  otherReadyEl.classList.toggle('is-ready', otherReady);
-  otherReadyEl.querySelector('.setup-ready-text').textContent = otherReady ? 'READY' : 'NOT READY';
+  // Other player's indicator — three states, mirroring my button:
+  //   - "IN BATTLE" while the wave is running (both sides are committed)
+  //   - "READY" if they've locked in their queue
+  //   - "QUEUING…" if they haven't locked in yet (whether their queue is
+  //     empty or just unconfirmed — both look the same from my side)
+  otherReadyEl.classList.toggle('is-ready', otherReady && !battleStarted);
+  let otherText;
+  if (battleStarted) otherText = 'IN BATTLE';
+  else if (otherReady) otherText = 'READY';
+  else if (otherQueue.length > 0) otherText = 'QUEUING…';
+  else otherText = 'NOT READY';
+  otherReadyEl.querySelector('.setup-ready-text').textContent = otherText;
 };
 
 // ── RENDER: top-bar names/gold ──
@@ -280,17 +343,30 @@ const renderHeader = () => {
   selfNameEl.textContent = myName;
   otherNameEl.textContent = otherName;
 
-  const mySpent = queueCost(siege[`${mySide}_wave1`] || []);
-  const otherSpent = queueCost(siege[`${otherSide}_wave1`] || []);
-  selfGoldEl.textContent = String(Math.max(0, startingGold - mySpent));
-  otherGoldEl.textContent = String(Math.max(0, startingGold - otherSpent));
+  // Gold is now persisted on the siege row (host_gold/ally_gold) so it
+  // carries across waves and tower-kill rewards stick. Falls back to the
+  // pre-battle derivation while the wave is still being queued for the
+  // very first time (host hasn't seeded the columns yet).
+  const myGold = siege[`${mySide}_gold`];
+  const otherGold = siege[`${otherSide}_gold`];
+  const mySpent = queueCost(siege[`${mySide}_queue`] || []);
+  const otherSpent = queueCost(siege[`${otherSide}_queue`] || []);
+  selfGoldEl.textContent = String(Number.isFinite(myGold) && myGold > 0
+    ? myGold
+    : Math.max(0, startingGold - mySpent));
+  otherGoldEl.textContent = String(Number.isFinite(otherGold) && otherGold > 0
+    ? otherGold
+    : Math.max(0, startingGold - otherSpent));
 
-  // Shards are visual-only for now.
-  selfShardsEl.textContent = '0';
-  otherShardsEl.textContent = '0';
+  // POINTS = lifetime profile.points, read once on battle entry. No live
+  // updates mid-match — the value only changes via award_match_points()
+  // and will refresh on the next page load.
+  selfPointsEl.textContent = String(mySelf?.profile?.points ?? 0);
+  otherPointsEl.textContent = String(myOther?.profile?.points ?? 0);
 
-  // Shared team lives — decremented in checkWaveOutcome().
-  livesLabelEl.textContent = `${teamLives} / ${MAX_LIVES}`;
+  // "Lives" = remaining wave attempts. Derived from current_wave /
+  // total_waves on the siege row — no separate column to sync.
+  livesLabelEl.textContent = `${livesRemaining()} / ${livesMax()}`;
 };
 
 // ── MAIN RENDER ──
@@ -300,10 +376,9 @@ const render = () => {
   const otherSide = isHost ? 'ally' : 'host';
   const myTypes = siege[`${mySide}_units`] || [];
   const otherTypes = siege[`${otherSide}_units`] || [];
-  const myQueue = siege[`${mySide}_wave1`] || [];
-  const otherQueue = siege[`${otherSide}_wave1`] || [];
-  const mySpent = queueCost(myQueue);
-  const myRemaining = Math.max(0, startingGold - mySpent);
+  const myQueue = siege[`${mySide}_queue`] || [];
+  const otherQueue = siege[`${otherSide}_queue`] || [];
+  const myRemaining = myGoldNow();
 
   renderHeader();
   // Interactive types disabled once the battle is rolling (no mid-wave changes).
@@ -333,11 +408,21 @@ const updateSiege = async (patch) => {
   return data;
 };
 
+// Gold is debited/refunded immediately against siege.host_gold /
+// ally_gold so it persists across waves. Falls back to startingGold for
+// the very first queue change when the column hasn't been seeded yet.
+const myGoldNow = () => {
+  const k = isHost ? 'host_gold' : 'ally_gold';
+  const v = siege?.[k];
+  return Number.isFinite(v) && v > 0 ? v : startingGold;
+};
+
 const addToQueue = (unitId) => {
   if (!siege || battleStarted) return;
-  const mySide = isHost ? 'host_wave1' : 'ally_wave1';
-  const readyKey = isHost ? 'host_wave1_ready' : 'ally_wave1_ready';
-  const queue = [...(siege[mySide] || [])];
+  const queueKey = isHost ? 'host_queue' : 'ally_queue';
+  const goldKey = isHost ? 'host_gold' : 'ally_gold';
+  const readyKey = isHost ? 'host_queue_ready' : 'ally_queue_ready';
+  const queue = [...(siege[queueKey] || [])];
   const unit = UNITS_BY_ID.get(unitId);
   if (!unit) return;
 
@@ -348,13 +433,14 @@ const addToQueue = (unitId) => {
     showAlert(`✗ QUEUE FULL (${queueCap} MAX)`, 'error');
     return;
   }
-  const spent = queueCost(queue);
-  if (spent + deployCost(unit) > startingGold) {
+  const cost = deployCost(unit);
+  const have = myGoldNow();
+  if (cost > have) {
     showAlert('✗ NOT ENOUGH GOLD', 'error');
     return;
   }
   queue.push(unitId);
-  const patch = { [mySide]: queue };
+  const patch = { [queueKey]: queue, [goldKey]: have - cost };
   if (siege[readyKey]) patch[readyKey] = false;
   applySiegeUpdate({ ...siege, ...patch });
   updateSiege(patch);
@@ -362,12 +448,17 @@ const addToQueue = (unitId) => {
 
 const removeFromQueue = (idx) => {
   if (!siege || battleStarted) return;
-  const mySide = isHost ? 'host_wave1' : 'ally_wave1';
-  const readyKey = isHost ? 'host_wave1_ready' : 'ally_wave1_ready';
-  const queue = [...(siege[mySide] || [])];
+  const queueKey = isHost ? 'host_queue' : 'ally_queue';
+  const goldKey = isHost ? 'host_gold' : 'ally_gold';
+  const readyKey = isHost ? 'host_queue_ready' : 'ally_queue_ready';
+  const queue = [...(siege[queueKey] || [])];
   if (idx < 0 || idx >= queue.length) return;
-  queue.splice(idx, 1);
-  const patch = { [mySide]: queue };
+  const removed = queue.splice(idx, 1)[0];
+  const refund = deployCostById(removed);
+  const patch = {
+    [queueKey]: queue,
+    [goldKey]: myGoldNow() + refund,
+  };
   if (siege[readyKey]) patch[readyKey] = false;
   applySiegeUpdate({ ...siege, ...patch });
   updateSiege(patch);
@@ -376,9 +467,9 @@ const removeFromQueue = (idx) => {
 const toggleReady = async () => {
   if (!siege || battleStarted) return;
   const mySide = isHost ? 'host' : 'ally';
-  const queue = siege[`${mySide}_wave1`] || [];
+  const queue = siege[`${mySide}_queue`] || [];
   if (queue.length === 0) return;
-  const readyKey = `${mySide}_wave1_ready`;
+  const readyKey = `${mySide}_queue_ready`;
   const next = !siege[readyKey];
   applySiegeUpdate({ ...siege, [readyKey]: next });
   await updateSiege({ [readyKey]: next });
@@ -457,18 +548,31 @@ const createUnitFromId = (unitId, position, laneOffset) => {
   return unit;
 };
 
+// Track whether the current wave has already been judged so the settle
+// timeout doesn't double-fire (e.g. on re-renders / state replays).
+let waveJudged = false;
+let waveSettleTimer = null;
+// Monotonic wave-attempt counter so spawn timeouts from a finished/failed
+// wave can't leak units into the next wave. Bumped every startWave().
+let waveAttemptId = 0;
+
 const spawnWaveQueues = () => {
-  const hostQueue = siege.host_wave1 || [];
-  const allyQueue = siege.ally_wave1 || [];
+  const hostQueue = siege.host_queue || [];
+  const allyQueue = siege.ally_queue || [];
 
   const spawnGap = 220;
   const spacing = 10;
   const dir = pathStartDirection();
+  // Snapshot the current attempt — pending timeouts compare against this
+  // and drop themselves if the wave has been re-armed since they were
+  // scheduled. Survives both wave failure and wave advancement.
+  const myAttempt = waveAttemptId;
 
   const spawn = (queue, laneOffset, team) => {
     queue.forEach((unitId, i) => {
       setTimeout(() => {
-        if (victoryShown) return;
+        if (matchEnded) return;
+        if (myAttempt !== waveAttemptId) return; // stale wave — drop
         const pos = { x: path[0].x, y: path[0].y };
         const unit = createUnitFromId(unitId, pos, laneOffset);
         unit.team = team;
@@ -488,38 +592,165 @@ const spawnWaveQueues = () => {
   // units to finish marching and dying before we judge.
   const longest = Math.max(hostQueue.length, allyQueue.length);
   const settleMs = longest * spawnGap + 6000;
-  setTimeout(checkWaveOutcome, settleMs);
+  if (waveSettleTimer) clearTimeout(waveSettleTimer);
+  waveSettleTimer = setTimeout(checkWaveOutcome, settleMs);
 };
 
-// Called once after the wave's units have spawned and had time to fight.
-// Per-side failure: that side's queue is exhausted (no living units of theirs
-// remain) AND towers still stand. Each failure burns one life.
+// Called continuously from animate() once the wave has begun, AND from
+// the settle timer as a safety net. Fires either 'wave-completed'
+// (towers gone) or 'wave-failed' (all queued units spawned and dead,
+// towers still standing). Guarded by waveJudged so it fires at most
+// once per wave.
 const checkWaveOutcome = () => {
-  if (victoryShown) return;
+  if (matchEnded || waveJudged || !battleStarted) return;
   if (towers.length === 0) {
-    // Victory — both sides cleared the towers. No lives lost.
+    waveJudged = true;
+    emit('wave-completed', { wave: siege?.current_wave ?? 1, towersRemaining: 0 });
     return;
   }
+  // Wave can only fail once every queued unit has had a chance to spawn —
+  // otherwise we'd judge before late spawns even hit the field. The
+  // expected total spawn count equals host_queue.length + ally_queue.length.
+  const expectedTotal = (siege?.host_queue?.length ?? 0) + (siege?.ally_queue?.length ?? 0);
+  if (unitsDeployedCount < expectedTotal) return;
   const hostAlive = attackUnits.some(u => !u.isDead && u.team === 'host');
   const allyAlive = attackUnits.some(u => !u.isDead && u.team === 'ally');
-  if (hostAlive || allyAlive) return; // wave still resolving
-
-  // Wave failed — burn one shared life.
-  teamLives = Math.max(0, teamLives - 1);
-  renderHeader();
+  if (hostAlive || allyAlive) return;
+  waveJudged = true;
+  emit('wave-failed', { wave: siege?.current_wave ?? 1, towersRemaining: towers.length });
 };
 
-const showVictory = () => {
-  if (victoryShown) return;
-  victoryShown = true;
-  statTowersEl.textContent = `${towersDestroyedCount} / ${totalTowers}`;
-  statLivesEl.textContent = `${teamLives} / ${MAX_LIVES}`;
-  statUnitsEl.textContent = String(unitsDeployedCount);
-  victoryOverlay.classList.remove('hidden');
-  victoryOverlay.setAttribute('aria-hidden', 'false');
+// Renders the end-of-match overlay (victory or defeat — both share the
+// same structure with different copy / accent colour). Host writes the
+// authoritative outcome + contribution JSONB so award_match_points()
+// gives both clients the same payout.
+const showEndOverlay = async (outcome) => {
+  if (matchEnded) return;
+  matchEnded = true;
+  if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
+
+  const overlay = outcome === 'victory' ? victoryOverlay : defeatOverlay;
+  const statsOf = outcome === 'victory'
+    ? { towers: statTowersEl, lives: statLivesEl, units: statUnitsEl }
+    : { towers: statTowersDefeatEl, lives: statLivesDefeatEl, units: statUnitsDefeatEl };
+
+  if (statsOf.towers) statsOf.towers.textContent = `${towersDestroyedCount} / ${totalTowers}`;
+  if (statsOf.lives)  statsOf.lives.textContent = `${livesRemaining()} / ${livesMax()}`;
+  if (statsOf.units)  statsOf.units.textContent = String(unitsDeployedCount);
+
+  overlay.classList.remove('hidden');
+  overlay.setAttribute('aria-hidden', 'false');
+
+  // Only the host writes outcome + contribution so the two clients don't
+  // race the payout RPC. The ally sees the row update via realtime and
+  // calls the RPC too — the second call hits the idempotency guard
+  // ('already_paid') and we treat that as a no-op so both HUDs render
+  // their reward.
+  if (isHost && siege.outcome !== outcome) {
+    const patch = {
+      outcome,
+      phase: 'complete',
+      host_contribution: contribution.host,
+      ally_contribution: contribution.ally,
+    };
+    applySiegeUpdate({ ...siege, ...patch });
+    await updateSiege(patch);
+  }
+  emit('battle-ended', { outcome });
+  await claimRewards(outcome);
 };
 
-victoryLobbyBtn.addEventListener('click', returnToLobby);
+// Server-validated payout. award_match_points() splits the pool 60/40
+// based on host_contribution / ally_contribution and bumps profiles.points
+// for both players. Idempotent via siege.ended_at — the second client to
+// call this gets 'already_paid' which we silently treat as success.
+const claimRewards = async (outcome) => {
+  if (!siege || (siege.outcome !== 'victory' && siege.outcome !== 'defeat')) return;
+  const { data, error } = await supabase.rpc('award_match_points', { p_siege: siege.id });
+  if (error) {
+    if (!String(error.message || '').includes('already_paid')) {
+      console.error('award_match_points failed', error);
+    }
+    return;
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return;
+  const myPoints = isHost ? row.host_award : row.ally_award;
+  const target = outcome === 'victory' ? rewardPointsEl : rewardPointsDefeatEl;
+  if (target) target.textContent = `+ ${myPoints ?? 0}`;
+};
+
+// End-of-match return-to-lobby. The match is over, so the siege row has
+// no further use — disband it the same way siege-setup does so both
+// clients' postgres_changes DELETE handlers bounce them back. If the
+// delete fails (RLS / network), still navigate locally so the user
+// isn't stuck. Idempotent: the second click (or the partner's click)
+// just deletes a row that's already gone.
+const disbandAndLeave = async (btn) => {
+  if (btn) btn.disabled = true;
+  if (siege?.id) {
+    const { error } = await supabase.from('sieges').delete().eq('id', siege.id);
+    if (error) console.error('post-match disband failed', error);
+  }
+  returnToLobby();
+};
+victoryLobbyBtn.addEventListener('click', () => disbandAndLeave(victoryLobbyBtn));
+if (defeatLobbyBtn) defeatLobbyBtn.addEventListener('click', () => disbandAndLeave(defeatLobbyBtn));
+
+// ── BATTLE EVENT WIRING ──
+// All discrete combat outcomes go through battleEvents above. Local
+// listeners drive HUD + state writes; the sync layer can mirror.
+
+// A tower fell. Credit the killing side for the tower kill and the gold
+// reward. Host writes both gold columns so the row reflects the shared
+// payout (game-flow §10 — both players bank tower-kill gold).
+battleEvents.addEventListener('tower-destroyed', (e) => {
+  const { lastAttackerTeam, reward } = e.detail;
+  if (lastAttackerTeam) creditTowerKill(lastAttackerTeam);
+  if (isHost && reward) {
+    const next = {
+      host_gold: Math.max(0, (siege.host_gold ?? 0) + reward),
+      ally_gold: Math.max(0, (siege.ally_gold ?? 0) + reward),
+    };
+    applySiegeUpdate({ ...siege, ...next });
+    updateSiege(next);
+  }
+});
+
+// All towers destroyed = victory, regardless of which wave we're on.
+// Clearing the map early is the win condition; remaining waves are
+// "you had room to spare," not unfinished work.
+battleEvents.addEventListener('wave-completed', async () => {
+  await showEndOverlay('victory');
+});
+
+// Wave failed (all friendly units dead, towers still standing). The team
+// gets to try again on the next wave — the HUD heart counter is derived
+// from total_waves - current_wave + 1, so just bumping current_wave is
+// enough to tick the counter down. There is no separate team_lives
+// column to maintain.
+//
+// If this was the last wave, that's defeat. Otherwise the host bumps
+// current_wave + clears the queues so both clients re-enter prep.
+battleEvents.addEventListener('wave-failed', async () => {
+  if (!isHost) return;
+  const current = siege.current_wave || 1;
+  const total = siege.total_waves || 15;
+  if (current >= total) {
+    await showEndOverlay('defeat');
+    return;
+  }
+  const patch = {
+    current_wave: current + 1,
+    host_queue: [],
+    ally_queue: [],
+    host_queue_ready: false,
+    ally_queue_ready: false,
+    phase: 'prep',
+  };
+  applySiegeUpdate({ ...siege, ...patch });
+  await updateSiege(patch);
+});
 
 const updateWaveProgress = () => {
   const destroyed = towersDestroyedCount;
@@ -529,9 +760,17 @@ const updateWaveProgress = () => {
   towersRemainingEl.textContent = `TOWERS REMAINING: ${totalTowers - destroyed}`;
 };
 
+// Wall-clock deltaTime so the simulation runs at the same speed on 60Hz
+// and 144Hz monitors. Cap at 100ms to prevent teleport-on-tab-return.
+let lastFrameTime = performance.now();
+
 const animate = () => {
   animationId = requestAnimationFrame(animate);
   if (!mapLoaded) return;
+
+  const now = performance.now();
+  sim.dt = Math.min(100, now - lastFrameTime);
+  lastFrameTime = now;
 
   gameCanvas.drawImage(backgroundImage, 0, 0);
 
@@ -548,11 +787,16 @@ const animate = () => {
       unit.target = tower;
     } else {
       if (tower.isDead) {
-        towers.shift();
+        const dead = towers.shift();
         towersDestroyedCount++;
         updateWaveProgress();
         renderHeader();
-        if (towers.length === 0) showVictory();
+        emit('tower-destroyed', {
+          towerIndex: towersDestroyedCount - 1,
+          lastAttackerTeam: dead?.lastAttackerTeam ?? null,
+          reward: dead?.reward ?? 0,
+        });
+        if (towers.length === 0) checkWaveOutcome();
       }
       unit.target = null;
     }
@@ -564,27 +808,110 @@ const animate = () => {
     const target = attackUnits.find(u => !u.isDead);
     tower.updateFrame(target);
   });
+
+  // Continuously check whether the wave has resolved so failure feedback
+  // is instant. The settle timer in spawnWaveQueues() is still kept as a
+  // belt-and-braces fallback in case unitsDeployedCount somehow undercounts.
+  if (battleStarted) checkWaveOutcome();
 };
 
-const startBattle = () => {
-  if (battleStarted || !mapLoaded) return;
+// Kick off one wave of combat. Called for each wave in the multi-wave
+// loop, not just the first one — re-uses the same banner / spawn / settle
+// machinery between waves.
+const startWave = () => {
+  if (!mapLoaded || matchEnded) return;
+  if (battleStarted) return; // already running this wave
   battleStarted = true;
+  waveJudged = false;
+  waveAttemptId++;
   attackUnits = [];
-  towersDestroyedCount = 0;
+  // Towers persist across waves — damage and destruction from previous
+  // waves carries over. Only seed the full set on the very first wave
+  // (or if the page reloaded mid-match and the local tower array is
+  // empty). towersDestroyedCount is local-only and tracks per-match
+  // progress; don't reset it between waves.
+  if (towers.length === 0 && towersDestroyedCount === 0) {
+    initialiseTowers();
+  }
+  updateWaveProgress();
+  // Per-wave contribution accumulates into the same totals across the
+  // whole match — only zero it once per match (first wave). After the
+  // first wave the totals just keep climbing.
+  if ((siege.current_wave ?? 1) === 1) resetContribution();
+
   bothReadyBanner.classList.remove('hidden');
   setTimeout(() => bothReadyBanner.classList.add('hidden'), 1400);
   spawnWaveQueues();
+  renderWaveTrack(siege.current_wave || 1, siege.total_waves || 15);
   render();
+
+  // First-wave bookkeeping: host seeds gold for both sides and flips
+  // phase to 'battle'. On subsequent waves gold already persists; we
+  // only flip phase back to 'battle' from 'prep'.
+  if (isHost) {
+    const patch = {};
+    if (siege.phase !== 'battle') patch.phase = 'battle';
+    if (!Number.isFinite(siege.host_gold) || siege.host_gold === 0) patch.host_gold = startingGold;
+    if (!Number.isFinite(siege.ally_gold) || siege.ally_gold === 0) patch.ally_gold = startingGold;
+    if (Object.keys(patch).length) {
+      applySiegeUpdate({ ...siege, ...patch });
+      updateSiege(patch);
+    }
+  }
 };
 
 // ── REALTIME RECONCILIATION ──
+// Stale-write guard: optimistic local applies use an in-memory row that
+// hasn't been round-tripped through Supabase, so the realtime echo of an
+// earlier write can land *after* a later optimistic apply and regress
+// state. Track the highest phase + current_wave we've seen and ignore
+// any incoming row that's behind.
+const phaseOrder = { lobby: 0, setup: 1, prep: 2, battle: 3, complete: 4 };
+
 const applySiegeUpdate = (fresh) => {
   if (!fresh || fresh.id !== siege?.id) return;
+  // Drop rows that are strictly older than what we already have.
+  // - Lower current_wave: stale.
+  // - Same wave but lower phase order: stale (e.g. echo of 'battle'
+  //   arriving after we've optimistically flipped to 'prep' for the
+  //   re-attempt). Outcome is a one-way door — once set, never unset.
+  if (siege) {
+    const freshWave = fresh.current_wave ?? 1;
+    const liveWave = siege.current_wave ?? 1;
+    if (freshWave < liveWave) return;
+    if (freshWave === liveWave) {
+      const freshPhaseOrd = phaseOrder[fresh.phase] ?? 0;
+      const livePhaseOrd = phaseOrder[siege.phase] ?? 0;
+      if (freshPhaseOrd < livePhaseOrd) return;
+    }
+    if (siege.outcome && !fresh.outcome) return;
+  }
+  const prevPhase = siege?.phase;
   siege = fresh;
   render();
 
-  const bothReady = !!siege.host_wave1_ready && !!siege.ally_wave1_ready;
-  if (bothReady && !battleStarted) startBattle();
+  // Phase flipped back to 'prep' — wave failed and the host bumped
+  // current_wave. Drop the battle-running state so the queue UI re-enables
+  // and clear the in-flight unit list, but DO NOT touch towersDestroyedCount
+  // or the towers array — map state persists across waves so the next wave
+  // continues the assault on whatever's left standing. unitsDeployedCount
+  // resets per wave so the new wave's expected-total check works.
+  if (siege.phase === 'prep' && prevPhase !== 'prep') {
+    battleStarted = false;
+    waveJudged = false;
+    if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
+    attackUnits = [];
+    unitsDeployedCount = 0;
+    updateWaveProgress();
+  }
+  // End-of-match overlay if the host wrote outcome from the other client.
+  if (siege.outcome && !matchEnded) {
+    showEndOverlay(siege.outcome);
+    return;
+  }
+  // Both sides ready — start (or re-start, between waves) the current wave.
+  const bothReady = !!siege.host_queue_ready && !!siege.ally_queue_ready;
+  if (bothReady && !battleStarted && !matchEnded) startWave();
 };
 
 // ── MAP LOAD ──
@@ -596,11 +923,11 @@ backgroundImage.onload = () => {
   towers.forEach(t => t.render());
   updateWaveProgress();
   if (!animationId) animate();
-  if (siege && siege.host_wave1_ready && siege.ally_wave1_ready) startBattle();
+  if (siege && siege.host_queue_ready && siege.ally_queue_ready) startWave();
 };
 
 // ── INIT ──
-const handoffId = sessionStorage.getItem('wave1SiegeId');
+const handoffId = sessionStorage.getItem('battleSiegeId');
 
 siege = await loadSiege(handoffId);
 if (!siege && handoffId) {
@@ -636,10 +963,12 @@ if (!siege) {
     loadProfile(myUid),
     otherUid ? loadProfile(otherUid) : Promise.resolve(null),
   ]);
+  mySelf  = { profile: meProfile || { points: 0 } };
+  myOther = { profile: themProfile || { points: 0 } };
   if (meProfile?.username) siege[isHost ? 'host_username' : 'ally_username'] = meProfile.username;
   if (themProfile?.username) siege[isHost ? 'ally_username' : 'host_username'] = themProfile.username;
 
-  renderWaveTrack(1, 15);
+  renderWaveTrack(siege.current_wave || 1, siege.total_waves || 15);
   render();
 
   // Map + tower init kicks off via backgroundImage.onload below.
@@ -651,6 +980,11 @@ if (!siege) {
       (payload) => applySiegeUpdate(payload.new))
     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'sieges', filter: `id=eq.${siege.id}` },
       () => {
+        // After the match has ended, the row delete is just cleanup
+        // triggered by either player clicking Lobby on the end overlay.
+        // Don't bounce — let the user read their reward and leave when
+        // they want via their own button.
+        if (matchEnded) return;
         showAlert('☠ THE SIEGE WAS DISBANDED', 'error');
         setTimeout(returnToLobby, 900);
       })

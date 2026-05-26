@@ -740,6 +740,22 @@ body { overflow: hidden; }
   width: 100%;
 }
 
+/* ── DEFEAT OVERLAY (red variant of victory) ─── */
+.game-defeat-card {
+  border-color: #4d1212;
+  box-shadow: 6px 6px 0 #0a0202,
+              0 0 28px 6px rgba(192, 64, 64, 0.32),
+              inset 0 0 0 1px rgba(255, 120, 100, 0.22);
+}
+.game-defeat-corner {
+  border-color: #c04040;
+  background: #4d1212;
+}
+.game-defeat-title {
+  color: #ff8a8a;
+  text-shadow: 3px 3px 0 #000, 0 0 12px rgba(255, 80, 60, 0.55);
+}
+
 /* ── RESPONSIVE ─────────────────────────────── */
 @media (max-width: 1400px) {
   .game-main { grid-template-columns: 240px 1fr 240px; }

@@ -254,7 +254,8 @@ export class Archer extends Unit {
             const dy = target.centre.y - (projectile.y + this.projectileSize / 2);
 
             if (Math.hypot(dx, dy) <= this.projectileSize + 4) {
-                target.takeDamage(projectile.damage);
+                // Pass `this` so the tower can credit the team.
+                target.takeDamage(projectile.damage, this);
                 return false;
             }
 

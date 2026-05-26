@@ -13,7 +13,6 @@ export class Tower extends Sprite {
 
     reward = 80;
 
-    //keep combat values (not in parent actually)
     attackRadius = 200;
     attackDamage = 10;
     attackCooldownMs = 800;
@@ -30,6 +29,9 @@ export class Tower extends Sprite {
     projectileSpeed = 5;
     projectileSize = 8;
 
+    lastHitBy = null;
+    rewardGranted = false;
+
     static image = null;
     static loaded = false;
 
@@ -44,13 +46,11 @@ export class Tower extends Sprite {
             Tower.image.onload = () => {
                 Tower.loaded = true;
             };
-
             Tower.image.src = "../assets/Tower/tower_1.png";
         }
     }
 
     render() {
-        //early return pattern (review feedback)
         if (!Tower.image || !Tower.loaded) return;
 
         this.gameCanvas.drawImage(
@@ -83,16 +83,35 @@ export class Tower extends Sprite {
         this.gameCanvas.strokeRect(x, y, this.width, 6);
     }
 
-    takeDamage(amount, attacker) {
-        this.health -= amount;
-        if (attacker?.team) {
-            this.lastAttackerTeam = attacker.team;
-            creditDamage(attacker.team, amount);
+    takeDamage(amount, attackerId = null) {
+        if (this.isDead) return;
+
+        if (attackerId) {
+            this.lastHitBy = attackerId;
         }
-        // Death detection + gold payout happens in battle.js animate(),
-        // which reads lastAttackerTeam and fires the 'tower-destroyed'
-        // event so per-side gold and towers_destroyed credit go through
-        // a single hook point.
+
+        this.health -= amount;
+
+        if (this.health <= 0) {
+            this.health = 0;
+            this.grantRewardOnce();
+        }
+    }
+
+    grantRewardOnce() {
+        if (this.rewardGranted) return;
+        this.rewardGranted = true;
+
+        const winnerId = this.lastHitBy;
+
+        if (typeof window.awardTowerReward === "function") {
+            window.awardTowerReward(winnerId, this.reward);
+            return;
+        }
+
+        if (typeof window.addGold === "function") {
+            window.addGold(this.reward);
+        }
     }
 
     findTarget(unit) {
@@ -132,16 +151,13 @@ export class Tower extends Sprite {
         if (!this.target) return;
 
         const now = performance.now();
-
         if (now - this.lastAttackAt < this.attackCooldownMs) return;
 
         this.lastAttackAt = now;
-
         this.spawnProjectile(this.target);
     }
 
     updateProjectiles() {
-        //still using filter intentionally
         this.projectiles = this.projectiles.filter(p => {
             p.x += p.vx;
             p.y += p.vy;
@@ -160,10 +176,10 @@ export class Tower extends Sprite {
                 if (typeof target.takeDamage === "function") {
                     target.takeDamage(p.damage);
                 }
-                return false; // remove projectile
+                return false;
             }
 
-            return true; // keep projectile
+            return true;
         });
     }
 
@@ -173,7 +189,6 @@ export class Tower extends Sprite {
         this.findTarget(unit);
         this.attack();
         this.updateProjectiles();
-
         this.render();
     }
 }

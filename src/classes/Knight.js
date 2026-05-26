@@ -51,18 +51,30 @@ export class Knight extends Unit {
             Knight.idleImage = new Image();
             Knight.idleImage.onload = () => { Knight.idleImageLoaded = true; };
             Knight.idleImage.src = "../assets/Knight/Knight/Knight-Idle.png";
+            Knight.idleImage.onload = () => {
+                Knight.idleImageLoaded = true;
+            };
+            Knight.idleImage.src = "/assets/Knight/Knight/Knight-Idle.png";
         }
 
         if (!Knight.attackImage) {
             Knight.attackImage = new Image();
             Knight.attackImage.onload = () => { Knight.attackImageLoaded = true; };
             Knight.attackImage.src = "../assets/Knight/Knight/Knight-Attack01.png";
+            Knight.attackImage.onload = () => {
+                Knight.attackImageLoaded = true;
+            };
+            Knight.attackImage.src = "/assets/Knight/Knight/Knight-Attack01.png";
         }
 
         if (!Knight.walkImage) {
             Knight.walkImage = new Image();
             Knight.walkImage.onload = () => { Knight.walkImageLoaded = true; };
             Knight.walkImage.src = "../assets/Knight/Knight/Knight-Walk.png";
+            Knight.walkImage.onload = () => {
+                Knight.walkImageLoaded = true;
+            };
+            Knight.walkImage.src = "/assets/Knight/Knight/Knight-Walk.png";
         }
     }
 
@@ -110,13 +122,16 @@ export class Knight extends Unit {
                 : (usingWalkSheet ? this.currentWalkFrame : 0);
 
             const sx = frameIndex * frameSize;
+            const sy = 0;
+            const sw = frameSize;
+            const sh = frameSize;
 
             this.gameCanvas.drawImage(
                 spriteSheet,
                 sx,
-                0,
-                frameSize,
-                frameSize,
+                sy,
+                sw,
+                sh,
                 this.position.x - (this.drawWidth - this.width) / 2,
                 this.position.y - (this.drawHeight - this.height) / 2,
                 this.drawWidth,
@@ -180,4 +195,5 @@ export class Knight extends Unit {
         const movedDistance = Math.hypot(this.position.x - beforeX, this.position.y - beforeY);
         this.isMoving = movedDistance > 0.001;
     }
+
 }

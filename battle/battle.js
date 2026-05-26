@@ -11,6 +11,11 @@ import { path } from '/src/data/path.js';
 import { towerLocations } from '/src/data/towerLocations.js';
 import { Archer } from '/src/classes/Archer.js';
 import { Knight } from '/src/classes/Knight.js';
+import { Orc } from '/src/classes/Orc.js';
+import { Soldier } from '/src/classes/Soldier.js';
+import { Swordsman } from '/src/classes/Swordsman.js';
+import { Slime } from '/src/classes/Slime.js';
+import { Skeleton } from '/src/classes/Skeleton.js';
 import { Tower } from '/src/classes/Tower.js';
 import { Unit } from '/src/classes/Unit.js';
 import { sim } from '/src/runtime/sim.js';
@@ -633,6 +638,11 @@ const createUnitFromId = (unitId, position, laneOffset) => {
   // block placeholder until a proper class is added.
   if (lower === 'archer') unit = new Archer(position, gameCanvas);
   else if (lower === 'knight') unit = new Knight(position, gameCanvas);
+  else if (lower === 'orc') unit = new Orc(position, gameCanvas);
+  else if (lower === 'soldier') unit = new Soldier(position, gameCanvas);
+  else if (lower === 'swordsman') unit = new Swordsman(position, gameCanvas);
+  else if (lower === 'slime') unit = new Slime(position, gameCanvas);
+  else if (lower === 'skeleton') unit = new Skeleton(position, gameCanvas);
   else unit = new PlaceholderUnit(position, gameCanvas, id);
   unit.laneOffset = (typeof laneOffset === 'number') ? laneOffset : 0;
   unit.pathRef = path;

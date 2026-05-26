@@ -439,7 +439,7 @@ const applySiegeUpdate = (fresh) => {
   siege = fresh;
   render();
 
-  // Both sides ready → both clients race to game.html. Wave queue is now
+  // Both sides ready → both clients race to match.html. Wave queue is now
   // built in the in-game HUD, so we skip the separate wave-1 page.
   const bothReady = !!siege.host_ready && !!siege.ally_ready;
   if (bothReady && !navigated) {
@@ -447,7 +447,7 @@ const applySiegeUpdate = (fresh) => {
     bothReadyBanner.classList.remove('hidden');
     bothReadyBanner.setAttribute('aria-hidden', 'false');
     sessionStorage.setItem('wave1SiegeId', siege.id);
-    setTimeout(() => smoothNavigate('/game/game.html'), 1100);
+    setTimeout(() => smoothNavigate('/battle/battle.html'), 1100);
     return;
   }
 

@@ -49,6 +49,8 @@ export class Knight extends Unit {
     static loadAssets() {
         if (!Knight.idleImage) {
             Knight.idleImage = new Image();
+            Knight.idleImage.onload = () => { Knight.idleImageLoaded = true; };
+            Knight.idleImage.src = "../assets/Knight/Knight/Knight-Idle.png";
             Knight.idleImage.onload = () => {
                 Knight.idleImageLoaded = true;
             };
@@ -57,6 +59,8 @@ export class Knight extends Unit {
 
         if (!Knight.attackImage) {
             Knight.attackImage = new Image();
+            Knight.attackImage.onload = () => { Knight.attackImageLoaded = true; };
+            Knight.attackImage.src = "../assets/Knight/Knight/Knight-Attack01.png";
             Knight.attackImage.onload = () => {
                 Knight.attackImageLoaded = true;
             };
@@ -65,6 +69,8 @@ export class Knight extends Unit {
 
         if (!Knight.walkImage) {
             Knight.walkImage = new Image();
+            Knight.walkImage.onload = () => { Knight.walkImageLoaded = true; };
+            Knight.walkImage.src = "../assets/Knight/Knight/Knight-Walk.png";
             Knight.walkImage.onload = () => {
                 Knight.walkImageLoaded = true;
             };
@@ -133,7 +139,6 @@ export class Knight extends Unit {
             );
 
             this.drawHealthBar();
-
             return;
         }
 
@@ -168,7 +173,8 @@ export class Knight extends Unit {
 
         if (!this.hasAppliedHit && this.currentAttackFrame >= this.attackReleaseFrame) {
             if (!this.target.isDead) {
-                this.target.takeDamage(this.attackStrength);
+                const attackerId = this.ownerId || null;
+                this.target.takeDamage(this.attackStrength, attackerId);
             }
             this.hasAppliedHit = true;
         }

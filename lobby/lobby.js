@@ -136,7 +136,14 @@ const findOwnEngagement = () => sieges.find(
 
 // ── ROOM LIST ──
 const renderRoomList = () => {
-  const filtered = sieges.filter(s => s.difficulty === currentDiff);
+  // Only show sieges in the 'lobby' phase — once siege-setup advances it
+  // to 'setup'/'prep'/'battle' the room is no longer joinable. Default of
+  // 'lobby' (migration 004) means existing rows without an explicit value
+  // still appear. The phase column is a no-op for clients that haven't
+  // applied migration 004 — those rows return undefined and fall through.
+  const filtered = sieges.filter(s =>
+    s.difficulty === currentDiff && (s.phase ? s.phase === 'lobby' : true)
+  );
   roomListEl.innerHTML = '';
   if (!filtered.length) {
     roomListEl.innerHTML = `

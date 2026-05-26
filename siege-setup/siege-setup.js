@@ -106,12 +106,19 @@ const loadIdleMeta = (unitId) => {
 
 // Drive an animated idle on a sprite element. Stops any prior animation
 // on the same element so re-rendering doesn't leak timers.
-const animateSprite = async (spriteEl, unitId, stageSize) => {
+const animateSprite = async (spriteEl, unitId, stageSize, scaleMultiplier = 3.0) => {
   const prev = spriteTimers.get(spriteEl);
   if (prev) clearInterval(prev);
   const meta = await loadIdleMeta(unitId);
   if (!spriteEl.isConnected) return;
-  const scale = (stageSize - 6) / Math.max(meta.frameWidth, meta.frameHeight);
+  // Sprite frames pack the character into the center of the frame with
+  // transparent padding for attack FX. Scale to a visual box larger than
+  // the stage so the character reads at full size — stages use
+  // overflow: visible to let the padding spill. If stageSize is null,
+  // measure the parent stage at runtime (used when the stage is fluid,
+  // like the pool cells which size from the grid).
+  const effectiveStage = stageSize ?? (spriteEl.parentElement?.getBoundingClientRect().width || 48);
+  const scale = (effectiveStage * scaleMultiplier) / Math.max(meta.frameWidth, meta.frameHeight);
   spriteEl.style.width = `${meta.frameWidth}px`;
   spriteEl.style.height = `${meta.frameHeight}px`;
   spriteEl.style.backgroundSize = `${meta.sheetWidth}px ${meta.frameHeight}px`;
@@ -213,7 +220,9 @@ const renderPool = (containerEl, units, picks, interactive) => {
       <div class="setup-pool-name">${escapeHtml(unit.id.toUpperCase())}</div>
     `;
     const spriteEl = card.querySelector('.setup-pool-sprite');
-    animateSprite(spriteEl, unit.id, 48);
+    // null stageSize => measure the actual stage (which now fills the card),
+    // so the sprite scales with the card regardless of grid column width.
+    animateSprite(spriteEl, unit.id, null, 1.6);
     if (interactive && !isPicked) {
       card.addEventListener('click', () => addPick(unit.id));
     }
@@ -430,15 +439,20 @@ const applySiegeUpdate = (fresh) => {
   siege = fresh;
   render();
 
-  // Both sides ready → both clients race to game.html. Use a small banner
-  // so the transition isn't jarring.
+  // Both sides ready → both clients race to battle.html. Wave queue is
+  // built in the in-game HUD on /battle.
   const bothReady = !!siege.host_ready && !!siege.ally_ready;
   if (bothReady && !navigated) {
     navigated = true;
     bothReadyBanner.classList.remove('hidden');
     bothReadyBanner.setAttribute('aria-hidden', 'false');
-    sessionStorage.setItem('wave1SiegeId', siege.id);
-    setTimeout(() => smoothNavigate('/wave-1/wave-1.html'), 1100);
+    sessionStorage.setItem('battleSiegeId', siege.id);
+    // Host advances phase to 'prep' so the lobby browser stops showing
+    // this siege. Ally just rides realtime — no double-write race.
+    if (siege.host_id === user.id && siege.phase !== 'prep' && siege.phase !== 'battle') {
+      updateSiege({ phase: 'prep' });
+    }
+    setTimeout(() => smoothNavigate('/battle/battle.html'), 1100);
     return;
   }
 
@@ -489,6 +503,13 @@ if (!siege) {
   myOther = { profile: themProfile, userId: otherUid, username: themProfile?.username || (isHost ? siege.ally_username : siege.host_username) || 'KNIGHT' };
 
   render();
+
+  // Advance phase to 'setup' on first entry (host only). The default after
+  // migration 004 is 'lobby'; lobby browser filters that out so once we
+  // flip it here the room stops appearing as joinable.
+  if (isHost && siege.phase === 'lobby') {
+    updateSiege({ phase: 'setup' });
+  }
 
   // ── REALTIME ──
   // Listen for opponent picks/ready as well as DELETE (disband) and any

@@ -134,9 +134,6 @@ const renderCard = (unit) => {
   card.setAttribute('role', 'listitem');
   card.dataset.unitId = unit.id;
 
-  const safe = unit.id.replace(/ /g, '%20');
-  const spritePath = `/assets/${safe}/${safe}/${safe}-Idle.png`;
-
   card.innerHTML = `
     ${unlocked ? '' : `
       <div class="unit-lock-badge">
@@ -145,10 +142,13 @@ const renderCard = (unit) => {
       </div>
     `}
     <div class="unit-sprite-stage">
-      <div class="unit-sprite" style="background-image:url('${spritePath}');"></div>
+      <div class="unit-sprite"></div>
     </div>
     <div class="unit-name">${unit.id.toUpperCase()}</div>
   `;
+
+  const spriteEl = card.querySelector('.unit-sprite');
+  applyIdleAnimation(spriteEl, unit);
 
   if (!unlocked) {
     card.addEventListener('click', () => attemptUnlock(unit, card));
@@ -157,6 +157,58 @@ const renderCard = (unit) => {
   card.addEventListener('mouseenter', () => showTooltip(unit));
   card.addEventListener('mouseleave', hideTooltip);
   return card;
+};
+
+// ── IDLE SPRITE (card thumbnails) ──
+// The CSS used to hardcode a 6-frame, 100px sheet, which broke for any unit
+// whose Idle sheet differed. Measure the real sheet and drive the strip from
+// JS so each card gets correct frame size + count.
+const IDLE_STAGE_SIZE = 80;
+const IDLE_VISUAL_BOX = IDLE_STAGE_SIZE * 3.0;
+const IDLE_FRAME_DURATION_MS = 140;
+const idleMetaCache = new Map();
+
+const loadIdleMeta = (unit) => {
+  if (idleMetaCache.has(unit.id)) return Promise.resolve(idleMetaCache.get(unit.id));
+  const safe = unit.id.replace(/ /g, '%20');
+  const src = `/assets/${safe}/${safe}/${safe}-Idle.png`;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const frameHeight = img.naturalHeight;
+      const frameWidth = frameHeight;
+      const frameCount = Math.max(1, Math.round(img.naturalWidth / frameWidth));
+      const meta = { sheetWidth: img.naturalWidth, frameWidth, frameHeight, frameCount, src };
+      idleMetaCache.set(unit.id, meta);
+      resolve(meta);
+    };
+    img.onerror = () => {
+      const meta = { sheetWidth: 600, frameWidth: 100, frameHeight: 100, frameCount: 6, src };
+      idleMetaCache.set(unit.id, meta);
+      resolve(meta);
+    };
+    img.src = src;
+  });
+};
+
+const applyIdleAnimation = async (spriteEl, unit) => {
+  const meta = await loadIdleMeta(unit);
+  if (!spriteEl.isConnected) return;
+  const scale = IDLE_VISUAL_BOX / Math.max(meta.frameWidth, meta.frameHeight);
+  spriteEl.style.width = `${meta.frameWidth}px`;
+  spriteEl.style.height = `${meta.frameHeight}px`;
+  spriteEl.style.backgroundImage = `url('${meta.src}')`;
+  spriteEl.style.backgroundSize = `${meta.sheetWidth}px ${meta.frameHeight}px`;
+  spriteEl.style.transform = `translate(-50%, -50%) scale(${scale})`;
+  spriteEl.style.backgroundPosition = '0 0';
+
+  let frame = 0;
+  const tick = () => {
+    if (!spriteEl.isConnected) return;
+    frame = (frame + 1) % meta.frameCount;
+    spriteEl.style.backgroundPosition = `${-frame * meta.frameWidth}px 0`;
+  };
+  setInterval(tick, IDLE_FRAME_DURATION_MS);
 };
 
 // ── TOOLTIP LOGIC ──
@@ -213,8 +265,12 @@ const stopAttackAnim = () => {
 // animation with a setInterval — robust against any frame count or size.
 const applySpriteAnimation = (spriteEl, meta) => {
   stopAttackAnim();
-  // Leave a small inset so glow/strokes aren't clipped by the stage border.
-  const scale = (STAGE_SIZE - 4) / Math.max(meta.frameWidth, meta.frameHeight);
+  // Sprite frames pack the character into roughly the center half of the
+  // frame, with transparent padding for attack FX. Scale to a larger "visual
+  // box" than the stage so the character itself fills the panel — the stage
+  // uses overflow: visible to let the padding spill.
+  const VISUAL_BOX = STAGE_SIZE * 1.8;
+  const scale = VISUAL_BOX / Math.max(meta.frameWidth, meta.frameHeight);
   spriteEl.style.width = `${meta.frameWidth}px`;
   spriteEl.style.height = `${meta.frameHeight}px`;
   spriteEl.style.backgroundSize = `${meta.sheetWidth}px ${meta.frameHeight}px`;
@@ -311,22 +367,40 @@ const attemptUnlock = async (unit, card) => {
   if (!ok) return;
 
   card.classList.add('purchasing');
-  const newPoints = currentPoints - unit.cost;
-  const newUnlocked = [...unlockedSet, unit.id];
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ points: newPoints, unlocked_units: newUnlocked })
-    .eq('user_id', user.id);
+  // Server-validated atomic check-and-debit. Direct profile UPDATE is blocked
+  // by the profiles_block_currency trigger (migration 005); purchase_unit()
+  // is the only path. The RPC raises 'purchase_failed' if the user can't
+  // afford it or already owns the unit — recover by re-loading the profile
+  // so the local optimistic state matches what's actually in the DB.
+  const { error } = await supabase.rpc('purchase_unit', {
+    p_unit: unit.id,
+    p_cost: unit.cost,
+  });
 
   if (error) {
     console.error('unlock failed', error);
-    showAlert('✗ THE SCRIBES FAILED. TRY AGAIN.', 'error');
+    const msg = String(error.message || '');
+    if (msg.includes('purchase_failed')) {
+      showAlert('✗ INSUFFICIENT FUNDS OR ALREADY OWNED — RELOADING.', 'error');
+      const { data } = await supabase
+        .from('profiles')
+        .select('points, unlocked_units')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (data) {
+        currentPoints = data.points ?? currentPoints;
+        unlockedSet = new Set(data.unlocked_units || []);
+        setTreasury(currentPoints);
+      }
+    } else {
+      showAlert('✗ THE SCRIBES FAILED. TRY AGAIN.', 'error');
+    }
     card.classList.remove('purchasing');
     return;
   }
 
-  currentPoints = newPoints;
+  currentPoints -= unit.cost;
   unlockedSet.add(unit.id);
   setTreasury(currentPoints);
   // Swap the card in place to avoid full re-render flicker.

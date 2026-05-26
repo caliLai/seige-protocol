@@ -1,4 +1,5 @@
 import { Sprite } from "./Sprite.js";
+import { creditDamage } from "../runtime/contribution.js";
 
 export class Tower extends Sprite {
     width = 50;
@@ -18,6 +19,11 @@ export class Tower extends Sprite {
     lastAttackAt = 0;
 
     target = null;
+
+    // Team that landed the last hit on this tower. battle.js reads this
+    // when the tower dies so the killing-blow side gets towers_destroyed
+    // credit and the per-side gold reward.
+    lastAttackerTeam = null;
 
     projectiles = [];
     projectileSpeed = 5;

@@ -56,33 +56,25 @@ export class Archer extends Unit {
     static loadAssets() {
         if (!Archer.bodyImage) {
             Archer.bodyImage = new Image();
-            Archer.bodyImage.onload = () => {
-                Archer.bodyImageLoaded = true;
-            };
+            Archer.bodyImage.onload = () => { Archer.bodyImageLoaded = true; };
             Archer.bodyImage.src = "../assets/Archer/Archer/Archer-Idle.png";
         }
 
         if (!Archer.attackImage) {
             Archer.attackImage = new Image();
-            Archer.attackImage.onload = () => {
-                Archer.attackImageLoaded = true;
-            };
+            Archer.attackImage.onload = () => { Archer.attackImageLoaded = true; };
             Archer.attackImage.src = "../assets/Archer/Archer/Archer-Attack01.png";
         }
 
         if (!Archer.walkImage) {
             Archer.walkImage = new Image();
-            Archer.walkImage.onload = () => {
-                Archer.walkImageLoaded = true;
-            };
+            Archer.walkImage.onload = () => { Archer.walkImageLoaded = true; };
             Archer.walkImage.src = "../assets/Archer/Archer/Archer-Walk.png";
         }
 
         if (!Archer.projectileImage) {
             Archer.projectileImage = new Image();
-            Archer.projectileImage.onload = () => {
-                Archer.projectileImageLoaded = true;
-            };
+            Archer.projectileImage.onload = () => { Archer.projectileImageLoaded = true; };
             Archer.projectileImage.src = "../assets/Archer/Arrow(projectile)/Arrow02(32x32).png";
         }
     }
@@ -145,7 +137,6 @@ export class Archer extends Unit {
             );
 
             this.drawHealthBar();
-
             return;
         }
 
@@ -169,7 +160,8 @@ export class Archer extends Unit {
             vx: Math.cos(angle) * this.projectileSpeed,
             vy: Math.sin(angle) * this.projectileSpeed,
             damage: this.attackStrength,
-            target,
+            target: target,
+            ownerId: this.ownerId
         });
     }
 
@@ -254,7 +246,8 @@ export class Archer extends Unit {
             const dy = target.centre.y - (projectile.y + this.projectileSize / 2);
 
             if (Math.hypot(dx, dy) <= this.projectileSize + 4) {
-                target.takeDamage(projectile.damage);
+                const attackerId = projectile.ownerId || this.ownerId || null;
+                target.takeDamage(projectile.damage, attackerId);
                 return false;
             }
 

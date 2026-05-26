@@ -439,15 +439,15 @@ const applySiegeUpdate = (fresh) => {
   siege = fresh;
   render();
 
-  // Both sides ready → both clients race to game.html. Use a small banner
-  // so the transition isn't jarring.
+  // Both sides ready → both clients race to game.html. Wave queue is now
+  // built in the in-game HUD, so we skip the separate wave-1 page.
   const bothReady = !!siege.host_ready && !!siege.ally_ready;
   if (bothReady && !navigated) {
     navigated = true;
     bothReadyBanner.classList.remove('hidden');
     bothReadyBanner.setAttribute('aria-hidden', 'false');
     sessionStorage.setItem('wave1SiegeId', siege.id);
-    setTimeout(() => smoothNavigate('/wave-1/wave-1.html'), 1100);
+    setTimeout(() => smoothNavigate('/game/game.html'), 1100);
     return;
   }
 

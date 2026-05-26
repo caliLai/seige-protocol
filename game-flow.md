@@ -173,17 +173,7 @@ Reward Multiplier
 
 Both players select their unit types.
 
-The number of available slots is determined by difficulty.
-
-Example:
-
-```text
-Easy: 6 unit types
-Normal: 5 unit types
-Hard: 4 unit types
-```
-
-This increases strategic decision-making on higher difficulties.
+Player should choose 3 unit types from their own unit pool, which contains the unlocked unit types.
 
 ---
 
@@ -288,8 +278,8 @@ Special objective contribution
 ```
 
 There are two different currency:
-1. One for buying units to queue in battle
-2. One for unlocking available unit from roster
+1. One for buying units to queue in battle (starting gold amount depends on difficulties)
+2. One for unlocking available unit types from the roster (This currency is earned at the end of the game as reward)
 
 ---
 

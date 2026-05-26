@@ -367,22 +367,40 @@ const attemptUnlock = async (unit, card) => {
   if (!ok) return;
 
   card.classList.add('purchasing');
-  const newPoints = currentPoints - unit.cost;
-  const newUnlocked = [...unlockedSet, unit.id];
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ points: newPoints, unlocked_units: newUnlocked })
-    .eq('user_id', user.id);
+  // Server-validated atomic check-and-debit. Direct profile UPDATE is blocked
+  // by the profiles_block_currency trigger (migration 005); purchase_unit()
+  // is the only path. The RPC raises 'purchase_failed' if the user can't
+  // afford it or already owns the unit — recover by re-loading the profile
+  // so the local optimistic state matches what's actually in the DB.
+  const { error } = await supabase.rpc('purchase_unit', {
+    p_unit: unit.id,
+    p_cost: unit.cost,
+  });
 
   if (error) {
     console.error('unlock failed', error);
-    showAlert('✗ THE SCRIBES FAILED. TRY AGAIN.', 'error');
+    const msg = String(error.message || '');
+    if (msg.includes('purchase_failed')) {
+      showAlert('✗ INSUFFICIENT FUNDS OR ALREADY OWNED — RELOADING.', 'error');
+      const { data } = await supabase
+        .from('profiles')
+        .select('points, unlocked_units')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (data) {
+        currentPoints = data.points ?? currentPoints;
+        unlockedSet = new Set(data.unlocked_units || []);
+        setTreasury(currentPoints);
+      }
+    } else {
+      showAlert('✗ THE SCRIBES FAILED. TRY AGAIN.', 'error');
+    }
     card.classList.remove('purchasing');
     return;
   }
 
-  currentPoints = newPoints;
+  currentPoints -= unit.cost;
   unlockedSet.add(unit.id);
   setTreasury(currentPoints);
   // Swap the card in place to avoid full re-render flicker.

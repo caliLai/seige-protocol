@@ -1,5 +1,6 @@
 import { Sprite } from "./Sprite.js";
 import { path } from "../data/path.js";
+import { sim } from "../runtime/sim.js";
 
 export class Unit extends Sprite {
   width = 50;

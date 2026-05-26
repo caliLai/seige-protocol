@@ -1,0 +1,763 @@
+/* ═══════════════════════════════════════════════
+   GAME PAGE — in-battle HUD
+   Builds on the shared stone-bg + .setup-column +
+   .setup-pool-label / .setup-ready-btn / .alert-banner
+   from lobby + siege-setup. Only the bits unique to
+   the battle screen live here.
+   ═══════════════════════════════════════════════ */
+
+/* ── FRAME OVERRIDE ──
+   The default .game-frame is 1120×640 with overflow:hidden — too small
+   for canvas + two side columns + bottom row. Let it grow to fit. */
+.game-frame-battle {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding: 8px;
+  align-items: stretch;
+  justify-items: stretch;
+  box-sizing: border-box;
+}
+body { overflow: hidden; }
+
+/* ── HEADER ─────────────────────────────────── */
+.game-header {
+  display: grid !important;
+  grid-template-columns: 1fr 1.3fr 1fr;
+  gap: 8px;
+  align-items: stretch;
+  margin: 0 !important;
+}
+
+.game-player {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, #2e2924 0%, #14110d 100%);
+  border: 4px solid #1a1510;
+  box-shadow: 4px 4px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+}
+
+.game-player-banner {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 26px;
+  background: #0a0604;
+  border: 3px solid #1a1510;
+  box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.25);
+  text-shadow: 2px 2px 0 #000;
+}
+.game-banner-self  { color: #f5c518; }
+.game-banner-other { color: #c04040; }
+
+.game-player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.game-player-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: #fff7d6;
+  text-shadow: 2px 2px 0 #000;
+}
+.game-player-self  .game-player-name { color: #f5c518; text-shadow: 2px 2px 0 #000, 0 0 6px rgba(245, 197, 24, 0.4); }
+.game-player-other .game-player-name { color: #ff8a8a; text-shadow: 2px 2px 0 #000, 0 0 6px rgba(255, 80, 60, 0.4); }
+
+.game-stat-row {
+  display: grid;
+  grid-template-columns: 14px auto 1fr;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  letter-spacing: 0.14em;
+  color: #a89880;
+  text-shadow: 1px 1px 0 #000;
+}
+.game-stat-ico-gold  { color: #f5c518; }
+.game-stat-ico-shard { color: #7dd3fc; }
+.game-stat-label { color: #a89880; }
+.game-stat-val {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: #fff7d6;
+  text-shadow: 1px 1px 0 #000;
+  justify-self: start;
+}
+.game-gold-val  { color: #f5c518; }
+.game-shard-val { color: #7dd3fc; }
+
+.game-hp-block {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: #fff7d6;
+  text-shadow: 1px 1px 0 #000;
+}
+.game-hp-ico {
+  color: #c04040;
+  font-size: 14px;
+  text-shadow: 1px 1px 0 #000, 0 0 6px rgba(255, 80, 60, 0.5);
+}
+
+.game-top-controls {
+  display: flex;
+  gap: 6px;
+}
+.game-ctrl-btn {
+  width: 38px;
+  height: 38px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: #f0d9a0;
+  background: linear-gradient(180deg, #3a3228 0%, #1f1a14 100%);
+  border: 3px solid #1a1510;
+  box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.18);
+  text-shadow: 1px 1px 0 #000;
+}
+.game-ctrl-btn:hover {
+  background: linear-gradient(180deg, #4a4030 0%, #2a2418 100%);
+  color: #fff5a0;
+  box-shadow: 2px 2px 0 #0a0604, 0 0 10px rgba(245, 197, 24, 0.4);
+}
+
+/* Wave block (middle of header) */
+.game-wave-block {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, #2e2924 0%, #14110d 100%);
+  border: 4px solid #1a1510;
+  box-shadow: 4px 4px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+}
+.game-wave-title {
+  font-family: 'Press Start 2P', monospace !important;
+  font-size: 16px !important;
+  letter-spacing: 0.16em !important;
+  color: #f5c518 !important;
+  text-shadow: 2px 2px 0 #000, 0 0 8px rgba(245, 197, 24, 0.4) !important;
+}
+.game-wave-track {
+  position: relative;
+  width: 100%;
+  height: 18px;
+  display: flex;
+  align-items: center;
+}
+.game-wave-line {
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 3px;
+  background: repeating-linear-gradient(
+    to right,
+    #4a4540 0 6px,
+    transparent 6px 10px
+  );
+  transform: translateY(-50%);
+}
+.game-wave-pips {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  z-index: 1;
+}
+.game-wave-pip {
+  width: 10px;
+  height: 10px;
+  background: #0a0604;
+  border: 2px solid #4a4540;
+  transform: rotate(45deg);
+  box-shadow: 1px 1px 0 #000;
+}
+.game-wave-pip.is-past    { background: #5fc24a; border-color: #2f7a2a; box-shadow: 1px 1px 0 #000, 0 0 4px rgba(95, 194, 74, 0.45); }
+.game-wave-pip.is-current { background: #f5c518; border-color: #7a600c; box-shadow: 1px 1px 0 #000, 0 0 6px rgba(245, 197, 24, 0.6); }
+.game-wave-pip.is-future  { background: #0a0604; border-color: #4a4540; }
+.game-wave-meta {
+  font-family: 'Press Start 2P', monospace !important;
+  font-size: 7px !important;
+  letter-spacing: 0.18em !important;
+  color: #a89880 !important;
+  text-shadow: 1px 1px 0 #000 !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.game-wave-tower { color: #f5c518; }
+.game-wave-meta-divider { color: #4a4540; padding: 0 4px; }
+.game-wave-meta .game-hp-ico { color: #c04040; font-size: 11px; text-shadow: 1px 1px 0 #000; }
+
+/* ── MAIN ROW ───────────────────────────────── */
+.game-main {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 260px;
+  gap: 8px;
+  align-items: stretch;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Side columns reuse .setup-column styling (parchment frame) — we just
+   nudge layout-specific bits here. */
+.game-side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 10px 12px !important;
+  overflow: hidden;
+}
+
+.game-panel-sub {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  letter-spacing: 0.12em;
+  color: #a89880;
+  margin-left: 6px;
+}
+.game-label-tower { color: #c66bff !important; }
+
+/* TYPE cards (the 3 picks) — gold-priced */
+.game-types {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px;
+  background: linear-gradient(180deg, #1a1408 0%, #0d0a07 100%);
+  border: 3px solid #1a0f08;
+  box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+}
+.game-type-card {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1 / 1.1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  padding: 4px 2px;
+  background: linear-gradient(180deg, #3a3228 0%, #1f1a14 100%);
+  border: 2px solid #1a1510;
+  box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+  cursor: pointer;
+  font-family: 'Press Start 2P', monospace;
+  overflow: hidden;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.game-type-card .game-type-stage {
+  flex: 1;
+  width: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+.game-type-card .game-type-sprite {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  image-rendering: pixelated;
+  transform-origin: center;
+}
+.game-type-card .game-type-name {
+  font-size: 5px;
+  letter-spacing: 0.10em;
+  color: #f0d9a0;
+  text-align: center;
+  line-height: 1.3;
+  text-shadow: 1px 1px 0 #000;
+  padding: 0 1px;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.game-type-card .game-type-cost {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 6px;
+  color: #f5c518;
+  text-shadow: 1px 1px 0 #000;
+  background: rgba(10, 6, 4, 0.7);
+  padding: 1px 4px;
+  border: 1px solid #1a1510;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+.game-type-card:hover:not(.is-disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.30), 0 0 10px rgba(245, 197, 24, 0.18);
+}
+.game-type-card.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.5);
+}
+.game-types-readonly .game-type-card { cursor: default; }
+.game-types-readonly .game-type-card:hover { transform: none; box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10); }
+
+/* QUEUE — numbered slot list */
+.game-queue {
+  list-style: none;
+  padding: 6px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #1a1408 0%, #0d0a07 100%);
+  border: 3px solid #1a0f08;
+  box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+}
+.game-queue::-webkit-scrollbar { width: 8px; }
+.game-queue::-webkit-scrollbar-track { background: #1a0f08; border: 1px solid #000; }
+.game-queue::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #7a600c, #4a3500); border: 1px solid #000; }
+
+.game-queue-row {
+  display: grid;
+  grid-template-columns: 22px 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px;
+  background: linear-gradient(180deg, #3a3228 0%, #14110d 100%);
+  border: 2px solid #1a1510;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  line-height: 1.4;
+  letter-spacing: 0.10em;
+  min-height: 34px;
+  color: #f0d9a0;
+  text-shadow: 1px 1px 0 #000;
+}
+.game-queue-row.is-empty {
+  background: linear-gradient(180deg, #1f1a14 0%, #0d0a07 100%);
+  border: 2px dashed #4a4540;
+  color: #4a4540;
+}
+.game-queue:not(.game-queue-readonly) .game-queue-row.is-filled { cursor: pointer; }
+.game-queue:not(.game-queue-readonly) .game-queue-row.is-filled:hover {
+  border-color: #c04040;
+  box-shadow: inset 0 0 0 1px rgba(255, 80, 60, 0.35), 0 0 8px rgba(255, 80, 60, 0.25);
+}
+.game-queue-idx { color: #8c7040; font-size: 7px; }
+.game-queue-thumb {
+  width: 28px;
+  height: 28px;
+  position: relative;
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.game-queue-sprite {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  image-rendering: pixelated;
+  transform-origin: center;
+}
+.game-queue-name {
+  color: #fff7d6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  padding: 2px 0;
+  min-width: 0;
+}
+.game-queue-cost { color: #f5c518; font-size: 7px; }
+
+/* ── STAGE (canvas) ─────────────────────────── */
+.game-stage {
+  position: relative;
+  background: linear-gradient(180deg, #2e2924 0%, #14110d 100%);
+  border: 4px solid #1a1510;
+  box-shadow: 4px 4px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px;
+}
+#gameCanvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  image-rendering: pixelated;
+  border: 2px solid #0a0604;
+  box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.20);
+  object-fit: contain;
+}
+
+/* ── BOTTOM ROW (visual mock) ───────────────── */
+.game-bottom {
+  display: grid;
+  grid-template-columns: 1.1fr 1.1fr 2.4fr 1.2fr;
+  gap: 8px;
+  height: 170px;
+  min-height: 0;
+}
+.game-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, #2e2924 0%, #14110d 100%);
+  border: 3px solid #1a1510;
+  box-shadow: 3px 3px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+  min-height: 0;
+  overflow: hidden;
+}
+.game-info-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.18em;
+  color: #6e6760;
+  text-shadow: 1px 1px 0 #000;
+  text-align: center;
+  padding: 16px 8px;
+}
+
+.game-items {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  flex: 1;
+}
+.game-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  min-height: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, #3a3228 0%, #1f1a14 100%);
+  border: 3px solid #1a1510;
+  box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.14);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  letter-spacing: 0.10em;
+  line-height: 1.7;
+  color: #a89880;
+  text-shadow: 1px 1px 0 #000;
+}
+.game-item-green  { border-color: #2f7a2a; box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(95, 194, 74, 0.30); }
+.game-item-blue   { border-color: #2a5a8a; box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(74, 140, 217, 0.30); }
+.game-item-purple { border-color: #6a2a8a; box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(160, 80, 217, 0.30); }
+.game-item-gold   { border-color: #7a600c; box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.30); }
+
+.game-item-name {
+  font-size: 8px;
+  letter-spacing: 0.10em;
+  color: #fff7d6;
+  text-align: center;
+  text-shadow: 1px 1px 0 #000;
+}
+.game-item-green  .game-item-name { color: #b4e8a8; text-shadow: 1px 1px 0 #000, 0 0 4px rgba(95, 194, 74, 0.5); }
+.game-item-blue   .game-item-name { color: #a8c8f0; text-shadow: 1px 1px 0 #000, 0 0 4px rgba(74, 140, 217, 0.5); }
+.game-item-purple .game-item-name { color: #d8a8f0; text-shadow: 1px 1px 0 #000, 0 0 4px rgba(160, 80, 217, 0.5); }
+.game-item-gold   .game-item-name { color: #f5d870; text-shadow: 1px 1px 0 #000, 0 0 4px rgba(245, 197, 24, 0.5); }
+
+.game-item-icon {
+  align-self: center;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+  text-shadow: 2px 2px 0 #000;
+}
+.game-item-desc {
+  flex: 1;
+  font-size: 5px;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  color: #a89880;
+  overflow: hidden;
+}
+.game-item-cost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 9px;
+  color: #f5c518;
+  text-shadow: 1px 1px 0 #000;
+  padding-top: 4px;
+  border-top: 1px dashed #4a4540;
+}
+
+/* Wave info panel */
+.game-wave-info {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.10em;
+  flex: 1;
+}
+.game-wi-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #a89880;
+  text-shadow: 1px 1px 0 #000;
+  padding: 3px 0;
+  border-bottom: 1px dashed #2a241c;
+}
+.game-wi-val { color: #fff7d6; font-size: 8px; }
+.game-wi-rewards-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.game-wi-bar {
+  height: 10px;
+  margin-top: 4px;
+  background: #0a0604;
+  border: 2px solid #1a1510;
+  box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.20);
+  overflow: hidden;
+}
+.game-wi-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #7a600c 0%, #f5c518 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  transition: width 0.4s ease;
+}
+
+.game-coin  { color: #f5c518; }
+.game-shard { color: #7dd3fc; }
+.game-badge { color: #c04040; }
+
+/* ── FOOTER LEGEND ──────────────────────────── */
+.game-legend {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 14px;
+  min-height: 0;
+  background: linear-gradient(180deg, #1f1a14 0%, #14110d 100%);
+  border: 3px solid #1a1510;
+  box-shadow: 3px 3px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.10);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  letter-spacing: 0.12em;
+  line-height: 1.7;
+  color: #a89880;
+  text-shadow: 1px 1px 0 #000;
+}
+.game-legend b { color: #fff7d6; }
+
+/* ── VICTORY OVERLAY ────────────────────────── */
+.game-victory-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(10, 6, 4, 0.80) 0%, rgba(0, 0, 0, 0.94) 80%);
+  animation: game-victory-fade 0.4s ease both;
+}
+.game-victory-overlay.hidden { display: none !important; }
+
+@keyframes game-victory-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.game-victory-card {
+  position: relative;
+  width: min(540px, 92vw);
+  padding: 28px 36px 28px;
+  background: linear-gradient(180deg, #3a3228 0%, #14110d 100%);
+  border: 5px solid #1a1510;
+  box-shadow: 6px 6px 0 #0a0604, 0 0 28px 6px rgba(245, 197, 24, 0.30), inset 0 0 0 1px rgba(245, 197, 24, 0.22);
+  animation: game-victory-pop 0.45s cubic-bezier(.18,.89,.32,1.28) both;
+}
+@keyframes game-victory-pop {
+  from { transform: scale(0.85); opacity: 0; }
+  to   { transform: scale(1.0);  opacity: 1; }
+}
+
+.game-victory-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 3px solid #f5c518;
+  background: #1a1510;
+}
+.game-victory-corner.tl { top: -3px; left: -3px; border-right: none; border-bottom: none; }
+.game-victory-corner.tr { top: -3px; right: -3px; border-left: none; border-bottom: none; }
+.game-victory-corner.bl { bottom: -3px; left: -3px; border-right: none; border-top: none; }
+.game-victory-corner.br { bottom: -3px; right: -3px; border-left: none; border-top: none; }
+
+.game-victory-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.game-victory-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 22px;
+  letter-spacing: 0.22em;
+  color: #f5c518;
+  text-shadow: 3px 3px 0 #000, 0 0 12px rgba(245, 197, 24, 0.55);
+}
+
+.game-victory-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 80%;
+}
+.game-victory-divider .dash-line {
+  flex: 1;
+  height: 2px;
+  background: repeating-linear-gradient(to right, #4a4540 0 6px, transparent 6px 12px);
+}
+.game-victory-divider .divider-icon {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  color: #f5c518;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.game-victory-body {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  line-height: 1.8;
+  text-align: center;
+  color: #f0d9a0;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.game-victory-rewards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+.game-victory-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  background: linear-gradient(180deg, #1f1a14 0%, #0d0a07 100%);
+  border: 3px solid #1a1510;
+  box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.18);
+}
+.game-victory-reward-ico {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 24px;
+  text-shadow: 2px 2px 0 #000;
+}
+.game-victory-reward-val {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 14px;
+  color: #fff7d6;
+  text-shadow: 2px 2px 0 #000, 0 0 6px rgba(245, 197, 24, 0.40);
+}
+.game-victory-reward-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  letter-spacing: 0.16em;
+  color: #a89880;
+  text-shadow: 1px 1px 0 #000;
+  text-align: center;
+}
+
+.game-victory-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(10, 6, 4, 0.5);
+  border: 2px dashed #4a4540;
+}
+.game-victory-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.14em;
+  color: #a89880;
+  text-shadow: 1px 1px 0 #000;
+  padding: 2px 0;
+}
+.game-victory-stat span:last-child {
+  color: #fff7d6;
+  font-size: 8px;
+}
+
+.game-victory-actions {
+  width: 100%;
+}
+.game-victory-actions .setup-ready-btn {
+  width: 100%;
+}
+
+/* ── DEFEAT OVERLAY (red variant of victory) ─── */
+.game-defeat-card {
+  border-color: #4d1212;
+  box-shadow: 6px 6px 0 #0a0202,
+              0 0 28px 6px rgba(192, 64, 64, 0.32),
+              inset 0 0 0 1px rgba(255, 120, 100, 0.22);
+}
+.game-defeat-corner {
+  border-color: #c04040;
+  background: #4d1212;
+}
+.game-defeat-title {
+  color: #ff8a8a;
+  text-shadow: 3px 3px 0 #000, 0 0 12px rgba(255, 80, 60, 0.55);
+}
+
+/* ── RESPONSIVE ─────────────────────────────── */
+@media (max-width: 1400px) {
+  .game-main { grid-template-columns: 240px 1fr 240px; }
+  .game-bottom { grid-template-columns: 1fr 1fr; }
+}

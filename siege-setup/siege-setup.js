@@ -439,7 +439,7 @@ const applySiegeUpdate = (fresh) => {
   siege = fresh;
   render();
 
-  // Both sides ready → both clients race to match.html. Wave queue is now
+  // Both sides ready → both clients race to battle.html. Wave queue is now
   // built in the in-game HUD, so we skip the separate wave-1 page.
   const bothReady = !!siege.host_ready && !!siege.ally_ready;
   if (bothReady && !navigated) {

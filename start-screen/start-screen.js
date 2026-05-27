@@ -238,7 +238,7 @@ document.addEventListener('keydown', (e) => {
 // with `started_at` set — i.e. they're past the lobby's START click).
 // If so, the label flips to "⚔ RESUME GAME ⚔" and clicking it shows a
 // "rejoining" overlay before sending them to the right screen:
-//   • host_ready AND ally_ready  →  /game/game.html       (mid-battle)
+//   • host_ready AND ally_ready  →  /battle/battle.html   (mid-battle)
 //   • otherwise                  →  /siege-setup/...      (mid-unit-pick)
 // If there's no ongoing siege the button stays "PLAY NOW" and goes to
 // the lobby as normal.
@@ -319,7 +319,7 @@ newGameBtn.addEventListener('click', async () => {
 
   if (ongoing) {
     const bothReady = !!ongoing.host_ready && !!ongoing.ally_ready;
-    const destination = bothReady ? '/game/game.html' : '/siege-setup/siege-setup.html';
+    const destination = bothReady ? '/battle/battle.html' : '/siege-setup/siege-setup.html';
 
     // Setup page expects the siege id in sessionStorage so it doesn't
     // have to re-discover the row. Harmless for the game destination.

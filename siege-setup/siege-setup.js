@@ -499,7 +499,7 @@ if (!siege) {
   // mid-battle reconnect path is the PLAY NOW button on the start screen,
   // which fires its own "reconnecting" overlay before navigation.
   navigated = true;
-  smoothNavigate('/game/game.html');
+  smoothNavigate('/battle/battle.html');
 } else {
   isHost = siege.host_id === user.id;
   const myUid    = user.id;

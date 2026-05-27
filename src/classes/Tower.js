@@ -118,17 +118,40 @@ export class Tower extends Sprite {
         }
     }
 
-    findTarget(unit) {
-        if (!unit || unit.isDead) {
+    findTarget(units) {
+        if (!Array.isArray(units) || units.length === 0) {
             this.target = null;
             return;
         }
 
-        const dx = unit.centre.x - this.centre.x;
-        const dy = unit.centre.y - this.centre.y;
-        const distance = Math.hypot(dx, dy);
+        // Keep current target if still valid and still in range
+        if (this.target && !this.target.isDead) {
+            const dx = this.target.centre.x - this.centre.x;
+            const dy = this.target.centre.y - this.centre.y;
+            const distance = Math.hypot(dx, dy);
 
-        this.target = distance <= this.attackRadius ? unit : null;
+            if (distance <= this.attackRadius) {
+                return;
+            }
+        }
+
+        let nearest = null;
+        let nearestDistance = Infinity;
+
+        for (const unit of units) {
+            if (!unit || unit.isDead) continue;
+
+            const dx = unit.centre.x - this.centre.x;
+            const dy = unit.centre.y - this.centre.y;
+            const distance = Math.hypot(dx, dy);
+
+            if (distance <= this.attackRadius && distance < nearestDistance) {
+                nearest = unit;
+                nearestDistance = distance;
+            }
+        }
+
+        this.target = nearest;
     }
 
     spawnProjectile(target) {
@@ -187,10 +210,10 @@ export class Tower extends Sprite {
         });
     }
 
-    updateFrame(unit) {
+    updateFrame(units) {
         if (this.isDead) return;
 
-        this.findTarget(unit);
+        this.findTarget(units);
         this.attack();
         this.updateProjectiles();
         this.render();

@@ -1063,8 +1063,7 @@ const animate = () => {
   attackUnits = attackUnits.filter(u => !u.isDead);
   attackUnits.forEach(u => u.updateFrame());
   towers.forEach(tower => {
-    const target = attackUnits.find(u => !u.isDead);
-    tower.updateFrame(target);
+  tower.updateFrame(attackUnits);
   });
   updateAndRenderExplosions();
   // Continuously check whether the wave has resolved so failure feedback

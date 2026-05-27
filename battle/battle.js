@@ -79,6 +79,27 @@ const readyBtn = document.getElementById('readyBtn');
 const otherReadyEl = document.getElementById('otherReady');
 const bothReadyBanner = document.getElementById('bothReadyBanner');
 const alertEl = document.getElementById('alertBanner');
+
+// Reconnect indicator on the ally side. Toggled from the presence
+// channel subscription (see further down). The badge sits on the
+// banner sprite, the status caption sits under the ally's name, and
+// the .is-reconnecting class on the parent .game-player-other drains
+// colour from the whole block so the absence reads at a glance.
+const otherPlayerEl = document.querySelector('.game-player-other');
+const otherReconnectingEl = document.getElementById('otherReconnecting');
+const otherStatusEl = document.getElementById('otherStatus');
+
+// Settings menu + abandon-siege flow (decorative pause/speed buttons
+// stay no-ops for now). The menu hangs below the ⚙ button; Abandon
+// opens a confirmation modal that ultimately calls disbandAndLeave().
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsMenu = document.getElementById('settingsMenu');
+const abandonSiegeBtn = document.getElementById('abandonSiegeBtn');
+const abandonOverlay = document.getElementById('abandonOverlay');
+const abandonCancelBtn = document.getElementById('abandonCancelBtn');
+const abandonConfirmBtn = document.getElementById('abandonConfirmBtn');
+const abandonConfirmText = document.getElementById('abandonConfirmText');
+const abandonConfirmLoading = document.getElementById('abandonConfirmLoading');
 const waveTitleEl = document.getElementById('waveTitle');
 const waveTrackEl = document.getElementById('waveTrack');
 const towersRemainingEl = document.getElementById('towersRemainingLabel');
@@ -486,6 +507,12 @@ const render = () => {
 };
 
 // ── SIEGE UPDATES ──
+// Direct UPDATEs on the row are only used for columns NOT locked by
+// migration 008's `sieges_block_battle` trigger — i.e. setup-phase
+// columns like host_units / host_ready. All battle-runtime mutations
+// (gold, queue, queue_ready, current_wave, phase, outcome, contribution)
+// must go through the security-definer RPCs below; a direct UPDATE on
+// any of those columns will be rejected with `battle_columns_locked`.
 const updateSiege = async (patch) => {
   const mySideKey = isHost ? 'host_id' : 'ally_id';
   const { data, error } = await supabase
@@ -504,6 +531,38 @@ const updateSiege = async (patch) => {
   return data;
 };
 
+// Thin wrapper around supabase.rpc that surfaces server-side errors
+// (insufficient_gold, queue_full, unit_not_owned, …) as user-visible
+// medieval alerts. The RPC's row-return is fed back through
+// applySiegeUpdate so the UI reconciles before realtime echoes.
+const callBattleRpc = async (name, args, applyShape) => {
+  const { data, error } = await supabase.rpc(name, args);
+  if (error) {
+    const code = String(error.message || '').split(':')[0].trim();
+    const msg = ({
+      insufficient_gold: '✗ NOT ENOUGH GOLD',
+      queue_full:        '✗ QUEUE FULL',
+      unit_not_owned:    '✗ UNIT NOT IN THY HOST',
+      empty_queue:       '✗ QUEUE AT LEAST ONE UNIT FIRST',
+      wrong_phase:       '✗ THE MOMENT HAS PASSED',
+      host_only:         '✗ ONLY THE HOST MAY DO THAT',
+      not_a_player:      '✗ THOU ART NOT IN THIS SIEGE',
+      not_both_ready:    '✗ BOTH HOSTS MUST BE READY',
+      final_wave_no_advance: '✗ NO WAVES REMAIN',
+    })[code] || `✗ ${code.toUpperCase().replace(/_/g, ' ')}`;
+    console.error(`${name} failed`, error);
+    showAlert(msg, 'error');
+    return null;
+  }
+  if (data && applyShape) {
+    // RPCs that return a row of mutated columns hand them back as the
+    // first/only element of the result array. Merge into the local row.
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row) applySiegeUpdate({ ...siege, ...row });
+  }
+  return data;
+};
+
 // Gold is debited/refunded immediately against siege.host_gold /
 // ally_gold so it persists across waves. Falls back to startingGold for
 // the very first queue change when the column hasn't been seeded yet.
@@ -513,51 +572,33 @@ const myGoldNow = () => {
   return Number.isFinite(v) && v > 0 ? v : startingGold;
 };
 
-const addToQueue = (unitId) => {
+// All queue mutations now go through migration 008's RPCs. The local
+// catalog still drives the UI's pre-flight checks (so we can disable
+// unaffordable cards before the round-trip), but the *authoritative*
+// cost / cap / ownership / balance checks happen inside queue_unit on
+// the server. A tampered client can't sneak past those.
+const addToQueue = async (unitId) => {
   if (!siege || battleStarted) return;
-  const queueKey = isHost ? 'host_queue' : 'ally_queue';
-  const goldKey = isHost ? 'host_gold' : 'ally_gold';
-  const readyKey = isHost ? 'host_queue_ready' : 'ally_queue_ready';
-  const queue = [...(siege[queueKey] || [])];
+  // Cheap local pre-flight — keeps the alert snappy and avoids a
+  // pointless server round-trip on the obvious "no gold" case. The
+  // server check is the real authority and will reject the call if
+  // anything looks off (different price, full queue, unowned unit).
   const unit = UNITS_BY_ID.get(unitId);
   if (!unit) return;
-
   const myTypes = siege[isHost ? 'host_units' : 'ally_units'] || [];
   if (!myTypes.includes(unitId)) return;
+  const queue = siege[isHost ? 'host_queue' : 'ally_queue'] || [];
+  if (queue.length >= queueCap) { showAlert(`✗ QUEUE FULL (${queueCap} MAX)`, 'error'); return; }
+  if (deployCost(unit) > myGoldNow()) { showAlert('✗ NOT ENOUGH GOLD', 'error'); return; }
 
-  if (queue.length >= queueCap) {
-    showAlert(`✗ QUEUE FULL (${queueCap} MAX)`, 'error');
-    return;
-  }
-  const cost = deployCost(unit);
-  const have = myGoldNow();
-  if (cost > have) {
-    showAlert('✗ NOT ENOUGH GOLD', 'error');
-    return;
-  }
-  queue.push(unitId);
-  const patch = { [queueKey]: queue, [goldKey]: have - cost };
-  if (siege[readyKey]) patch[readyKey] = false;
-  applySiegeUpdate({ ...siege, ...patch });
-  updateSiege(patch);
+  await callBattleRpc('queue_unit', { p_siege: siege.id, p_unit: unitId }, true);
 };
 
-const removeFromQueue = (idx) => {
+const removeFromQueue = async (idx) => {
   if (!siege || battleStarted) return;
-  const queueKey = isHost ? 'host_queue' : 'ally_queue';
-  const goldKey = isHost ? 'host_gold' : 'ally_gold';
-  const readyKey = isHost ? 'host_queue_ready' : 'ally_queue_ready';
-  const queue = [...(siege[queueKey] || [])];
+  const queue = siege[isHost ? 'host_queue' : 'ally_queue'] || [];
   if (idx < 0 || idx >= queue.length) return;
-  const removed = queue.splice(idx, 1)[0];
-  const refund = deployCostById(removed);
-  const patch = {
-    [queueKey]: queue,
-    [goldKey]: myGoldNow() + refund,
-  };
-  if (siege[readyKey]) patch[readyKey] = false;
-  applySiegeUpdate({ ...siege, ...patch });
-  updateSiege(patch);
+  await callBattleRpc('dequeue_unit', { p_siege: siege.id, p_idx: idx }, true);
 };
 
 const toggleReady = async () => {
@@ -567,8 +608,10 @@ const toggleReady = async () => {
   if (queue.length === 0) return;
   const readyKey = `${mySide}_queue_ready`;
   const next = !siege[readyKey];
+  // Optimistic local flip so the button updates instantly; the
+  // realtime echo from the RPC's UPDATE will reconcile in ~100ms.
   applySiegeUpdate({ ...siege, [readyKey]: next });
-  await updateSiege({ [readyKey]: next });
+  await callBattleRpc(next ? 'lock_in_wave' : 'unlock_wave', { p_siege: siege.id }, false);
 };
 
 readyBtn.addEventListener('click', toggleReady);
@@ -744,18 +787,23 @@ const showEndOverlay = async (outcome) => {
 
   // Only the host writes outcome + contribution so the two clients don't
   // race the payout RPC. The ally sees the row update via realtime and
-  // calls the RPC too — the second call hits the idempotency guard
-  // ('already_paid') and we treat that as a no-op so both HUDs render
-  // their reward.
+  // calls award_match_points too — the second call hits the idempotency
+  // guard ('already_paid') and we treat that as a no-op so both HUDs
+  // render their reward.
+  //
+  // The terminal-state write now goes through set_match_outcome (mig 008)
+  // instead of a direct UPDATE — the trigger blocks direct writes to
+  // outcome / phase / contribution columns to prevent a tampered host
+  // from writing 'victory' on a loss. Combat sim itself is still
+  // client-side, so the host's *contribution* values are still trusted;
+  // see migration 008 LIMITATION note.
   if (isHost && siege.outcome !== outcome) {
-    const patch = {
-      outcome,
-      phase: 'complete',
-      host_contribution: contribution.host,
-      ally_contribution: contribution.ally,
-    };
-    applySiegeUpdate({ ...siege, ...patch });
-    await updateSiege(patch);
+    await callBattleRpc('set_match_outcome', {
+      p_siege: siege.id,
+      p_outcome: outcome,
+      p_host_contribution: contribution.host,
+      p_ally_contribution: contribution.ally,
+    }, false);
   }
   emit('battle-ended', { outcome });
   await claimRewards(outcome);
@@ -798,6 +846,93 @@ const disbandAndLeave = async (btn) => {
 victoryLobbyBtn.addEventListener('click', () => disbandAndLeave(victoryLobbyBtn));
 if (defeatLobbyBtn) defeatLobbyBtn.addEventListener('click', () => disbandAndLeave(defeatLobbyBtn));
 
+// ── SETTINGS MENU + ABANDON SIEGE ─────────────
+// The ⚙ button toggles a dropdown menu anchored beneath it. Today
+// the menu just hosts the Abandon Siege action; pause/speed/etc.
+// can be added as additional .game-settings-menu-item children
+// without touching this handler.
+const openSettingsMenu = () => {
+  settingsMenu.classList.remove('hidden');
+  settingsMenu.setAttribute('aria-hidden', 'false');
+  settingsBtn.setAttribute('aria-expanded', 'true');
+};
+const closeSettingsMenu = () => {
+  settingsMenu.classList.add('hidden');
+  settingsMenu.setAttribute('aria-hidden', 'true');
+  settingsBtn.setAttribute('aria-expanded', 'false');
+};
+const isSettingsMenuOpen = () => !settingsMenu.classList.contains('hidden');
+
+settingsBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (isSettingsMenuOpen()) closeSettingsMenu();
+  else openSettingsMenu();
+});
+
+// Outside-click closes the menu; clicks on the menu itself
+// (handled by stopPropagation on each menu item that does work)
+// keep it open.
+document.addEventListener('click', (e) => {
+  if (!isSettingsMenuOpen()) return;
+  if (settingsMenu.contains(e.target)) return;
+  if (e.target === settingsBtn) return;
+  closeSettingsMenu();
+});
+
+// ── ABANDON CONFIRMATION ──────────────────────
+const openAbandonModal = () => {
+  closeSettingsMenu();
+  abandonOverlay.classList.remove('hidden');
+  abandonOverlay.setAttribute('aria-hidden', 'false');
+  abandonConfirmBtn.disabled = false;
+  abandonConfirmText.style.display = 'inline';
+  abandonConfirmLoading.style.display = 'none';
+  // Focus the cancel button by default — fewer fat-finger abandons.
+  setTimeout(() => abandonCancelBtn.focus(), 30);
+};
+const closeAbandonModal = () => {
+  abandonOverlay.classList.add('hidden');
+  abandonOverlay.setAttribute('aria-hidden', 'true');
+};
+
+abandonSiegeBtn.addEventListener('click', openAbandonModal);
+abandonCancelBtn.addEventListener('click', closeAbandonModal);
+abandonOverlay.addEventListener('click', (e) => {
+  if (e.target === abandonOverlay) closeAbandonModal();
+});
+
+// Escape closes whichever surface is open (modal first, then menu).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!abandonOverlay.classList.contains('hidden')) {
+    e.stopImmediatePropagation();
+    closeAbandonModal();
+    return;
+  }
+  if (isSettingsMenuOpen()) {
+    e.stopImmediatePropagation();
+    closeSettingsMenu();
+  }
+}, true);
+
+// Confirming abandon deletes the siege row. That fires the realtime
+// DELETE event for both clients: the abandoning player sees the
+// "ye have abandoned" alert below before being bounced, the OTHER
+// player rides the existing postgres_changes DELETE handler at the
+// bottom of this file, which surfaces "☠ THE SIEGE WAS DISBANDED"
+// and returns them to the lobby. matchEnded is intentionally left
+// false here so that DELETE handler does fire — disbandAndLeave
+// sets nothing relevant before issuing the delete.
+abandonConfirmBtn.addEventListener('click', async () => {
+  abandonConfirmBtn.disabled = true;
+  abandonConfirmText.style.display = 'none';
+  abandonConfirmLoading.style.display = 'inline';
+  // Local feedback for the player who pressed Abandon — the other
+  // player will see the generic disband alert via realtime.
+  showAlert('☠ YE HAVE ABANDONED THE SIEGE', 'error');
+  await disbandAndLeave(abandonConfirmBtn);
+});
+
 // ── BATTLE EVENT WIRING ──
 // All discrete combat outcomes go through battleEvents above. Local
 // listeners drive HUD + state writes; the sync layer can mirror.
@@ -814,13 +949,14 @@ battleEvents.addEventListener('tower-destroyed', (e) => {
 
   if (lastAttackerTeam) creditTowerKill(lastAttackerTeam);
 
-  if (isHost && reward) {
-    const next = {
-      host_gold: Math.max(0, (siege.host_gold ?? 0) + reward),
-      ally_gold: Math.max(0, (siege.ally_gold ?? 0) + reward),
-    };
-    applySiegeUpdate({ ...siege, ...next });
-    updateSiege(next);
+  // Host-only: the server-side award_tower_kill RPC re-derives the
+  // reward amount from difficulty_settings so we don't have to (and
+  // a tampered client can't claim a tower was worth 999 gold). The
+  // `reward` field on the event is now informational only — kept on
+  // the event so contribution.js can still log the kill, but it's
+  // not what the server pays out on.
+  if (isHost) {
+    callBattleRpc('award_tower_kill', { p_siege: siege.id }, true);
   }
 });
 
@@ -847,16 +983,9 @@ battleEvents.addEventListener('wave-failed', async () => {
     await showEndOverlay('defeat');
     return;
   }
-  const patch = {
-    current_wave: current + 1,
-    host_queue: [],
-    ally_queue: [],
-    host_queue_ready: false,
-    ally_queue_ready: false,
-    phase: 'prep',
-  };
-  applySiegeUpdate({ ...siege, ...patch });
-  await updateSiege(patch);
+  // Wave bump now goes through the server-authoritative RPC. The RPC
+  // enforces +1 (no skipping) and resets queues/ready/phase atomically.
+  await callBattleRpc('advance_wave', { p_siege: siege.id }, false);
 });
 
 const updateWaveProgress = () => {
@@ -955,18 +1084,14 @@ const startWave = () => {
   renderWaveTrack(siege.current_wave || 1, siege.total_waves || 15);
   render();
 
-  // First-wave bookkeeping: host seeds gold for both sides and flips
-  // phase to 'battle'. On subsequent waves gold already persists; we
-  // only flip phase back to 'battle' from 'prep'.
+  // First-wave bookkeeping: host flips phase → 'battle' (and on the
+  // VERY first wave the RPC also seeds starting gold from
+  // difficulty_settings — that single sql path is now the only way
+  // gold ever appears on the row, so clients can't claim a custom
+  // starting balance). Idempotent: if phase is already 'battle' the
+  // RPC short-circuits.
   if (isHost) {
-    const patch = {};
-    if (siege.phase !== 'battle') patch.phase = 'battle';
-    if (!Number.isFinite(siege.host_gold) || siege.host_gold === 0) patch.host_gold = startingGold;
-    if (!Number.isFinite(siege.ally_gold) || siege.ally_gold === 0) patch.ally_gold = startingGold;
-    if (Object.keys(patch).length) {
-      applySiegeUpdate({ ...siege, ...patch });
-      updateSiege(patch);
-    }
+    callBattleRpc('start_wave_battle', { p_siege: siege.id }, false);
   }
 };
 
@@ -1084,6 +1209,21 @@ if (!siege) {
   if (meProfile?.username) siege[isHost ? 'host_username' : 'ally_username'] = meProfile.username;
   if (themProfile?.username) siege[isHost ? 'ally_username' : 'host_username'] = themProfile.username;
 
+  // Both players call enter_prep_phase on first battle entry. The RPC
+  // is idempotent and the second caller's seed branch no-ops once gold
+  // is non-zero (FOR UPDATE row lock makes the check race-safe). Doing
+  // this from both sides — not just the host — covers two edge cases:
+  //   • Host's RPC fails / slow connection: ally still gets a seed
+  //   • Ally lands on battle.html before host's RPC echoes via realtime
+  // The RPC also catches legacy sieges where phase advanced before
+  // migration 008/009 were applied (so the seed was silently dropped).
+  {
+    const { data, error } = await supabase.rpc('enter_prep_phase', { p_siege: siege.id });
+    if (error) console.error('enter_prep_phase failed', error);
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row) applySiegeUpdate({ ...siege, ...row });
+  }
+
   renderWaveTrack(siege.current_wave || 1, siege.total_waves || 15);
   render();
 
@@ -1105,4 +1245,71 @@ if (!siege) {
         setTimeout(returnToLobby, 900);
       })
     .subscribe();
+
+  // ── PRESENCE CHANNEL ─────────────────────────
+  // Tracks WHO is currently connected to this siege so the HUD can
+  // surface a "RECONNECTING…" indicator on the ally's profile when
+  // they lose connection (closed tab / network drop / signed out).
+  //
+  // ── SERVER-AUTH NOTE ─────────────────────────
+  // Presence intentionally lives in the Realtime layer only — NEVER
+  // persist it to public.sieges or any other auth-relevant table.
+  // Otherwise a tampered client could spoof "I'm online" to dodge
+  // teammate-disconnect penalties, or spoof "they're offline" to
+  // trigger them. Today presence affects ZERO gameplay decisions
+  // (gold, queue, outcome, payout, …) — it's a pure UI hint. Keep
+  // it that way. If a future feature needs "disconnect for N seconds
+  // triggers X", build that off the server clock + a dedicated
+  // server-side heartbeat, not off this channel.
+  const renderConnectionIndicator = (onlineUserIds) => {
+    // user.id is always considered online from its own client's
+    // POV — we only render the indicator for the OTHER player.
+    if (!otherUid) {
+      otherReconnectingEl.classList.add('hidden');
+      otherStatusEl.classList.add('hidden');
+      otherPlayerEl?.classList.remove('is-reconnecting');
+      return;
+    }
+    const otherOnline = onlineUserIds.has(otherUid);
+    otherReconnectingEl.classList.toggle('hidden', otherOnline);
+    otherStatusEl.classList.toggle('hidden', otherOnline);
+    otherPlayerEl?.classList.toggle('is-reconnecting', !otherOnline);
+  };
+
+  // Start in the "ally is reconnecting" state until their presence
+  // sync confirms them online — better to flash the indicator
+  // briefly than to falsely claim everything's fine while we wait.
+  renderConnectionIndicator(new Set());
+
+  const presenceChannel = supabase.channel(`presence-${siege.id}`, {
+    config: { presence: { key: user.id } },
+  });
+
+  presenceChannel
+    .on('presence', { event: 'sync' }, () => {
+      // presenceState() returns an object keyed by presence key
+      // (user.id in our config). One key per connected client.
+      const state = presenceChannel.presenceState();
+      renderConnectionIndicator(new Set(Object.keys(state)));
+    })
+    .subscribe(async (status) => {
+      // Only track ourselves once the channel is actually live —
+      // otherwise track() rejects with "channel not subscribed".
+      if (status === 'SUBSCRIBED') {
+        await presenceChannel.track({
+          user_id: user.id,
+          online_at: new Date().toISOString(),
+        });
+      }
+    });
+
+  // Clean teardown on page unload so the OTHER client sees us drop
+  // off the presence list immediately, not after the WebSocket's
+  // ~30s timeout. Belt-and-braces: closing the tab tears down the
+  // socket anyway, but explicit untrack lets a clean navigation
+  // (e.g. clicking RETURN TO WAR ROOM) flip the ally's UI right
+  // away instead of leaving them with a stale "ally still here".
+  window.addEventListener('beforeunload', () => {
+    try { presenceChannel.untrack(); } catch { /* socket already gone */ }
+  });
 }

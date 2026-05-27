@@ -447,11 +447,10 @@ const applySiegeUpdate = (fresh) => {
     bothReadyBanner.classList.remove('hidden');
     bothReadyBanner.setAttribute('aria-hidden', 'false');
     sessionStorage.setItem('battleSiegeId', siege.id);
-    // Host advances phase to 'prep' so the lobby browser stops showing
-    // this siege. Ally just rides realtime — no double-write race.
-    if (siege.host_id === user.id && siege.phase !== 'prep' && siege.phase !== 'battle') {
-      updateSiege({ phase: 'prep' });
-    }
+    // Phase advancement to 'prep' (and the starting-gold seed) now
+    // happens inside battle.js via the enter_prep_phase RPC — direct
+    // writes to `phase` are blocked by migration 008's trigger. The
+    // ally just rides realtime; no double-write race.
     setTimeout(() => smoothNavigate('/battle/battle.html'), 1100);
     return;
   }
@@ -513,11 +512,14 @@ if (!siege) {
 
   render();
 
-  // Advance phase to 'setup' on first entry (host only). The default after
-  // migration 004 is 'lobby'; lobby browser filters that out so once we
-  // flip it here the room stops appearing as joinable.
+  // Advance phase to 'setup' on first entry (host only). The default
+  // after migration 004 is 'lobby'; lobby browser filters that out so
+  // once we flip it here the room stops appearing as joinable. Goes
+  // through enter_setup_phase RPC because migration 008's trigger
+  // rejects direct writes to the `phase` column.
   if (isHost && siege.phase === 'lobby') {
-    updateSiege({ phase: 'setup' });
+    const { error } = await supabase.rpc('enter_setup_phase', { p_siege: siege.id });
+    if (error) console.error('enter_setup_phase failed', error);
   }
 
   // ── REALTIME ──

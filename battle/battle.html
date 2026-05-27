@@ -43,16 +43,42 @@
       </div>
 
       <div class="game-player game-player-other">
-        <div class="game-player-banner game-banner-other">⚜</div>
+        <div class="game-player-banner game-banner-other">⚜
+          <!-- Reconnect badge overlaid on the ally's banner — appears
+               when Supabase Realtime Presence drops them from the
+               battle channel (closed tab, lost network, signed out).
+               Removes itself when they come back. Pure UI hint;
+               never persisted to the DB. See presence channel in
+               battle.js for why this MUST stay out of auth state. -->
+          <div class="game-reconnect-badge hidden" id="otherReconnecting" aria-live="polite">
+            <span class="game-reconnect-dot"></span>
+            <span class="game-reconnect-dot"></span>
+            <span class="game-reconnect-dot"></span>
+          </div>
+        </div>
         <div class="game-player-info">
           <div class="game-player-name" id="otherName">ALLY</div>
+          <div class="game-player-status hidden" id="otherStatus">RECONNECTING…</div>
           <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-gold">◆</span><span class="game-stat-label">BATTLE GOLD</span><span class="game-stat-val game-gold-val" id="otherGold">0</span></div>
           <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-shard">◇</span><span class="game-stat-label">POINTS</span><span class="game-stat-val game-shard-val" id="otherPoints">0</span></div>
         </div>
         <div class="game-top-controls">
           <button type="button" class="px-btn game-ctrl-btn" id="speedBtn">x1</button>
           <button type="button" class="px-btn game-ctrl-btn" id="pauseBtn">❚❚</button>
-          <button type="button" class="px-btn game-ctrl-btn" id="settingsBtn">⚙</button>
+          <button type="button" class="px-btn game-ctrl-btn" id="settingsBtn" aria-haspopup="true" aria-expanded="false" aria-controls="settingsMenu">⚙</button>
+
+          <!-- Settings dropdown — anchored under the ⚙ button. Hidden
+               until settingsBtn is clicked; closes on outside click /
+               Escape. Currently only holds Abandon Siege; room left for
+               volume, controls-help, etc. -->
+          <div id="settingsMenu" class="game-settings-menu hidden" role="menu" aria-hidden="true" aria-labelledby="settingsBtn">
+            <div class="game-settings-menu-title">⚙ ROYAL DECREES</div>
+            <button type="button" id="abandonSiegeBtn" class="px-btn game-settings-menu-item game-settings-menu-item-danger" role="menuitem">
+              <span class="game-settings-menu-icon">☠</span>
+              <span class="game-settings-menu-label">ABANDON SIEGE</span>
+              <span class="game-settings-menu-hint">END THE BATTLE FOR BOTH HOSTS</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -250,6 +276,43 @@
 
           <div class="game-victory-actions">
             <button type="button" id="defeatLobbyBtn" class="px-btn setup-ready-btn">↩ RETURN TO WAR ROOM</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Abandon confirmation — triggered from the settings menu.
+         Reuses the existing .confirm-overlay / .confirm-card-danger
+         styles from lobby-styles.css so it matches the lobby's
+         disband modal visually. Either player can fire it; whichever
+         one confirms deletes the siege row, and the realtime DELETE
+         echo bounces the OTHER player back to the lobby with the
+         "siege was abandoned" alert. -->
+    <div id="abandonOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="abandonTitle" aria-hidden="true">
+      <div class="confirm-card confirm-card-danger">
+        <div class="confirm-card-inner-border"></div>
+        <div class="confirm-card-corner tl"></div>
+        <div class="confirm-card-corner tr"></div>
+        <div class="confirm-card-corner bl"></div>
+        <div class="confirm-card-corner br"></div>
+        <div class="confirm-card-content">
+          <div id="abandonTitle" class="confirm-title">☠ ABANDON THE SIEGE? ☠</div>
+          <div class="divider confirm-divider">
+            <div class="dash-line"></div>
+            <span class="divider-icon">⚔</span>
+            <div class="dash-line"></div>
+          </div>
+          <p class="confirm-body">
+            FORFEITING NOW ENDS THE BATTLE FOR BOTH HOSTS.<br/>
+            NEITHER SIDE EARNS THE MATCH REWARD.<br/>
+            BOTH WILL RETURN TO THE WAR ROOM.
+          </p>
+          <div class="confirm-actions">
+            <button type="button" id="abandonCancelBtn" class="px-btn confirm-cancel-btn">◀ STAY THE COURSE</button>
+            <button type="button" id="abandonConfirmBtn" class="px-btn confirm-danger-btn">
+              <span id="abandonConfirmText">☠ ABANDON ☠</span>
+              <span id="abandonConfirmLoading" class="btn-loading">█ RETREATING… █</span>
+            </button>
           </div>
         </div>
       </div>

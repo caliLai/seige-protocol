@@ -143,6 +143,13 @@ let matchEnded = false;
 // (applySiegeUpdate's 'prep' transition).
 let observingMode = false;
 let latestSnapshot = null;
+// True while latestSnapshot came from a one-shot DB read (seed or
+// watchdog refetch) rather than a live broadcast / Postgres CDC push.
+// Promotion is intentionally NOT triggered off seed-only data within
+// the first few seconds — the DB seed can be moments old AND units in
+// it can be near the spawn point, so promoting from it would visually
+// "rewind" the wave on the refreshing client.
+let latestSnapshotIsSeed = false;
 
 // "Lives" in the HUD represents wave-attempts remaining — the team can
 // fail one wave per remaining attempt. Derived from current_wave /
@@ -557,12 +564,21 @@ const updateSiege = async (patch) => {
 // match-end RPC is benign — the player just misses 80 gold on the
 // final tower, but the match is ending anyway, so showing "THE MOMENT
 // HAS PASSED" during the victory overlay is just noise.
+// Errors that are part of normal multiplayer racing — the user has no
+// action to take, so suppress the visible alert (still log to console).
+// not_both_ready: caller hit lock-in/start before the partner readied.
+//                 The HUD already shows "waiting for ally" so a popup is
+//                 redundant noise.
+// wrong_phase:    siege row was updated by the other client between the
+//                 caller's check and the RPC landing — idempotent races.
+const SILENT_BATTLE_ERRORS = new Set(['not_both_ready']);
+
 const callBattleRpc = async (name, args, applyShape, silentErrors = []) => {
   const { data, error } = await supabase.rpc(name, args);
   if (error) {
     const code = String(error.message || '').split(':')[0].trim();
-    if (silentErrors.includes(code)) {
-      console.warn(`${name} returned ${code} (silenced — expected for this caller)`);
+    if (silentErrors.includes(code) || SILENT_BATTLE_ERRORS.has(code)) {
+      console.warn(`${name} returned ${code} (silenced)`);
       return null;
     }
     const msg = ({
@@ -573,7 +589,6 @@ const callBattleRpc = async (name, args, applyShape, silentErrors = []) => {
       wrong_phase:       '✗ THE MOMENT HAS PASSED',
       host_only:         '✗ ONLY THE HOST MAY DO THAT',
       not_a_player:      '✗ THOU ART NOT IN THIS SIEGE',
-      not_both_ready:    '✗ BOTH HOSTS MUST BE READY',
       final_wave_no_advance: '✗ NO WAVES REMAIN',
     })[code] || `✗ ${code.toUpperCase().replace(/_/g, ' ')}`;
     console.error(`${name} failed`, error);
@@ -830,13 +845,16 @@ const showEndOverlay = async (outcome) => {
   // guard ('already_paid') and we treat that as a no-op so both HUDs
   // render their reward.
   //
-  // The terminal-state write now goes through set_match_outcome (mig 008)
-  // instead of a direct UPDATE — the trigger blocks direct writes to
-  // outcome / phase / contribution columns to prevent a tampered host
-  // from writing 'victory' on a loss. Combat sim itself is still
-  // client-side, so the host's *contribution* values are still trusted;
-  // see migration 008 LIMITATION note.
-  if (isHost && siege.outcome !== outcome) {
+  // The terminal-state write goes through set_match_outcome — the
+  // trigger blocks direct writes to outcome/phase/contribution to
+  // stop a tampered client from inventing a victory on a loss.
+  //
+  // Either player may now make this call (mig 013). Originally
+  // host-only, but after a both-refresh recovery the host's
+  // reconstructed sim may never reach victory locally while the
+  // ally's does, and the match would hang. RPC is idempotent on
+  // phase='complete' so racing calls just no-op on the second one.
+  if (siege.outcome !== outcome) {
     await callBattleRpc('set_match_outcome', {
       p_siege: siege.id,
       p_outcome: outcome,
@@ -1162,18 +1180,16 @@ const promoteToSimmer = () => {
 
 let stuckWatchdogTimer = null;
 let observingSince = 0;
-// Conservative thresholds. The watchdog should only fire when we're
-// confident NEITHER peer is producing fresh state — too eager and we
-// step on a peer that was simply slow to establish its broadcast
-// subscription, mis-promoting from an out-of-date snapshot.
-//
-// At 5Hz, broadcasts arrive every 200ms in normal operation, so a
-// 2.5s gap means broadcasts truly stopped. The 2.5s minimum observing
-// time also gives the broadcast subscription + presence channel time
-// to come up cleanly before we decide the peer is gone.
+// Promote off live data fast; promote off seed-only data slow.
+// The split exists because the DB seed (or watchdog refetch) can be
+// moments old AND can show units near the spawn point — promoting from
+// it visually "rewinds" the wave on the refreshing client. We only
+// trust seed data once we've waited long enough that the live channel
+// has clearly failed.
 const STUCK_MIN_OBSERVING_MS = 2500;
-const STUCK_SNAPSHOT_MAX_AGE = 2500;
-const STUCK_DB_REFETCH_AGE  = 1500;
+const STUCK_SNAPSHOT_MAX_AGE = 2500;        // gap for FRESH (live) data
+const STUCK_DB_REFETCH_AGE   = 1500;
+const STUCK_SEED_FALLBACK_MS = 8000;        // only promote off seed after this
 
 const startStuckWaveWatchdog = () => {
   if (stuckWatchdogTimer) clearInterval(stuckWatchdogTimer);
@@ -1203,7 +1219,10 @@ const startStuckWaveWatchdog = () => {
       if (data && Array.isArray(data.units)) {
         const dbTs = data.ts || 0;
         const curTs = latestSnapshot?.ts || 0;
-        if (dbTs >= curTs) latestSnapshot = data;
+        if (dbTs >= curTs) {
+          latestSnapshot = data;
+          latestSnapshotIsSeed = true;  // DB origin, not a live broadcast
+        }
       }
     }
 
@@ -1220,6 +1239,17 @@ const startStuckWaveWatchdog = () => {
     // waiting (the server-side watchdog from migration 012 handles
     // the truly-abandoned case after 60s).
     if (!latestSnapshot || !Array.isArray(latestSnapshot.units) || latestSnapshot.units.length === 0) {
+      return;
+    }
+
+    // Hold off on promotion if all we have is seed/CDC-refetch data
+    // and we haven't waited long enough — the live broadcast subscription
+    // might just be slow. Promoting off a stale seed places units near
+    // their spawn point even though the actual wave has progressed far
+    // beyond that, which reads to the user as "the wave restarted".
+    // After STUCK_SEED_FALLBACK_MS the peer is presumed gone for good
+    // and we promote off whatever we have.
+    if (latestSnapshotIsSeed && observingFor < STUCK_SEED_FALLBACK_MS) {
       return;
     }
 
@@ -1257,6 +1287,21 @@ const renderObservedState = () => {
     if (dead?.centre) spawnExplosion(dead.centre.x, dead.centre.y);
   }
   updateWaveProgress();
+
+  // OBSERVED VICTORY DETECTION ─────────────────────────────────
+  // When the snapshot reports all towers destroyed, the wave is won
+  // — regardless of whether our local sim has reached that state.
+  // Both peers see the same snapshot, so both fire showEndOverlay in
+  // the same frame: the host's call inside it writes set_match_outcome
+  // (host-only), and the ally just shows the overlay locally and waits
+  // for the row update to land. This is the fix for "victory screen
+  // doesn't pop up when both refresh" — without it, an ally who reached
+  // the final tower locally could hang waiting for the host's sim to
+  // catch up. Guarded by !matchEnded so it only fires once per match.
+  if (!matchEnded && towers.length === 0 && towersDestroyedCount >= totalTowers) {
+    showEndOverlay('victory');
+    return;
+  }
 
   // Sync remaining towers' HP from the snapshot.
   for (const t of snap.towers || []) {
@@ -1302,10 +1347,19 @@ const renderObservedState = () => {
 // Image plus the inferred frame geometry — we assume sheets are
 // horizontal strips of square frames (matches every unit folder under
 // /assets/<Unit>/<Unit>/<Unit>-Idle.png).
+//
+// Keyed by `${unitId}|${kind}` so we can cache both Idle and Attack
+// sheets per unit type without colliding.
 const observedSpriteMeta = new Map();
 
-const ensureObservedSprite = (unitId) => {
-  if (observedSpriteMeta.has(unitId)) return observedSpriteMeta.get(unitId);
+const attackSpriteUrl = (unitId) =>
+  `/assets/${encodeURI(unitId)}/${encodeURI(unitId)}/${unitId}-Attack01.png`;
+const attackFallbackUrl = (unitId) =>
+  `/assets/${encodeURI(unitId)}/${encodeURI(unitId)}/${unitId}-Attack.png`;
+
+const ensureObservedSprite = (unitId, kind = 'idle') => {
+  const cacheKey = `${unitId}|${kind}`;
+  if (observedSpriteMeta.has(cacheKey)) return observedSpriteMeta.get(cacheKey);
   const meta = {
     img: new Image(),
     loaded: false,
@@ -1313,6 +1367,7 @@ const ensureObservedSprite = (unitId) => {
     frameHeight: 100,
     frameCount: 6,
     sheetWidth: 600,
+    triedAttackFallback: false,
   };
   meta.img.onload = () => {
     meta.frameHeight = meta.img.naturalHeight;
@@ -1321,9 +1376,18 @@ const ensureObservedSprite = (unitId) => {
     meta.frameCount  = Math.max(1, Math.round(meta.sheetWidth / meta.frameWidth));
     meta.loaded = true;
   };
-  meta.img.onerror = () => { /* keep box fallback on load failure */ };
-  meta.img.src = idleSpriteUrl(unitId);
-  observedSpriteMeta.set(unitId, meta);
+  meta.img.onerror = () => {
+    // Some units (Priest, Skeleton Archer) ship Attack.png instead of
+    // Attack01.png — retry the fallback name before giving up.
+    if (kind === 'attack' && !meta.triedAttackFallback) {
+      meta.triedAttackFallback = true;
+      meta.img.src = attackFallbackUrl(unitId);
+    }
+    // Otherwise leave loaded=false; the box fallback in drawObservedUnit
+    // handles missing sheets gracefully.
+  };
+  meta.img.src = kind === 'attack' ? attackSpriteUrl(unitId) : idleSpriteUrl(unitId);
+  observedSpriteMeta.set(cacheKey, meta);
   return meta;
 };
 
@@ -1342,10 +1406,21 @@ const OBSERVED_DRAW_SIZE   = 120;
 const OBSERVED_VISUAL_OFFSET = (OBSERVED_DRAW_SIZE - OBSERVED_UNIT_WIDTH) / 2; // 35
 
 const drawObservedUnit = (u, x = u.x, y = u.y) => {
-  const meta = ensureObservedSprite(u.u || 'Soldier');
+  // u.a (attack flag) is set in the broadcast when the live unit had a
+  // live target. Swap to the Attack sheet so observed clients see the
+  // proper swing/strike instead of the idle pose. Attack sheets are
+  // loaded lazily on first attacking sighting; until loaded we still
+  // show the idle pose (which is already cached) as a graceful fallback.
+  const unitId = u.u || 'Soldier';
+  const attackMeta = u.a ? ensureObservedSprite(unitId, 'attack') : null;
+  const idleMeta   = ensureObservedSprite(unitId, 'idle');
+  const meta = (attackMeta && attackMeta.loaded) ? attackMeta : idleMeta;
 
   if (meta.loaded) {
-    const frame = Math.floor(performance.now() / 130) % meta.frameCount;
+    // Attack frames run faster than idle (~70ms in the live sim) so the
+    // strike reads as a strike, not a stretched idle.
+    const framePeriod = (meta === attackMeta) ? 90 : 130;
+    const frame = Math.floor(performance.now() / framePeriod) % meta.frameCount;
     gameCanvas.drawImage(
       meta.img,
       frame * meta.frameWidth, 0, meta.frameWidth, meta.frameHeight,
@@ -1513,12 +1588,36 @@ const startWave = () => {
         if (!data) return;                 // no DB row yet — fall through to broadcast
         if (latestSnapshot && (latestSnapshot.ts || 0) >= (data.ts || 0)) return;
         latestSnapshot = data;
+        latestSnapshotIsSeed = true;       // DB origin — gate promotion accordingly
       });
 
     startStuckWaveWatchdog();
     showAlert('⚔ WAVE IN PROGRESS — AWAITING THINE ALLY', 'info');
     return;
   }
+
+  // Phase is 'prep' + bothReady. Don't spawn here — spawning is now
+  // driven by the server-committed phase='prep' → 'battle' transition
+  // (see beginWaveSpawn() called from applySiegeUpdate). This makes the
+  // wave start deterministic across both clients: nobody has units on
+  // the field until start_wave_battle has actually committed. A refresh
+  // in the gap between local lock-in and the RPC commit now lands on
+  // either phase='prep' (waits for echo → spawn) or phase='battle'
+  // (observes), instead of re-spawning at path[0] and visually
+  // restarting the wave for one player.
+  if (isHost) {
+    callBattleRpc('start_wave_battle', { p_siege: siege.id }, false);
+  }
+  // Ally has nothing to do — just waits for the host's RPC to commit.
+};
+
+// Spawn the queues for the wave that just transitioned to phase='battle'
+// on the server. Called from applySiegeUpdate when prevPhase==='prep'
+// and the fresh row's phase==='battle'. Idempotent via battleStarted.
+const beginWaveSpawn = () => {
+  if (!mapLoaded || matchEnded) return;
+  if (battleStarted) return;
+  if (observingMode) return;  // refreshers stay observing instead of spawning
 
   battleStarted = true;
   waveJudged = false;
@@ -1543,16 +1642,6 @@ const startWave = () => {
   spawnWaveQueues();
   renderWaveTrack(siege.current_wave || 1, siege.total_waves || 15);
   render();
-
-  // First-wave bookkeeping: host flips phase → 'battle' (and on the
-  // VERY first wave the RPC also seeds starting gold from
-  // difficulty_settings — that single sql path is now the only way
-  // gold ever appears on the row, so clients can't claim a custom
-  // starting balance). Idempotent: if phase is already 'battle' the
-  // RPC short-circuits.
-  if (isHost) {
-    callBattleRpc('start_wave_battle', { p_siege: siege.id }, false);
-  }
 };
 
 // ── REALTIME RECONCILIATION ──
@@ -1604,6 +1693,15 @@ const applySiegeUpdate = (fresh) => {
     attackUnits = [];
     unitsDeployedCount = 0;
     updateWaveProgress();
+  }
+
+  // Server has just committed the prep → battle transition. Spawn the
+  // queues NOW so both clients spawn off the same event instead of off
+  // their own lock-in moments (which previously raced the RPC commit
+  // and let a refresher re-spawn fresh while the other client's sim was
+  // already mid-flight).
+  if (siege.phase === 'battle' && prevPhase === 'prep' && !battleStarted && !observingMode && !matchEnded) {
+    beginWaveSpawn();
   }
   render();
 
@@ -1766,6 +1864,7 @@ if (!siege) {
       // clients have their own authoritative local sim.
       if (observingMode && msg?.payload) {
         latestSnapshot = msg.payload;
+        latestSnapshotIsSeed = false;  // live data — promotion may use it
       }
     })
     .subscribe((status) => {
@@ -1797,6 +1896,11 @@ if (!siege) {
               u: u.unitId || u.constructor?.name || 'Soldier',  // sprite key
               h: Math.max(0, Math.round(u.health ?? 0)),
               m: Math.max(1, Math.round(u.maxHealth ?? 1)),
+              // a = 1 when the unit has a live attack target. Observed
+              // clients use this to swap to the Attack sprite sheet so
+              // refreshed players see units actually attacking towers
+              // instead of just standing in idle.
+              a: (u.target && (u.target.health ?? 1) > 0) ? 1 : 0,
             })),
           towers: towers.map((t, i) => ({
             i: towersDestroyedCount + i,  // original (pre-destruction) index
@@ -1839,7 +1943,13 @@ if (!siege) {
         (payload) => {
           if (!observingMode) return;
           const state = payload.new?.state;
-          if (state) latestSnapshot = state;
+          if (state) {
+            latestSnapshot = state;
+            // A CDC push of a row that the OTHER peer just wrote IS
+            // fresh in the only sense that matters here (the peer is
+            // alive and persisting). Treat the same as a live broadcast.
+            latestSnapshotIsSeed = false;
+          }
         })
     .subscribe();
 

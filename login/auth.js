@@ -12,16 +12,35 @@ import { supabase } from '/lib/supabase.js';
 // Bounce them straight to the start screen if a session exists so the
 // site behaves like a real signed-in app.
 // We do this before any DOM setup so the form never even flashes.
+//
+// EXCEPT: if single-session.js just kicked this tab out (because a
+// newer tab/device claimed the account), `kicked_tab` is set in this
+// tab's sessionStorage. Skipping the auto-redirect here breaks the
+// otherwise-infinite loop:
+//   kicked → /login → valid session → /start-screen → kicked again → ...
+// The localStorage session token is still valid — it belongs to the
+// new tab too, and we don't want to invalidate it. The user can
+// manually sign in again if they want THIS tab back; that submit
+// path becomes the new latest session and would kick the other tab
+// in turn, which is the expected single-session semantics.
 {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user) {
-    // skipDoorAnimation so returning users don't sit through the
-    // 2.3s castle-door open every page visit.
-    sessionStorage.setItem('skipDoorAnimation', '1');
-    window.location.replace('/start-screen/start-screen.html');
-    // Throw so module evaluation halts — the page is about to unload
-    // anyway, but stopping here keeps the form bindings from running.
-    throw new Error('redirecting to start screen — existing session');
+  const wasKicked = sessionStorage.getItem('kicked_tab') === '1';
+  if (wasKicked) {
+    sessionStorage.removeItem('kicked_tab');
+    // Fall through to render the form; the showAlert below will
+    // explain why they're here.
+  } else {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      // skipDoorAnimation so returning users don't sit through the
+      // 2.3s castle-door open every page visit.
+      sessionStorage.setItem('skipDoorAnimation', '1');
+      window.location.replace('/start-screen/start-screen.html');
+      // Throw so module evaluation halts — the page is about to
+      // unload anyway, but stopping here keeps the form bindings
+      // from running.
+      throw new Error('redirecting to start screen — existing session');
+    }
   }
 }
 
@@ -62,6 +81,18 @@ const showAlert = (msg, type = 'error') => {
   alertEl.style.color = '#f0d9a0';
   alertEl.style.boxShadow = '3px 3px 0 #000';
 };
+
+// If we landed here because single-session.js kicked the previous
+// tab, surface a clear explanation so the user understands they
+// weren't randomly signed out. The flag is cleared on first read so
+// it doesn't persist across normal future logins.
+{
+  const notice = sessionStorage.getItem('authNotice');
+  if (notice === 'other_session') {
+    sessionStorage.removeItem('authNotice');
+    showAlert('⚠ SIGNED OUT — THY NAME WAS CLAIMED ELSEWHERE');
+  }
+}
 
 // Supabase returns errors with .message strings rather than fixed codes.
 // Map common phrases to medieval error text.

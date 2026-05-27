@@ -233,7 +233,117 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── ACTION HANDLERS ──
-document.getElementById('newGameBtn').addEventListener('click', () => {
+// The PLAY NOW button doubles as a RESUME GAME button. On page load we
+// check whether the user has an in-progress siege (a row they're part of
+// with `started_at` set — i.e. they're past the lobby's START click).
+// If so, the label flips to "⚔ RESUME GAME ⚔" and clicking it shows a
+// "rejoining" overlay before sending them to the right screen:
+//   • host_ready AND ally_ready  →  /game/game.html       (mid-battle)
+//   • otherwise                  →  /siege-setup/...      (mid-unit-pick)
+// If there's no ongoing siege the button stays "PLAY NOW" and goes to
+// the lobby as normal.
+const newGameBtn = document.getElementById('newGameBtn');
+
+// Cached so the click handler doesn't have to re-query. Refreshed
+// post-load by the lookup just below.
+let resumeSiege = null;
+
+const showReconnectOverlay = (title, body) => {
+  const ov = document.getElementById('reconnectOverlay');
+  if (!ov) return;
+  if (title) {
+    const t = document.getElementById('reconnectTitle');
+    if (t) t.textContent = title;
+  }
+  if (body) {
+    const b = ov.querySelector('.reconnect-body');
+    if (b) b.innerHTML = body;
+  }
+  ov.classList.remove('hidden');
+  ov.setAttribute('aria-hidden', 'false');
+};
+
+// Look up any started siege the user is in. We do NOT filter on
+// host_ready / ally_ready — those decide *where* we resume, not whether
+// we resume. Using .order + .limit instead of .maybeSingle() guards
+// against the edge case of multiple started rows (rare, but
+// .maybeSingle would treat that as an error and discard the result).
+const findOngoingSiege = async () => {
+  const { data, error } = await supabase
+    .from('sieges')
+    .select('id, host_id, ally_id, host_ready, ally_ready, started_at')
+    .or(`host_id.eq.${user.id},ally_id.eq.${user.id}`)
+    .not('started_at', 'is', null)
+    .order('started_at', { ascending: false })
+    .limit(1);
+  if (error) {
+    console.error('ongoing siege lookup failed', error);
+    return null;
+  }
+  return (data && data[0]) || null;
+};
+
+// Set the button label + accessible state based on whether we have a
+// resume target. Called once on page load, and again from the click
+// handler if a stale "resume" turned out to no longer exist.
+const renderPlayButton = () => {
+  if (resumeSiege) {
+    newGameBtn.textContent = '⚔ RESUME GAME ⚔';
+    newGameBtn.setAttribute('aria-label', 'Resume thy ongoing siege');
+    newGameBtn.dataset.mode = 'resume';
+  } else {
+    newGameBtn.textContent = '⚔ PLAY NOW';
+    newGameBtn.setAttribute('aria-label', 'Start a new siege');
+    newGameBtn.dataset.mode = 'play';
+  }
+};
+
+// Kick off the lookup as soon as the module loads so the label is right
+// by the time the doors finish opening. Failures fall through silently
+// to "PLAY NOW" — the lobby's own resume guard is the safety net.
+resumeSiege = await findOngoingSiege();
+renderPlayButton();
+
+newGameBtn.addEventListener('click', async () => {
+  // Disable the button immediately so a frantic double-click can't fire
+  // two navigations on top of each other.
+  if (newGameBtn.disabled) return;
+  newGameBtn.disabled = true;
+
+  // Always re-query right before navigating — the cached value can go
+  // stale if the other player disbanded while this tab was idle, and
+  // we don't want to show a "reconnecting" overlay only to land on a
+  // deleted siege.
+  const ongoing = await findOngoingSiege();
+  resumeSiege = ongoing;
+
+  if (ongoing) {
+    const bothReady = !!ongoing.host_ready && !!ongoing.ally_ready;
+    const destination = bothReady ? '/game/game.html' : '/siege-setup/siege-setup.html';
+
+    // Setup page expects the siege id in sessionStorage so it doesn't
+    // have to re-discover the row. Harmless for the game destination.
+    sessionStorage.setItem('setupSiegeId', ongoing.id);
+    sessionStorage.setItem('resumeSiegeId', ongoing.id);
+
+    showReconnectOverlay(
+      bothReady ? '⚔ REJOINING THE BATTLE ⚔' : '⚔ RETURNING TO THE MARSHALLING ⚔',
+      bothReady
+        ? '▌ RAISING THY BANNER ANEW ▐<br/>THINE ALLY AWAITS UPON THE FIELD'
+        : '▌ TAKING UP THY POST ANEW ▐<br/>THINE ALLY AWAITS IN THE WAR ROOM',
+    );
+
+    // Brief pause so the player actually sees the "reconnecting" screen —
+    // otherwise the navigation hides it before the eye can register it.
+    setTimeout(() => { window.location.href = destination; }, 1200);
+    return;
+  }
+
+  // No ongoing siege — straight to the lobby as normal. Re-render the
+  // button in case it was previously labelled RESUME (stale cache) and
+  // re-enable so a cancelled navigation doesn't leave it dead.
+  renderPlayButton();
+  newGameBtn.disabled = false;
   smoothNavigate('/lobby/lobby.html');
 });
 

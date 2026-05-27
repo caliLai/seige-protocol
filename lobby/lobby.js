@@ -675,12 +675,21 @@ if (!selectedSiege) {
 
 // If the user is mid-setup (e.g. they refreshed during the unit-pick phase
 // or arrived via a deep link), bounce them straight back to the setup
-// screen rather than stranding them at the START button.
+// screen rather than stranding them at the START button. If both sides
+// already readied up, the battle is in progress — skip setup and resume
+// straight into the game screen. This is a safety net: the primary
+// entrypoint for mid-battle reconnects is the PLAY NOW button on the
+// start screen, which shows a "rejoining the battle" overlay first.
+// Here we just navigate silently so the user doesn't bounce setup→game.
 const ongoing = sieges.find(
   s => (s.host_id === user.id || s.ally_id === user.id) && s.started_at
 );
 if (ongoing) {
-  navigateToSetup(ongoing.id);
+  if (ongoing.host_ready && ongoing.ally_ready) {
+    smoothNavigate('/game/game.html');
+  } else {
+    navigateToSetup(ongoing.id);
+  }
 } else {
   renderRoomList();
   renderPreview();

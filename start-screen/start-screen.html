@@ -144,7 +144,7 @@
             <button id="achievementsBtn" class="px-btn menu-btn">★ HALL OF DEEDS</button>
             <button id="settingsBtn" class="px-btn menu-btn">⚙ ROYAL DECREES</button>
             <button id="creditsBtn" class="px-btn menu-btn">📜 SCRIBES &amp; SCROLLS</button>
-            <button id="logoutBtn" class="px-btn menu-btn menu-btn-danger">⏻ ABANDON KEEP</button>
+            <button id="logoutBtn" class="px-btn menu-btn menu-btn-danger">⏻ LOGOUT</button>
           </div>
 
         </div>
@@ -189,6 +189,38 @@
             <span id="usernameSubmitLoading" class="username-loading">█ SCRIBING… █</span>
           </button>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ RECONNECT OVERLAY (mid-battle resume) ═══ -->
+  <!-- Surfaced by start-screen.js when the user clicks PLAY NOW and has an
+       active siege where both sides already readied up — i.e. they were
+       inside game.html when the connection dropped. Pure presentational
+       overlay; the actual navigation is fired from the click handler. -->
+  <div id="reconnectOverlay" class="reconnect-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reconnectTitle" aria-hidden="true">
+    <div class="reconnect-card">
+      <div class="reconnect-card-inner-border"></div>
+      <div class="reconnect-card-corner tl"></div>
+      <div class="reconnect-card-corner tr"></div>
+      <div class="reconnect-card-corner bl"></div>
+      <div class="reconnect-card-corner br"></div>
+      <div class="reconnect-card-content">
+        <div id="reconnectTitle" class="reconnect-title">⚔ REJOINING THE BATTLE ⚔</div>
+        <div class="divider reconnect-divider">
+          <div class="dash-line"></div>
+          <span class="divider-icon">⚔</span>
+          <div class="dash-line"></div>
+        </div>
+        <p class="reconnect-body">
+          ▌ RAISING THY BANNER ANEW ▐<br/>
+          THINE ALLY AWAITS UPON THE FIELD
+        </p>
+        <div class="reconnect-dots" aria-hidden="true">
+          <span class="reconnect-dot"></span>
+          <span class="reconnect-dot"></span>
+          <span class="reconnect-dot"></span>
+        </div>
       </div>
     </div>
   </div>

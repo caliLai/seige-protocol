@@ -4,6 +4,27 @@
 
 import { supabase } from '/lib/supabase.js';
 
+// ── EXISTING-SESSION GATE ──
+// Sessions are already persisted to localStorage by lib/supabase.js
+// (persistSession: true). The login page itself wasn't honouring that —
+// it always rendered the form even when a valid session was sitting in
+// storage, forcing users to "log in" every time they hit the root URL.
+// Bounce them straight to the start screen if a session exists so the
+// site behaves like a real signed-in app.
+// We do this before any DOM setup so the form never even flashes.
+{
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user) {
+    // skipDoorAnimation so returning users don't sit through the
+    // 2.3s castle-door open every page visit.
+    sessionStorage.setItem('skipDoorAnimation', '1');
+    window.location.replace('/start-screen/start-screen.html');
+    // Throw so module evaluation halts — the page is about to unload
+    // anyway, but stopping here keeps the form bindings from running.
+    throw new Error('redirecting to start screen — existing session');
+  }
+}
+
 // ── DOM REFS ──
 const loginView = document.getElementById('loginView');
 const registerView = document.getElementById('registerView');

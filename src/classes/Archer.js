@@ -177,7 +177,7 @@ export class Archer extends Unit {
             vy: Math.sin(angle) * this.projectileSpeed,
             damage: this.attackStrength,
             target: target,
-            ownerId: this.ownerId
+            ownerId: this.team || this.ownerId || null
         });
     }
 
@@ -207,7 +207,8 @@ export class Archer extends Unit {
         this.lastAttackFrameAt = now;
         this.currentAttackFrame++;
 
-        if (!this.hasReleasedProjectile && this.currentAttackFrame >= this.attackReleaseFrame) {
+        const releaseFrame = Math.min(this.attackReleaseFrame, this.attackFrameCount - 1);
+        if (!this.hasReleasedProjectile && this.currentAttackFrame >= releaseFrame) {
             this.spawnProjectileAtTarget(this.target);
             this.hasReleasedProjectile = true;
         }
@@ -262,7 +263,7 @@ export class Archer extends Unit {
             const dy = target.centre.y - (projectile.y + this.projectileSize / 2);
 
             if (Math.hypot(dx, dy) <= this.projectileSize + 4) {
-                const attackerId = projectile.ownerId || this.ownerId || null;
+                const attackerId = projectile.ownerId || this.team || this.ownerId || null;
                 target.takeDamage(projectile.damage, attackerId);
                 return false;
             }

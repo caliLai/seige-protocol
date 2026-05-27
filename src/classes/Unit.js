@@ -171,13 +171,14 @@ export class Unit extends Sprite {
 
     const distance = Math.hypot(dx, dy);
 
-    if (distance < 2 && this.pathIndex < activePath.length - 1) {
+    const waypointReachDistance = 8;
+    if (distance <= waypointReachDistance && this.pathIndex < activePath.length - 1) {
       this.pathIndex++;
       return;
     }
 
     const angle = Math.atan2(dy, dx);
-    const frameStep = this.moveSpeedPxPerSecond / 60;
+    const frameStep = Math.min(this.moveSpeedPxPerSecond / 60, distance);
 
     this.position.x += Math.cos(angle) * frameStep;
     this.position.y += Math.sin(angle) * frameStep;

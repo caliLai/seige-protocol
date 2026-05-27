@@ -88,6 +88,10 @@ export class Tower extends Sprite {
 
         if (attackerId) {
             this.lastHitBy = attackerId;
+            if (attackerId === "host" || attackerId === "ally") {
+                this.lastAttackerTeam = attackerId;
+                creditDamage(attackerId, amount);
+            }
         }
 
         this.health -= amount;

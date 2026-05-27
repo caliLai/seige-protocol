@@ -171,9 +171,10 @@ export class Knight extends Unit {
         this.lastAttackFrameAt = now;
         this.currentAttackFrame++;
 
-        if (!this.hasAppliedHit && this.currentAttackFrame >= this.attackReleaseFrame) {
+        const releaseFrame = Math.min(this.attackReleaseFrame, this.attackFrameCount - 1);
+        if (!this.hasAppliedHit && this.currentAttackFrame >= releaseFrame) {
             if (!this.target.isDead) {
-                const attackerId = this.ownerId || null;
+                const attackerId = this.team || this.ownerId || null;
                 this.target.takeDamage(this.attackStrength, attackerId);
             }
             this.hasAppliedHit = true;

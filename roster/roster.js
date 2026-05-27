@@ -360,10 +360,10 @@ const renderGrid = () => {
 const attemptUnlock = async (unit, card) => {
   if (isUnlocked(unit)) return;
   if (currentPoints < unit.cost) {
-    showAlert(`✗ NOT ENOUGH GOLD! NEED ${unit.cost - currentPoints} MORE.`, 'error');
+    showAlert(`✗ NOT ENOUGH POINTS! NEED ${unit.cost - currentPoints} MORE.`, 'error');
     return;
   }
-  const ok = confirm(`Recruit ${unit.id} for ${unit.cost} gold?`);
+  const ok = confirm(`Recruit ${unit.id} for ${unit.cost} points?`);
   if (!ok) return;
 
   card.classList.add('purchasing');

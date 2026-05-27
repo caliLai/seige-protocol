@@ -3,6 +3,7 @@
    ═══════════════════════════════════════════════ */
 
 import { supabase } from '/lib/supabase.js';
+import { enforceSingleSession } from '/lib/single-session.js';
 
 // ── DOM REFS ──
 const doorLoader = document.getElementById('doorLoader');
@@ -45,6 +46,10 @@ const { data: { user } } = await supabase.auth.getUser();
 if (!user) {
   window.location.href = '/login/login.html';
 }
+
+// Latest tab/device wins — opening a new session anywhere else for
+// this account signs THIS tab out and bounces it to /login.
+enforceSingleSession(user);
 
 const setHailedAs = (name) => {
   userNameEl.textContent = (name || 'NAMELESS KNIGHT').toUpperCase();

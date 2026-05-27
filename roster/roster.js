@@ -3,6 +3,7 @@
    ═══════════════════════════════════════════════ */
 
 import { supabase } from '/lib/supabase.js';
+import { enforceSingleSession } from '/lib/single-session.js';
 
 // ── UNIT CATALOG ──
 // `starter: true` means the unit is always available — those rows are not
@@ -99,6 +100,10 @@ const { data: { user } } = await supabase.auth.getUser();
 if (!user) {
   window.location.href = '/login/login.html';
 }
+
+// Latest tab/device wins — opening a new session anywhere else for
+// this account signs THIS tab out and bounces it to /login.
+enforceSingleSession(user);
 
 // ── STATE ──
 let currentPoints = 0;

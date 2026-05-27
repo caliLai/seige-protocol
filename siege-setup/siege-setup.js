@@ -3,6 +3,7 @@
    ═══════════════════════════════════════════════ */
 
 import { supabase } from '/lib/supabase.js';
+import { enforceSingleSession } from '/lib/single-session.js';
 import { UNITS_BY_ID, availableUnits, idleSpriteUrl } from '/lib/units.js';
 
 // ── DOM REFS ──
@@ -73,6 +74,10 @@ const returnToLobby = () => smoothNavigate('/lobby/lobby.html');
 // ── AUTH GATE ──
 const { data: { user } } = await supabase.auth.getUser();
 if (!user) window.location.href = '/login/login.html';
+
+// Latest tab/device wins — opening a new session anywhere else for
+// this account signs THIS tab out and bounces it to /login.
+enforceSingleSession(user);
 
 // ── SPRITE ANIMATION ──
 // Same horizontal-strip pattern roster.js uses, but Idle-only since this

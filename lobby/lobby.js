@@ -693,7 +693,7 @@ const ongoing = sieges.find(
 );
 if (ongoing) {
   if (ongoing.host_ready && ongoing.ally_ready) {
-    smoothNavigate('/game/game.html');
+    smoothNavigate('/battle/battle.html');
   } else {
     navigateToSetup(ongoing.id);
   }

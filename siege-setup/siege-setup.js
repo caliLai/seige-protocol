@@ -491,6 +491,15 @@ if (!siege) {
   bounce('user is neither host nor ally', '⊘ THOU ART NOT IN THIS SIEGE — RETURNING TO WAR ROOM');
 } else if (!siege.started_at) {
   bounce('siege.started_at is null', '⊘ SIEGE NOT YET STARTED — RETURNING TO WAR ROOM');
+} else if (siege.host_ready && siege.ally_ready) {
+  // Both already ready — the user is returning to a siege that's already
+  // past the setup phase (closed the tab mid-battle, refreshed after the
+  // ready-up handshake, etc.). Skip the setup screen entirely and resume
+  // straight into the live game. This is a safety net; the primary
+  // mid-battle reconnect path is the PLAY NOW button on the start screen,
+  // which fires its own "reconnecting" overlay before navigation.
+  navigated = true;
+  smoothNavigate('/game/game.html');
 } else {
   isHost = siege.host_id === user.id;
   const myUid    = user.id;

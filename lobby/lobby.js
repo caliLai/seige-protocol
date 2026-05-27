@@ -364,8 +364,11 @@ tabs.forEach(tab => {
       t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
     });
     currentDiff = tab.dataset.diff;
-    // Auto-select first siege of the new difficulty (if any).
-    selectedSiege = sieges.find(s => s.difficulty === currentDiff) || null;
+    // Clear the preview when switching difficulty so the right pane
+    // shows placeholders until the user explicitly picks a room.
+    // Auto-selecting felt misleading because the preview previously
+    // displayed real host/ally usernames as if they were yours.
+    selectedSiege = null;
     renderRoomList();
     renderPreview();
   });
@@ -681,9 +684,12 @@ if (!selectedSiege) {
     }
   }
 }
-if (!selectedSiege) {
-  selectedSiege = sieges.find(s => s.difficulty === currentDiff) || null;
-}
+// Intentionally NOT auto-selecting the first siege on default load —
+// the preview pane should show placeholders until the user picks a
+// room. Without this, the right pane shows the host/ally usernames of
+// some random existing siege as if they were the current user's, which
+// is confusing. The handoffId branch above still preselects when the
+// user is bouncing back from create-siege.
 
 // If the user is mid-setup (e.g. they refreshed during the unit-pick phase
 // or arrived via a deep link), bounce them straight back to the setup

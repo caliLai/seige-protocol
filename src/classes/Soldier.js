@@ -1,7 +1,7 @@
-import { Unit } from "./Unit.js";
+import { MeleeUnit } from "./MeleeUnit.js";
 
-export class Soldier extends Unit {
-    role = 'Versatile Ranged';
+export class Soldier extends MeleeUnit {
+    role = 'Versatile Melee';
 
     width = 50;
     height = 50;
@@ -15,19 +15,17 @@ export class Soldier extends Unit {
 
     moveSpeedPxPerSecond = 52;
 
-    attackRadius = 135;
-    attackStrength = 11;
-    attackCooldownMs = 1000 / 1.25;
-
-    projectileSpeed = 5.5;
-    projectileSize = 10;
-    projectileDrawSize = 20;
-    projectileRotationOffset = 0;
+    // Melee range: needs to be touching the target. The exact striking
+    // distance is enforced inside MeleeUnit.isCloseEnoughToHit; this
+    // attackRadius is just the engagement-trigger threshold.
+    attackRadius = 82;
+    attackStrength = 14;
+    attackCooldownMs = 1000 / 1.2;
 
     attackFrameDurationMs = 70;
-    attackReleaseFrame = 6;
+    attackReleaseFrame = 5;
     isAttacking = false;
-    hasReleasedProjectile = false;
+    hasAppliedHit = false;
     currentAttackFrame = 0;
     lastAttackFrameAt = 0;
 
@@ -35,6 +33,7 @@ export class Soldier extends Unit {
     isMoving = false;
     currentWalkFrame = 0;
     lastWalkFrameAt = 0;
+    facingDirection = 1;
 
     static idleImage = null;
     static idleImageLoaded = false;
@@ -44,9 +43,6 @@ export class Soldier extends Unit {
 
     static walkImage = null;
     static walkImageLoaded = false;
-
-    static projectileImage = null;
-    static projectileImageLoaded = false;
 
     constructor(position, gameCanvas) {
         super(position, gameCanvas);
@@ -77,14 +73,6 @@ export class Soldier extends Unit {
             };
             Soldier.walkImage.src = "/assets/Soldier/Soldier/Soldier-Walk.png";
         }
-
-        if (!Soldier.projectileImage) {
-            Soldier.projectileImage = new Image();
-            Soldier.projectileImage.onload = () => {
-                Soldier.projectileImageLoaded = true;
-            };
-            Soldier.projectileImage.src = "/assets/Soldier/Arrow(projectile)/Arrow01(32x32).png";
-        }
     }
 
     get attackFrameCount() {
@@ -95,19 +83,6 @@ export class Soldier extends Unit {
     get walkFrameCount() {
         if (!Soldier.walkImageLoaded) return 1;
         return Math.max(1, Math.floor(Soldier.walkImage.width / Soldier.walkImage.height));
-    }
-
-    updateWalkAnimation() {
-        if (!this.isMoving) {
-            this.currentWalkFrame = 0;
-            return;
-        }
-
-        const now = performance.now();
-        if (now - this.lastWalkFrameAt < this.walkFrameDurationMs) return;
-
-        this.lastWalkFrameAt = now;
-        this.currentWalkFrame = (this.currentWalkFrame + 1) % this.walkFrameCount;
     }
 
     render() {
@@ -134,17 +109,38 @@ export class Soldier extends Unit {
             const sw = frameSize;
             const sh = frameSize;
 
-            this.gameCanvas.drawImage(
-                spriteSheet,
-                sx,
-                sy,
-                sw,
-                sh,
-                this.position.x - (this.drawWidth - this.width) / 2,
-                this.position.y - (this.drawHeight - this.height) / 2,
-                this.drawWidth,
-                this.drawHeight
-            );
+            const drawX = this.position.x - (this.drawWidth - this.width) / 2;
+            const drawY = this.position.y - (this.drawHeight - this.height) / 2;
+
+            if (this.facingDirection >= 0) {
+                this.gameCanvas.drawImage(
+                    spriteSheet,
+                    sx,
+                    sy,
+                    sw,
+                    sh,
+                    drawX,
+                    drawY,
+                    this.drawWidth,
+                    this.drawHeight
+                );
+            } else {
+                this.gameCanvas.save();
+                this.gameCanvas.translate(drawX + this.drawWidth / 2, 0);
+                this.gameCanvas.scale(-1, 1);
+                this.gameCanvas.drawImage(
+                    spriteSheet,
+                    sx,
+                    sy,
+                    sw,
+                    sh,
+                    -this.drawWidth / 2,
+                    drawY,
+                    this.drawWidth,
+                    this.drawHeight
+                );
+                this.gameCanvas.restore();
+            }
 
             this.drawHealthBar();
 
@@ -152,117 +148,5 @@ export class Soldier extends Unit {
         }
 
         super.render();
-    }
-
-    spawnProjectileAtTarget(target) {
-        const from = {
-            x: this.centre.x - this.projectileSize / 2,
-            y: this.centre.y - this.projectileSize / 2,
-        };
-        const to = target.centre;
-        const angle = Math.atan2(to.y - this.centre.y, to.x - this.centre.x);
-
-        this.projectiles.push({
-            x: from.x,
-            y: from.y,
-            vx: Math.cos(angle) * this.projectileSpeed,
-            vy: Math.sin(angle) * this.projectileSpeed,
-            damage: this.attackStrength,
-            target,
-            ownerId: this.team || this.ownerId || null,
-        });
-    }
-
-    attack() {
-        if (!this.target || this.target.isDead) {
-            this.isAttacking = false;
-            this.hasReleasedProjectile = false;
-            this.currentAttackFrame = 0;
-            return;
-        }
-
-        const now = performance.now();
-
-        if (!this.isAttacking) {
-            if (now - this.lastAttackAt < this.attackCooldownMs) return;
-
-            this.isAttacking = true;
-            this.hasReleasedProjectile = false;
-            this.currentAttackFrame = 0;
-            this.lastAttackFrameAt = now;
-            this.lastAttackAt = now;
-            return;
-        }
-
-        if (now - this.lastAttackFrameAt < this.attackFrameDurationMs) return;
-
-        this.lastAttackFrameAt = now;
-        this.currentAttackFrame++;
-
-        const releaseFrame = Math.min(this.attackReleaseFrame, this.attackFrameCount - 1);
-        if (!this.hasReleasedProjectile && this.currentAttackFrame >= releaseFrame) {
-            this.spawnProjectileAtTarget(this.target);
-            this.hasReleasedProjectile = true;
-        }
-
-        if (this.currentAttackFrame >= this.attackFrameCount - 1) {
-            this.isAttacking = false;
-            this.hasReleasedProjectile = false;
-            this.currentAttackFrame = 0;
-        }
-    }
-
-    calculateAndUpdatePathMovement() {
-        const beforeX = this.position.x;
-        const beforeY = this.position.y;
-
-        super.calculateAndUpdatePathMovement();
-
-        const movedDistance = Math.hypot(this.position.x - beforeX, this.position.y - beforeY);
-        this.isMoving = movedDistance > 0.001;
-    }
-
-    updateProjectiles() {
-        this.projectiles = this.projectiles.filter((projectile) => {
-            projectile.x += projectile.vx;
-            projectile.y += projectile.vy;
-
-            if (Soldier.projectileImageLoaded) {
-                const centerX = projectile.x + this.projectileSize / 2;
-                const centerY = projectile.y + this.projectileSize / 2;
-                const angle = Math.atan2(projectile.vy, projectile.vx) + this.projectileRotationOffset;
-
-                this.gameCanvas.save();
-                this.gameCanvas.translate(centerX, centerY);
-                this.gameCanvas.rotate(angle);
-                this.gameCanvas.drawImage(
-                    Soldier.projectileImage,
-                    -this.projectileDrawSize / 2,
-                    -this.projectileDrawSize / 2,
-                    this.projectileDrawSize,
-                    this.projectileDrawSize
-                );
-                this.gameCanvas.restore();
-            } else {
-                this.gameCanvas.fillStyle = '#ff2b2b';
-                this.gameCanvas.fillRect(projectile.x, projectile.y, this.projectileSize, this.projectileSize);
-            }
-
-            const target = projectile.target;
-            if (!target || target.isDead) return false;
-
-            const projectileCenterX = projectile.x + this.projectileSize / 2;
-            const projectileCenterY = projectile.y + this.projectileSize / 2;
-            const dx = target.centre.x - projectileCenterX;
-            const dy = target.centre.y - projectileCenterY;
-            const distance = Math.hypot(dx, dy);
-
-            if (distance <= this.projectileSize + 4) {
-                target.takeDamage(projectile.damage, projectile.ownerId || this.team || this.ownerId || null);
-                return false;
-            }
-
-            return true;
-        });
     }
 }

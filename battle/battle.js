@@ -16,6 +16,7 @@ import { Soldier } from '/src/classes/Soldier.js';
 import { Swordsman } from '/src/classes/Swordsman.js';
 import { Slime } from '/src/classes/Slime.js';
 import { Skeleton } from '/src/classes/Skeleton.js';
+import { MeleeUnit } from '/src/classes/MeleeUnit.js';
 import { Tower } from '/src/classes/Tower.js';
 import { Unit } from '/src/classes/Unit.js';
 import { sim } from '/src/runtime/sim.js';
@@ -705,12 +706,23 @@ const spawnWaveQueues = () => {
   const allyQueue = siege.ally_queue || [];
 
   const spawnGap = 220;
-  const spacing = 10;
+  const spacing = 24;
   const dir = pathStartDirection();
   // Snapshot the current attempt — pending timeouts compare against this
   // and drop themselves if the wave has been re-armed since they were
   // scheduled. Survives both wave failure and wave advancement.
   const myAttempt = waveAttemptId;
+
+  const formationLaneOffset = (baseLaneOffset, index) => {
+    const slots = [0, -6, 6, -3, 3];
+    return baseLaneOffset + slots[index % slots.length];
+  };
+
+  const formationPathSpacing = (index) => {
+    const row = Math.floor(index / 5);
+    const slots = [0, 18, 18, 36, 36];
+    return row * (spacing * 3) + slots[index % slots.length];
+  };
 
   const spawn = (queue, laneOffset, team) => {
     queue.forEach((unitId, i) => {
@@ -718,18 +730,20 @@ const spawnWaveQueues = () => {
         if (matchEnded) return;
         if (myAttempt !== waveAttemptId) return; // stale wave — drop
         const pos = { x: path[0].x, y: path[0].y };
-        const unit = createUnitFromId(unitId, pos, laneOffset);
+        const unit = createUnitFromId(unitId, pos, formationLaneOffset(laneOffset, i));
         unit.team = team;
-        unit.position.x -= dir.x * (i * spacing);
-        unit.position.y -= dir.y * (i * spacing);
+        unit.ownerId = team;
+        const pathSpacing = formationPathSpacing(i);
+        unit.position.x -= dir.x * pathSpacing;
+        unit.position.y -= dir.y * pathSpacing;
         attackUnits.push(unit);
         unitsDeployedCount++;
       }, i * spawnGap);
     });
   };
 
-  spawn(hostQueue, -14, 'host');
-  spawn(allyQueue, 14, 'ally');
+  spawn(hostQueue, -16, 'host');
+  spawn(allyQueue, 16, 'ally');
 
   // After every unit has been spawned and resolved, check the wave outcome.
   // Total spawn time = (longer queue - 1) * spawnGap; pad a few seconds for
@@ -1000,6 +1014,15 @@ const updateWaveProgress = () => {
 // and 144Hz monitors. Cap at 100ms to prevent teleport-on-tab-return.
 let lastFrameTime = performance.now();
 
+const unitCanReachTower = (unit, tower) => {
+  const dx = tower.centre.x - unit.centre.x;
+  const dy = tower.centre.y - unit.centre.y;
+  const distance = Math.hypot(dx, dy);
+  const towerBuffer = Math.max(tower.width, tower.height) / 2;
+  const meleeAdjustment = unit instanceof MeleeUnit ? -8 : 0;
+  return distance <= unit.attackRadius + towerBuffer + meleeAdjustment;
+};
+
 const animate = () => {
   animationId = requestAnimationFrame(animate);
   if (!mapLoaded) return;
@@ -1015,11 +1038,7 @@ const animate = () => {
     const tower = towers[0];
     if (!unit || !tower) continue;
 
-    const dx = tower.centre.x - unit.centre.x;
-    const dy = tower.centre.y - unit.centre.y;
-    const distance = Math.hypot(dx, dy);
-
-    if (!tower.isDead && distance <= unit.attackRadius) {
+    if (!tower.isDead && unitCanReachTower(unit, tower)) {
       unit.target = tower;
     } else {
       if (tower.isDead) {

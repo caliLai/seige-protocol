@@ -1,4 +1,3 @@
-import { path } from "../data/path.js";
 import { Unit } from "./Unit.js";
 
 export class MeleeUnit extends Unit {
@@ -9,6 +8,7 @@ export class MeleeUnit extends Unit {
         const clearingTarget = hadTarget && !newTarget;
 
         if (clearingTarget && this.isAttacking) {
+            this.syncPathIndexToNearestPathPoint();
             this.isRecenteringToPath = true;
         }
 
@@ -50,6 +50,32 @@ export class MeleeUnit extends Unit {
         }
     }
 
+    activePath() {
+        return (this.pathRef && Array.isArray(this.pathRef) && this.pathRef.length)
+            ? this.pathRef
+            : [];
+    }
+
+    syncPathIndexToNearestPathPoint() {
+        const activePath = this.activePath();
+        if (!activePath.length) return;
+
+        let closestIndex = this.pathIndex;
+        let closestDistance = Infinity;
+
+        activePath.forEach((point, index) => {
+            if (index < this.pathIndex) return;
+
+            const distance = Math.hypot(point.x - this.centre.x, point.y - this.centre.y);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestIndex = index;
+            }
+        });
+
+        this.pathIndex = closestIndex;
+    }
+
     moveCloserToTargetWhileAttacking() {
         if (!this.target || this.target.isDead) return;
 
@@ -57,7 +83,7 @@ export class MeleeUnit extends Unit {
         const dy = this.target.centre.y - this.centre.y;
         const distance = Math.hypot(dx, dy);
 
-        const desiredDistance = (this.width + this.target.width) / 2 + 4;
+        const desiredDistance = this.meleeContactDistance();
         if (distance <= desiredDistance) return;
 
         const angle = Math.atan2(dy, dx);
@@ -67,6 +93,19 @@ export class MeleeUnit extends Unit {
 
         this.position.x += Math.cos(angle) * step;
         this.position.y += Math.sin(angle) * step;
+    }
+
+    meleeContactDistance() {
+        if (!this.target) return 0;
+        return (this.width + this.target.width) / 2 + 8;
+    }
+
+    isCloseEnoughToHit() {
+        if (!this.target || this.target.isDead) return false;
+
+        const dx = this.target.centre.x - this.centre.x;
+        const dy = this.target.centre.y - this.centre.y;
+        return Math.hypot(dx, dy) <= this.meleeContactDistance() + 6;
     }
 
     updateRecenteringState() {
@@ -81,19 +120,48 @@ export class MeleeUnit extends Unit {
     }
 
     moveTowardCurrentPathPoint() {
-        const pathPoint = path[this.pathIndex];
+        const activePath = this.activePath();
+        const pathPoint = activePath[this.pathIndex];
         if (!pathPoint) return false;
 
-        const dx = pathPoint.x - this.centre.x;
-        const dy = pathPoint.y - this.centre.y;
+        const laneOffset = (typeof this.laneOffset === 'number') ? this.laneOffset : 0;
+        let dirX = 0;
+        let dirY = 0;
+
+        const nextPoint = activePath[this.pathIndex + 1];
+        const prevPoint = activePath[this.pathIndex - 1];
+
+        if (nextPoint) {
+            dirX = nextPoint.x - pathPoint.x;
+            dirY = nextPoint.y - pathPoint.y;
+        } else if (prevPoint) {
+            dirX = pathPoint.x - prevPoint.x;
+            dirY = pathPoint.y - prevPoint.y;
+        } else {
+            dirX = 1;
+            dirY = 0;
+        }
+
+        const len = Math.hypot(dirX, dirY) || 1;
+        const targetX = pathPoint.x + (-dirY / len) * laneOffset;
+        const targetY = pathPoint.y + (dirX / len) * laneOffset;
+
+        const dx = targetX - this.centre.x;
+        const dy = targetY - this.centre.y;
         const distance = Math.hypot(dx, dy);
 
-        const stopDistance = 6;
-        if (distance <= stopDistance) return false;
+        const stopDistance = 8;
+        if (distance <= stopDistance) {
+            if (this.pathIndex < activePath.length - 1) {
+                this.pathIndex++;
+                return true;
+            }
+            return false;
+        }
 
         const angle = Math.atan2(dy, dx);
-        const frameStep = this.moveSpeedPxPerSecond / 60;
-        const step = Math.min(frameStep, distance - stopDistance);
+        const frameStep = Math.min(this.moveSpeedPxPerSecond / 60, distance);
+        const step = Math.min(frameStep, distance);
 
         this.position.x += Math.cos(angle) * step;
         this.position.y += Math.sin(angle) * step;
@@ -129,9 +197,10 @@ export class MeleeUnit extends Unit {
         this.lastAttackFrameAt = now;
         this.currentAttackFrame++;
 
-        if (!this.hasAppliedHit && this.currentAttackFrame >= this.attackReleaseFrame) {
-            if (!this.target.isDead) {
-                this.target.takeDamage(this.attackStrength);
+        const releaseFrame = Math.min(this.attackReleaseFrame, this.attackFrameCount - 1);
+        if (!this.hasAppliedHit && this.currentAttackFrame >= releaseFrame) {
+            if (!this.target.isDead && this.isCloseEnoughToHit()) {
+                this.target.takeDamage(this.attackStrength, this.team || this.ownerId || null);
             }
             this.hasAppliedHit = true;
         }

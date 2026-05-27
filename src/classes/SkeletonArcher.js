@@ -169,6 +169,7 @@ export class SkeletonArcher extends Unit {
             vy: Math.sin(angle) * this.projectileSpeed,
             damage: this.attackStrength,
             target,
+            ownerId: this.team || this.ownerId || null,
         });
     }
 
@@ -198,7 +199,8 @@ export class SkeletonArcher extends Unit {
         this.lastAttackFrameAt = now;
         this.currentAttackFrame++;
 
-        if (!this.hasReleasedProjectile && this.currentAttackFrame >= this.attackReleaseFrame) {
+        const releaseFrame = Math.min(this.attackReleaseFrame, this.attackFrameCount - 1);
+        if (!this.hasReleasedProjectile && this.currentAttackFrame >= releaseFrame) {
             this.spawnProjectileAtTarget(this.target);
             this.hasReleasedProjectile = true;
         }
@@ -256,7 +258,7 @@ export class SkeletonArcher extends Unit {
             const distance = Math.hypot(dx, dy);
 
             if (distance <= this.projectileSize + 4) {
-                target.takeDamage(projectile.damage);
+                target.takeDamage(projectile.damage, projectile.ownerId || this.team || this.ownerId || null);
                 return false;
             }
 

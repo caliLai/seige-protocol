@@ -1377,6 +1377,8 @@ const drawObservedUnit = (u, x = u.x, y = u.y) => {
     gameCanvas.strokeStyle = 'black';
     gameCanvas.strokeRect(bx, by, barW, barH);
   }
+};
+
 const unitCanReachTower = (unit, tower) => {
   const dx = tower.centre.x - unit.centre.x;
   const dy = tower.centre.y - unit.centre.y;

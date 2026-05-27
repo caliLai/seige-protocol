@@ -48,27 +48,30 @@ export class Unit extends Sprite {
   }
 
   drawHealthBar() {
-    if (this.maxHealth <= 0) return;
-
-    const barWidth = this.width;
-    const barHeight = 5;
-
     const x = this.position.x;
-    const y = this.position.y - 8;
+    const y = this.position.y - 10;
 
+    // Background
     this.gameCanvas.fillStyle = "#3a3a3a";
-    this.gameCanvas.fillRect(x, y, barWidth, barHeight);
+    this.gameCanvas.fillRect(x, y, this.width, 5);
 
     const hpRatio = this.health / this.maxHealth;
 
-    if (hpRatio > 0.6) this.gameCanvas.fillStyle = "limegreen";
-    else if (hpRatio > 0.3) this.gameCanvas.fillStyle = "yellow";
-    else this.gameCanvas.fillStyle = "#ff3b30";
+    // Colour logic (same as tower)
+    if (hpRatio > 0.6) {
+        this.gameCanvas.fillStyle = "limegreen";
+    } else if (hpRatio > 0.3) {
+        this.gameCanvas.fillStyle = "yellow";
+    } else {
+        this.gameCanvas.fillStyle = "#ff3b30";
+    }
 
-    this.gameCanvas.fillRect(x, y, barWidth * hpRatio, barHeight);
+    // Health fill
+    this.gameCanvas.fillRect(x, y, this.width * hpRatio, 5);
 
+    // Outline
     this.gameCanvas.strokeStyle = "black";
-    this.gameCanvas.strokeRect(x, y, barWidth, barHeight);
+    this.gameCanvas.strokeRect(x, y, this.width, 5);
   }
 
   takeDamage(amount) {

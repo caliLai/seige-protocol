@@ -47,32 +47,32 @@ export class Unit extends Sprite {
     this.drawHealthBar();
   }
 
-  drawHealthBar() {
-    const x = this.position.x;
-    const y = this.position.y - 10;
+drawHealthBar() {
+  const x = this.position.x;
+  const y = this.position.y - 10;
 
-    // Background
-    this.gameCanvas.fillStyle = "#3a3a3a";
-    this.gameCanvas.fillRect(x, y, this.width, 5);
+  const ctx = this.gameCanvas;
 
-    const hpRatio = this.health / this.maxHealth;
+  ctx.fillStyle = "#3a3a3a";
+  ctx.fillRect(x, y, this.width, 5);
 
-    // Colour logic (same as tower)
-    if (hpRatio > 0.6) {
-        this.gameCanvas.fillStyle = "limegreen";
-    } else if (hpRatio > 0.3) {
-        this.gameCanvas.fillStyle = "yellow";
-    } else {
-        this.gameCanvas.fillStyle = "#ff3b30";
-    }
+  const hpRatio = this.health / this.maxHealth;
 
-    // Health fill
-    this.gameCanvas.fillRect(x, y, this.width * hpRatio, 5);
+  const isAlly = this.team === "ally";
 
-    // Outline
-    this.gameCanvas.strokeStyle = "black";
-    this.gameCanvas.strokeRect(x, y, this.width, 5);
+  if (hpRatio > 0.6) {
+    ctx.fillStyle = isAlly ? "#4da6ff" : "limegreen";
+  } else if (hpRatio > 0.3) {
+    ctx.fillStyle = isAlly ? "#3399ff" : "yellow";
+  } else {
+    ctx.fillStyle = isAlly ? "#0066cc" : "#ff3b30";
   }
+
+  ctx.fillRect(x, y, this.width * hpRatio, 5);
+
+  ctx.strokeStyle = "black";
+  ctx.strokeRect(x, y, this.width, 5);
+}
 
   takeDamage(amount) {
     this.health -= amount;

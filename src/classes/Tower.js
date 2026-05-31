@@ -36,8 +36,10 @@ export class Tower extends Sprite {
     static loaded = false;
 
     constructor(position, gameCanvas) {
-        super(position, gameCanvas);
-        Tower.loadAssets();
+    super(position, gameCanvas);
+    Tower.loadAssets();
+
+    this.hitEffects = [];
     }
 
     static loadAssets() {
@@ -51,7 +53,11 @@ export class Tower extends Sprite {
     }
 
     render() {
-        if (!Tower.image || !Tower.loaded) return;
+    if (!Tower.image || !Tower.loaded) return;
+
+    if (this.lastShotTime && performance.now() - this.lastShotTime < 100) {
+        this.gameCanvas.globalAlpha = 0.7;
+    }
 
         this.gameCanvas.drawImage(
             Tower.image,
@@ -62,6 +68,7 @@ export class Tower extends Sprite {
         );
 
         this.drawHealthBar();
+        this.gameCanvas.globalAlpha = 1;
     }
 
     drawHealthBar() {
@@ -84,22 +91,22 @@ export class Tower extends Sprite {
     }
 
     takeDamage(amount, attackerId = null) {
-        if (this.isDead) return;
+    if (this.isDead) return;
 
-        if (attackerId) {
-            this.lastHitBy = attackerId;
-            if (attackerId === "host" || attackerId === "ally") {
-                this.lastAttackerTeam = attackerId;
-                creditDamage(attackerId, amount);
-            }
+    if (attackerId) {
+        this.lastHitBy = attackerId;
+        if (attackerId === "host" || attackerId === "ally") {
+            this.lastAttackerTeam = attackerId;
+            creditDamage(attackerId, amount);
         }
+    }
 
-        this.health -= amount;
+    this.health -= amount;
 
-        if (this.health <= 0) {
-            this.health = 0;
-            this.grantRewardOnce();
-        }
+    if (this.health <= 0) {
+        this.health = 0;
+        this.grantRewardOnce();
+    }
     }
 
     grantRewardOnce() {
@@ -182,40 +189,101 @@ export class Tower extends Sprite {
 
         this.lastAttackAt = now;
         this.spawnProjectile(this.target);
+
+                // Flash effect
+        this.lastShotTime = performance.now();
     }
 
-    updateProjectiles() {
-        this.projectiles = this.projectiles.filter(p => {
-            p.x += p.vx;
-            p.y += p.vy;
+    renderHitEffects() {
+    const now = performance.now();
 
-            this.gameCanvas.fillStyle = "yellow";
-            this.gameCanvas.fillRect(p.x, p.y, this.projectileSize, this.projectileSize);
+    this.hitEffects = this.hitEffects.filter(effect => {
+        const elapsed = now - effect.createdAt;
+        const duration = 200;
 
-            const target = p.target;
-            if (!target || target.isDead) return false;
+        const progress = elapsed / duration;
+        if (progress >= 1) return false;
 
+        const radius = 5 + progress * 15;
+        const alpha = 1 - progress;
+
+        this.gameCanvas.save();
+        this.gameCanvas.globalAlpha = alpha;
+
+        this.gameCanvas.fillStyle = "orange";
+        this.gameCanvas.beginPath();
+        this.gameCanvas.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+        this.gameCanvas.fill();
+
+        this.gameCanvas.restore();
+
+        return true;
+    });
+}
+
+updateProjectiles() {
+    this.projectiles = this.projectiles.filter(p => {
+
+        const target = p.target;
+
+        if (target && !target.isDead) {
             const dx = target.centre.x - p.x;
             const dy = target.centre.y - p.y;
-            const distance = Math.hypot(dx, dy);
 
-            if (distance <= 10) {
-                if (typeof target.takeDamage === "function") {
-                    target.takeDamage(p.damage);
-                }
-                return false;
+            const angle = Math.atan2(dy, dx);
+
+            p.vx = Math.cos(angle) * this.projectileSpeed;
+            p.vy = Math.sin(angle) * this.projectileSpeed;
+        }
+
+        p.x += p.vx;
+        p.y += p.vy;
+
+        const ctx = this.gameCanvas;
+
+        ctx.save();
+        ctx.shadowColor = "rgba(255, 80, 0, 0.6)"; 
+        ctx.shadowBlur = 6; 
+        ctx.fillStyle = "#cc3300"; 
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, this.projectileSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
+        if (!target || target.isDead) return false;
+
+        const dx = target.centre.x - p.x;
+        const dy = target.centre.y - p.y;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance <= 10) {
+            if (typeof target.takeDamage === "function") {
+                target.takeDamage(p.damage);
             }
 
-            return true;
-        });
+            this.hitEffects.push({
+                x: p.x,
+                y: p.y,
+                createdAt: performance.now()
+            });
+
+            return false;
+        }
+
+        return true;
+    });
+}
+    updateFrame(units) {
+    if (this.isDead) {
+    this.renderHitEffects();
+    return;
     }
 
-    updateFrame(units) {
-        if (this.isDead) return;
-
-        this.findTarget(units);
-        this.attack();
-        this.updateProjectiles();
-        this.render();
+    this.findTarget(units);
+    this.attack();
+    this.updateProjectiles();
+    this.render();
+    this.renderHitEffects();   
     }
 }

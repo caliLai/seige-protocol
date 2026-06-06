@@ -35,7 +35,7 @@ export class Unit extends Sprite {
 
   set target(newTarget) {
     this._target = newTarget;
-  }
+ } 
 
   get target() {
     return this._target;

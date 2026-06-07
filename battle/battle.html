@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,6 +12,7 @@
   <link rel="stylesheet" href="/siege-setup/siege-setup-styles.css" />
   <link rel="stylesheet" href="/battle/battle.css" />
 </head>
+
 <body>
 
   <div class="game-frame stone-bg lobby-frame setup-frame game-frame-battle">
@@ -22,8 +24,12 @@
         <div class="game-player-banner game-banner-self">⚜</div>
         <div class="game-player-info">
           <div class="game-player-name" id="selfName">KNIGHT</div>
-          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-gold">◆</span><span class="game-stat-label">BATTLE GOLD</span><span class="game-stat-val game-gold-val" id="selfGold">0</span></div>
-          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-shard">◇</span><span class="game-stat-label">POINTS</span><span class="game-stat-val game-shard-val" id="selfPoints">0</span></div>
+          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-gold">◆</span><span
+              class="game-stat-label">BATTLE GOLD</span><span class="game-stat-val game-gold-val" id="selfGold">0</span>
+          </div>
+          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-shard">◇</span><span
+              class="game-stat-label">POINTS</span><span class="game-stat-val game-shard-val" id="selfPoints">0</span>
+          </div>
         </div>
       </div>
 
@@ -59,21 +65,28 @@
         <div class="game-player-info">
           <div class="game-player-name" id="otherName">ALLY</div>
           <div class="game-player-status hidden" id="otherStatus">RECONNECTING…</div>
-          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-gold">◆</span><span class="game-stat-label">BATTLE GOLD</span><span class="game-stat-val game-gold-val" id="otherGold">0</span></div>
-          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-shard">◇</span><span class="game-stat-label">POINTS</span><span class="game-stat-val game-shard-val" id="otherPoints">0</span></div>
+          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-gold">◆</span><span
+              class="game-stat-label">BATTLE GOLD</span><span class="game-stat-val game-gold-val"
+              id="otherGold">0</span></div>
+          <div class="game-stat-row"><span class="game-stat-ico game-stat-ico-shard">◇</span><span
+              class="game-stat-label">POINTS</span><span class="game-stat-val game-shard-val" id="otherPoints">0</span>
+          </div>
         </div>
         <div class="game-top-controls">
           <button type="button" class="px-btn game-ctrl-btn" id="speedBtn">x1</button>
           <button type="button" class="px-btn game-ctrl-btn" id="pauseBtn">❚❚</button>
-          <button type="button" class="px-btn game-ctrl-btn" id="settingsBtn" aria-haspopup="true" aria-expanded="false" aria-controls="settingsMenu">⚙</button>
+          <button type="button" class="px-btn game-ctrl-btn" id="settingsBtn" aria-haspopup="true" aria-expanded="false"
+            aria-controls="settingsMenu">⚙</button>
 
           <!-- Settings dropdown — anchored under the ⚙ button. Hidden
                until settingsBtn is clicked; closes on outside click /
                Escape. Currently only holds Abandon Siege; room left for
                volume, controls-help, etc. -->
-          <div id="settingsMenu" class="game-settings-menu hidden" role="menu" aria-hidden="true" aria-labelledby="settingsBtn">
+          <div id="settingsMenu" class="game-settings-menu hidden" role="menu" aria-hidden="true"
+            aria-labelledby="settingsBtn">
             <div class="game-settings-menu-title">⚙ ROYAL DECREES</div>
-            <button type="button" id="abandonSiegeBtn" class="px-btn game-settings-menu-item game-settings-menu-item-danger" role="menuitem">
+            <button type="button" id="abandonSiegeBtn"
+              class="px-btn game-settings-menu-item game-settings-menu-item-danger" role="menuitem">
               <span class="game-settings-menu-icon">☠</span>
               <span class="game-settings-menu-label">ABANDON SIEGE</span>
               <span class="game-settings-menu-hint">END THE BATTLE FOR BOTH HOSTS</span>
@@ -88,10 +101,12 @@
 
       <!-- LEFT COLUMN — self -->
       <aside class="setup-column game-side game-side-self">
-        <div class="setup-pool-label">▶ AVAILABLE UNIT TYPES <span class="game-panel-sub" id="selfTypesCount">(0/3)</span></div>
+        <div class="setup-pool-label">▶ AVAILABLE UNIT TYPES <span class="game-panel-sub"
+            id="selfTypesCount">(0/3)</span></div>
         <div class="game-types" id="selfTypes" role="list"></div>
 
-        <div class="setup-pool-label">▶ CURRENT WAVE QUEUE <span class="game-panel-sub" id="selfQueueCount">(0/0)</span></div>
+        <div class="setup-pool-label">▶ CURRENT WAVE QUEUE <span class="game-panel-sub" id="selfQueueCount">(0/0)</span>
+        </div>
         <ol class="game-queue" id="selfQueue"></ol>
 
         <button type="button" id="readyBtn" class="px-btn setup-ready-btn" disabled>
@@ -107,10 +122,12 @@
 
       <!-- RIGHT COLUMN — other -->
       <aside class="setup-column setup-column-other game-side game-side-other">
-        <div class="setup-pool-label">▶ AVAILABLE UNIT TYPES <span class="game-panel-sub" id="otherTypesCount">(0/3)</span></div>
+        <div class="setup-pool-label">▶ AVAILABLE UNIT TYPES <span class="game-panel-sub"
+            id="otherTypesCount">(0/3)</span></div>
         <div class="game-types game-types-readonly" id="otherTypes" role="list"></div>
 
-        <div class="setup-pool-label">▶ CURRENT WAVE QUEUE <span class="game-panel-sub" id="otherQueueCount">(0/0)</span></div>
+        <div class="setup-pool-label">▶ CURRENT WAVE QUEUE <span class="game-panel-sub"
+            id="otherQueueCount">(0/0)</span></div>
         <ol class="game-queue game-queue-readonly" id="otherQueue"></ol>
 
         <div class="setup-ready-indicator" id="otherReady">
@@ -126,6 +143,27 @@
         <div class="game-info-body" id="unitInfo">— SELECT A UNIT —</div>
       </div>
 
+
+      <div class="game-panel game-panel-leaderboard">
+        <div class="setup-pool-label">▶ BATTLE LEADERBOARD</div>
+
+        <div class="game-panel-inner"> <!-- ✅ ADD THIS -->
+
+          <div class="game-leaderboard-meta">
+            <span>CURRENT WAVE</span>
+            <span class="game-leaderboard-wave" id="leaderboardWaveValue">1</span>
+          </div>
+
+          <div class="game-leaderboard-head">
+            <span>RANK</span>
+            <span>PLAYER</span>
+            <span>DEATHS</span>
+          </div>
+
+          <div id="leaderboardBody" class="game-leaderboard-body"></div>
+
+        </div>
+      </div>
       <div class="game-panel">
         <div class="setup-pool-label game-label-tower">▶ TOWER INFORMATION</div>
         <div class="game-info-body" id="towerInfo">— SELECT A TOWER —</div>
@@ -177,14 +215,17 @@
           <div class="game-wi-row">
             <span>WAVE PROGRESS</span><span class="game-wi-val" id="waveProgressLabel">0%</span>
           </div>
-          <div class="game-wi-bar"><div class="game-wi-bar-fill" id="waveProgressBar"></div></div>
+          <div class="game-wi-bar">
+            <div class="game-wi-bar-fill" id="waveProgressBar"></div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- ═══ FOOTER LEGEND ═══ -->
     <div class="game-legend">
-      <span><span class="game-coin">◆</span> <b>BATTLE GOLD</b> — USED TO PURCHASE UNITS AND IN-GAME ITEMS DURING BATTLE.</span>
+      <span><span class="game-coin">◆</span> <b>BATTLE GOLD</b> — USED TO PURCHASE UNITS AND IN-GAME ITEMS DURING
+        BATTLE.</span>
       <span><span class="game-shard">◇</span> <b>POINTS</b> — USED IN THE ROSTER TO UNLOCK NEW UNIT TYPES.</span>
     </div>
 
@@ -192,7 +233,8 @@
     <div id="alertBanner" class="alert-banner lobby-alert" role="alert" aria-live="polite"></div>
 
     <!-- Victory overlay -->
-    <div id="victoryOverlay" class="game-victory-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="victoryTitle" aria-hidden="true">
+    <div id="victoryOverlay" class="game-victory-overlay hidden" role="dialog" aria-modal="true"
+      aria-labelledby="victoryTitle" aria-hidden="true">
       <div class="game-victory-card">
         <div class="game-victory-corner tl"></div>
         <div class="game-victory-corner tr"></div>
@@ -201,9 +243,10 @@
         <div class="game-victory-content">
           <div id="victoryTitle" class="game-victory-title">⚔ VICTORY ⚔</div>
           <div class="game-victory-divider">
-            <div class="dash-line"></div><span class="divider-icon">⚜</span><div class="dash-line"></div>
+            <div class="dash-line"></div><span class="divider-icon">⚜</span>
+            <div class="dash-line"></div>
           </div>
-          <div class="game-victory-body">THE FORTRESS HATH FALLEN.<br/>SPOILS ARE THINE.</div>
+          <div class="game-victory-body">THE FORTRESS HATH FALLEN.<br />SPOILS ARE THINE.</div>
 
           <div class="game-victory-rewards">
             <div class="game-victory-reward">
@@ -237,7 +280,8 @@
     </div>
 
     <!-- Defeat overlay (mirrors victory, red theme) -->
-    <div id="defeatOverlay" class="game-victory-overlay game-defeat-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="defeatTitle" aria-hidden="true">
+    <div id="defeatOverlay" class="game-victory-overlay game-defeat-overlay hidden" role="dialog" aria-modal="true"
+      aria-labelledby="defeatTitle" aria-hidden="true">
       <div class="game-victory-card game-defeat-card">
         <div class="game-victory-corner game-defeat-corner tl"></div>
         <div class="game-victory-corner game-defeat-corner tr"></div>
@@ -246,9 +290,10 @@
         <div class="game-victory-content">
           <div id="defeatTitle" class="game-victory-title game-defeat-title">☠ DEFEAT ☠</div>
           <div class="game-victory-divider">
-            <div class="dash-line"></div><span class="divider-icon">☠</span><div class="dash-line"></div>
+            <div class="dash-line"></div><span class="divider-icon">☠</span>
+            <div class="dash-line"></div>
           </div>
-          <div class="game-victory-body">THE FORTRESS STANDS.<br/>THE TEAM FALTERS.</div>
+          <div class="game-victory-body">THE FORTRESS STANDS.<br />THE TEAM FALTERS.</div>
 
           <div class="game-victory-rewards">
             <div class="game-victory-reward">
@@ -288,7 +333,8 @@
          one confirms deletes the siege row, and the realtime DELETE
          echo bounces the OTHER player back to the lobby with the
          "siege was abandoned" alert. -->
-    <div id="abandonOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="abandonTitle" aria-hidden="true">
+    <div id="abandonOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true"
+      aria-labelledby="abandonTitle" aria-hidden="true">
       <div class="confirm-card confirm-card-danger">
         <div class="confirm-card-inner-border"></div>
         <div class="confirm-card-corner tl"></div>
@@ -303,8 +349,8 @@
             <div class="dash-line"></div>
           </div>
           <p class="confirm-body">
-            FORFEITING NOW ENDS THE BATTLE FOR BOTH HOSTS.<br/>
-            NEITHER SIDE EARNS THE MATCH REWARD.<br/>
+            FORFEITING NOW ENDS THE BATTLE FOR BOTH HOSTS.<br />
+            NEITHER SIDE EARNS THE MATCH REWARD.<br />
             BOTH WILL RETURN TO THE WAR ROOM.
           </p>
           <div class="confirm-actions">
@@ -326,4 +372,5 @@
 
   <script type="module" src="/battle/battle.js"></script>
 </body>
+
 </html>

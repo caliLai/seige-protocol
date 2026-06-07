@@ -1,6 +1,7 @@
 import { Sprite } from "./Sprite.js";
 import { path } from "../data/path.js";
 import { sim } from "../runtime/sim.js";
+import { creditUnitDeath } from "../runtime/leaderboard.js";
 
 export class Unit extends Sprite {
   width = 50;
@@ -31,6 +32,7 @@ export class Unit extends Sprite {
     this.laneOffset = 0;
     this.ownerId = null;
     this.team = null;
+    this.deathRecorded = false;
   }
 
   set target(newTarget) {
@@ -79,8 +81,20 @@ export class Unit extends Sprite {
     ctx.strokeRect(x, y, this.width, 5);
   }
 
-  takeDamage(amount) {
+  takeDamage(amount, attackerId = null) {
+    if (this.isDead) return;
+
     this.health -= amount;
+
+    if (this.health <= 0) {
+      this.health = 0;
+
+      if (!this.deathRecorded) {
+        this.deathRecorded = true;
+        const owningTeam = this.team || this.ownerId || null;
+        creditUnitDeath(owningTeam);
+      }
+    }
   }
 
   attack() {

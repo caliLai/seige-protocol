@@ -23,6 +23,14 @@ import { Unit } from '/src/classes/Unit.js';
 import { sim } from '/src/runtime/sim.js';
 import { contribution, resetContribution, creditTowerKill } from '/src/runtime/contribution.js';
 
+import {
+  resetLeaderboard,
+  setLeaderboardNames,
+  setCurrentWave,
+  getLeaderboardRows,
+  leaderboardState,
+} from '/src/runtime/leaderboard.js';
+
 let blastImage = new Image();
 let blastLoaded = false;
 
@@ -416,6 +424,7 @@ const renderQueue = (containerEl, queue, cap, interactive, countEl) => {
 const renderWaveTrack = (current, total) => {
   waveTitleEl.textContent = `WAVE ${current} / ${total}`;
   waveTrackEl.innerHTML = '';
+
   for (let i = 1; i <= total; i++) {
     const pip = document.createElement('div');
     pip.className = 'game-wave-pip';
@@ -424,8 +433,34 @@ const renderWaveTrack = (current, total) => {
     else pip.classList.add('is-future');
     waveTrackEl.appendChild(pip);
   }
+
+  setCurrentWave(current);
+
   const lineEl = document.querySelector('.game-wave-line');
-  if (lineEl) lineEl.style.setProperty('--wave-pct', `${((current - 1) / Math.max(1, total - 1)) * 100}%`);
+  if (lineEl) {
+    lineEl.style.setProperty('--wave-pct', `${((current - 1) / Math.max(1, total - 1)) * 100}%`);
+  }
+};
+
+const leaderboardBodyEl = document.getElementById('leaderboardBody');
+const leaderboardWaveEl = document.getElementById('leaderboardWaveValue');
+
+const renderLeaderboard = () => {
+  if (!leaderboardBodyEl) return;
+
+  const rows = getLeaderboardRows();
+
+  if (leaderboardWaveEl) {
+    leaderboardWaveEl.textContent = String(leaderboardState.wave);
+  }
+
+  leaderboardBodyEl.innerHTML = rows.map(row => `
+    <div class="game-leaderboard-row is-${row.side}">
+      <span class="game-leaderboard-rank">#${row.rank}</span>
+      <span class="game-leaderboard-name">${escapeHtml(row.name)}</span>
+      <span class="game-leaderboard-deaths">${row.unitDeaths}</span>
+    </div>
+  `).join('');
 };
 
 // ── RENDER: ready controls ──
@@ -519,13 +554,19 @@ const render = () => {
   const otherQueue = siege[`${otherSide}_queue`] || [];
   const myRemaining = myGoldNow();
 
+  setLeaderboardNames({
+    hostName: siege.host_username || 'HOST',
+    allyName: siege.ally_username || 'ALLY',
+  });
+  setCurrentWave(siege.current_wave || 1);
+
   renderHeader();
-  // Interactive types disabled once the battle is rolling (no mid-wave changes).
   renderTypes(selfTypesEl, myTypes, !battleStarted, myRemaining, myQueue.length >= queueCap, selfTypesCountEl);
   renderTypes(otherTypesEl, otherTypes, false, 0, false, otherTypesCountEl);
   renderQueue(selfQueueEl, myQueue, queueCap, !battleStarted, selfQueueCountEl);
   renderQueue(otherQueueEl, otherQueue, queueCap, false, otherQueueCountEl);
   renderReadyControls();
+  renderLeaderboard();
 };
 
 // ── SIEGE UPDATES ──
@@ -1509,12 +1550,16 @@ const animate = () => {
     }
   }
 
+  
   attackUnits = attackUnits.filter(u => !u.isDead);
   attackUnits.forEach(u => u.updateFrame());
   towers.forEach(tower => {
-  tower.updateFrame(attackUnits);
+    tower.updateFrame(attackUnits);
   });
   updateAndRenderExplosions();
+
+  renderLeaderboard();
+
   // Continuously check whether the wave has resolved so failure feedback
   // is instant. The settle timer in spawnWaveQueues() is still kept as a
   // belt-and-braces fallback in case unitsDeployedCount somehow undercounts.
@@ -1759,6 +1804,13 @@ if (!siege) {
   isHost = siege.host_id === user.id;
   startingGold = goldForDifficulty(siege.difficulty);
   queueCap = queueCapForDifficulty(siege.difficulty);
+
+  resetLeaderboard();
+  setCurrentWave(siege.current_wave || 1);
+  setLeaderboardNames({
+    hostName: siege.host_username || 'HOST',
+    allyName: siege.ally_username || 'ALLY',
+  });
 
   // Preload profiles so we display fresh usernames (siege row also has them
   // but profile is canonical).

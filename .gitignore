@@ -3,3 +3,5 @@
 .claude/
 CLAUDE.md
 PLAN*
+node_modules/
+package-lock.json

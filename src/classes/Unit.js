@@ -37,44 +37,49 @@ export class Unit extends Sprite {
 
   set target(newTarget) {
     this._target = newTarget;
-  }
+ } 
 
   get target() {
     return this._target;
   }
 
   render() {
-    this.gameCanvas.fillStyle = 'red';
-    this.gameCanvas.fillRect(this.position.x, this.position.y, this.width, this.height);
+    this.gameCanvas.fillStyle = "red";
+    this.gameCanvas.fillRect(
+      this.position.x,
+      this.position.y,
+      this.width,
+      this.height,
+    );
     this.drawHealthBar();
   }
 
-drawHealthBar() {
-  const x = this.position.x;
-  const y = this.position.y - 10;
+  drawHealthBar() {
+    const x = this.position.x;
+    const y = this.position.y - 10;
 
-  const ctx = this.gameCanvas;
+    const ctx = this.gameCanvas;
 
-  ctx.fillStyle = "#3a3a3a";
-  ctx.fillRect(x, y, this.width, 5);
+    ctx.fillStyle = "#3a3a3a";
+    ctx.fillRect(x, y, this.width, 5);
 
-  const hpRatio = this.health / this.maxHealth;
+    const hpRatio = this.health / this.maxHealth;
 
-  const isAlly = this.team === "ally";
+    const isAlly = this.team === "ally";
 
-  if (hpRatio > 0.6) {
-    ctx.fillStyle = isAlly ? "#4da6ff" : "limegreen";
-  } else if (hpRatio > 0.3) {
-    ctx.fillStyle = isAlly ? "#3399ff" : "yellow";
-  } else {
-    ctx.fillStyle = isAlly ? "#0066cc" : "#ff3b30";
+    if (hpRatio > 0.6) {
+      ctx.fillStyle = isAlly ? "#4da6ff" : "limegreen";
+    } else if (hpRatio > 0.3) {
+      ctx.fillStyle = isAlly ? "#3399ff" : "yellow";
+    } else {
+      ctx.fillStyle = isAlly ? "#0066cc" : "#ff3b30";
+    }
+
+    ctx.fillRect(x, y, this.width * hpRatio, 5);
+
+    ctx.strokeStyle = "black";
+    ctx.strokeRect(x, y, this.width, 5);
   }
-
-  ctx.fillRect(x, y, this.width * hpRatio, 5);
-
-  ctx.strokeStyle = "black";
-  ctx.strokeRect(x, y, this.width, 5);
-}
 
   takeDamage(amount, attackerId = null) {
     if (this.isDead) return;
@@ -115,7 +120,7 @@ drawHealthBar() {
       vy: Math.sin(angle) * this.projectileSpeed,
       damage: this.attackStrength,
       target: this.target,
-      ownerId: this.ownerId
+      ownerId: this.ownerId,
     });
   }
 
@@ -124,8 +129,13 @@ drawHealthBar() {
       projectile.x += projectile.vx;
       projectile.y += projectile.vy;
 
-      this.gameCanvas.fillStyle = '#ff2b2b';
-      this.gameCanvas.fillRect(projectile.x, projectile.y, this.projectileSize, this.projectileSize);
+      this.gameCanvas.fillStyle = "#ff2b2b";
+      this.gameCanvas.fillRect(
+        projectile.x,
+        projectile.y,
+        this.projectileSize,
+        this.projectileSize,
+      );
 
       const target = projectile.target;
       if (!target || target.isDead) return false;
@@ -147,14 +157,15 @@ drawHealthBar() {
 
   calculateAndUpdatePathMovement() {
     const activePath =
-      (this.pathRef && Array.isArray(this.pathRef) && this.pathRef.length)
+      this.pathRef && Array.isArray(this.pathRef) && this.pathRef.length
         ? this.pathRef
         : path;
 
     const pathPoint = activePath[this.pathIndex];
     if (!pathPoint) return;
 
-    const laneOffset = (typeof this.laneOffset === 'number') ? this.laneOffset : 0;
+    const laneOffset =
+      typeof this.laneOffset === "number" ? this.laneOffset : 0;
 
     let dirX = 0;
     let dirY = 0;
@@ -186,7 +197,10 @@ drawHealthBar() {
     const distance = Math.hypot(dx, dy);
 
     const waypointReachDistance = 8;
-    if (distance <= waypointReachDistance && this.pathIndex < activePath.length - 1) {
+    if (
+      distance <= waypointReachDistance &&
+      this.pathIndex < activePath.length - 1
+    ) {
       this.pathIndex++;
       return;
     }
@@ -199,10 +213,12 @@ drawHealthBar() {
   }
 
   resetAttackState() {
-    if (typeof this.isAttacking === 'boolean') this.isAttacking = false;
-    if (typeof this.hasReleasedProjectile === 'boolean') this.hasReleasedProjectile = false;
-    if (typeof this.hasAppliedHit === 'boolean') this.hasAppliedHit = false;
-    if (typeof this.currentAttackFrame === 'number') this.currentAttackFrame = 0;
+    if (typeof this.isAttacking === "boolean") this.isAttacking = false;
+    if (typeof this.hasReleasedProjectile === "boolean")
+      this.hasReleasedProjectile = false;
+    if (typeof this.hasAppliedHit === "boolean") this.hasAppliedHit = false;
+    if (typeof this.currentAttackFrame === "number")
+      this.currentAttackFrame = 0;
   }
 
   updateFrame() {

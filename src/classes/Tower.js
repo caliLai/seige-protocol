@@ -57,10 +57,6 @@ export class Tower extends Sprite {
   render() {
     if (!Tower.image || !Tower.loaded) return;
 
-    if (this.lastShotTime && performance.now() - this.lastShotTime < 100) {
-      this.gameCanvas.globalAlpha = 0.7;
-    }
-
     this.gameCanvas.drawImage(
       Tower.image,
       this.position.x - (this.drawWidth - this.width) / 2,
@@ -163,14 +159,17 @@ export class Tower extends Sprite {
   }
 
   spawnProjectile(target) {
-    const from = {
-      x: this.centre.x,
-      y: this.centre.y,
-    };
-
-    const dx = target.centre.x - from.x;
-    const dy = target.centre.y - from.y;
+    const dx = target.centre.x - this.centre.x;
+    const dy = target.centre.y - this.centre.y;
     const angle = Math.atan2(dy, dx);
+
+    // Spawn the shot at the tower's edge along the firing direction so it
+    // never overlaps (and visually pulses over) the tower sprite.
+    const muzzleOffset = 55;
+    const from = {
+      x: this.centre.x + Math.cos(angle) * muzzleOffset,
+      y: this.centre.y + Math.sin(angle) * muzzleOffset,
+    };
 
     this.projectiles.push({
       x: from.x,
@@ -190,9 +189,6 @@ export class Tower extends Sprite {
 
     this.lastAttackAt = now;
     this.spawnProjectile(this.target);
-
-    // Flash effect
-    this.lastShotTime = performance.now();
   }
 
   renderHitEffects() {
@@ -246,8 +242,6 @@ export class Tower extends Sprite {
       const ctx = this.gameCanvas;
 
       ctx.save();
-      ctx.shadowColor = "rgba(255, 80, 0, 0.6)";
-      ctx.shadowBlur = 6;
       ctx.fillStyle = "#cc3300";
       ctx.beginPath();
       ctx.arc(p.x, p.y, this.projectileSize, 0, Math.PI * 2);

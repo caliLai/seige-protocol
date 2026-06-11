@@ -40,6 +40,17 @@ blastImage.onload = () => {
 
 blastImage.src = "../assets/effects/blast.png";
 
+// Tower-death explosion frames exported from the Animate source
+// (assets/Tower/PNG/54–61): a burst -> fireball -> smoke -> dissipate
+// sequence played in order across each explosion's lifetime by
+// updateAndRenderExplosions(). Preloaded once at module load.
+const EXPLOSION_FRAME_IDS = [54, 55, 56, 57, 58, 59, 60, 61];
+const explosionFrames = EXPLOSION_FRAME_IDS.map((id) => {
+  const img = new Image();
+  img.src = `../assets/Tower/PNG/${id}.png`;
+  return img;
+});
+
 // ── DIFFICULTY KNOBS ──
 const STARTING_GOLD = { recruit: 300, veteran: 250, elite: 200 };
 const QUEUE_CAP = { recruit: 10, veteran: 8, elite: 6 };
@@ -211,7 +222,7 @@ const spawnExplosion = (x, y) => {
     x,
     y,
     age: 0,
-    maxAge: 650, // ms
+    maxAge: 720, // ms (~90ms per explosion frame across 8 frames)
     radius: 18,
     sparks: Array.from({ length: 12 }, (_, i) => {
       const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.3;
@@ -234,39 +245,25 @@ const updateAndRenderExplosions = () => {
     ex.age += dt;
     const progress = Math.min(1, ex.age / ex.maxAge);
 
-    // Main blast ring
-    const blastRadius = ex.radius + progress * 40;
-    const alpha = 1 - progress;
-
     gameCanvas.save();
-    gameCanvas.globalAlpha = alpha;
-    if (blastLoaded) {
-      gameCanvas.drawImage(
-        blastImage,
-        ex.x - 40,
-        ex.y - 40,
-        80,
-        80
-      );
+
+    // Step through the burst -> smoke frame sequence over the explosion's
+    // lifetime. The frames already animate the fade, so draw them at full
+    // opacity except for a short tail-out on the final frames.
+    const frameIdx = Math.min(
+      explosionFrames.length - 1,
+      Math.floor(progress * explosionFrames.length)
+    );
+    const frame = explosionFrames[frameIdx];
+    if (frame && frame.complete && frame.naturalWidth) {
+      const size = 110;
+      gameCanvas.globalAlpha = progress > 0.85 ? (1 - progress) / 0.15 : 1;
+      gameCanvas.drawImage(frame, ex.x - size / 2, ex.y - size / 2, size, size);
+    } else if (blastLoaded) {
+      // Fallback to the legacy blast sprite if a frame hasn't loaded yet.
+      gameCanvas.globalAlpha = 1 - progress;
+      gameCanvas.drawImage(blastImage, ex.x - 40, ex.y - 40, 80, 80);
     }
-
-    // Outer orange ring
-    gameCanvas.beginPath();
-    gameCanvas.arc(ex.x, ex.y, blastRadius, 0, Math.PI * 2);
-    gameCanvas.fillStyle = 'rgba(255,140,0,0.35)';
-    gameCanvas.fill();
-
-    // Inner bright core
-    gameCanvas.beginPath();
-    gameCanvas.arc(ex.x, ex.y, blastRadius * 0.55, 0, Math.PI * 2);
-    gameCanvas.fillStyle = 'rgba(255,220,80,0.7)';
-    gameCanvas.fill();
-
-    // Small white hot centre
-    gameCanvas.beginPath();
-    gameCanvas.arc(ex.x, ex.y, blastRadius * 0.22, 0, Math.PI * 2);
-    gameCanvas.fillStyle = 'rgba(255,255,255,0.9)';
-    gameCanvas.fill();
 
     // Sparks
     ex.sparks.forEach((spark) => {
@@ -1551,7 +1548,11 @@ const animate = () => {
   }
 
   
-  attackUnits = attackUnits.filter(u => !u.isDead);
+  // Keep dying units around until their death animation finishes (isGone),
+  // not the instant they hit 0 HP (isDead) — otherwise they'd vanish before
+  // a single death frame could render. They're excluded from "alive" checks
+  // and broadcasts by isDead, so this is purely a local visual lifetime.
+  attackUnits = attackUnits.filter(u => !u.isGone);
   attackUnits.forEach(u => u.updateFrame());
   towers.forEach(tower => {
     tower.updateFrame(attackUnits);

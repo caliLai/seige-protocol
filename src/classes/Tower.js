@@ -5,8 +5,10 @@ export class Tower extends Sprite {
   width = 50;
   height = 50;
 
-  drawWidth = 96;
-  drawHeight = 96;
+  // Drawn larger than the 50x50 footprint and sized to the source art's
+  // aspect ratio (157x120 -> ~1.31) so the new tower sprite isn't squashed.
+  drawWidth = 104;
+  drawHeight = 80;
 
   maxHealth = 100;
   health = 100;
@@ -48,7 +50,7 @@ export class Tower extends Sprite {
       Tower.image.onload = () => {
         Tower.loaded = true;
       };
-      Tower.image.src = "../assets/Tower/tower_1.png";
+      Tower.image.src = "../assets/Tower/PNG/25.png";
     }
   }
 
@@ -220,10 +222,14 @@ export class Tower extends Sprite {
     });
   }
 
-  updateProjectiles() {
+  updateProjectiles(units = []) {
+    const list = Array.isArray(units) ? units : [];
+
     this.projectiles = this.projectiles.filter((p) => {
       const target = p.target;
 
+      // Home toward the locked target while it lives; once it dies the
+      // shot keeps its last heading and can still strike another unit.
       if (target && !target.isDead) {
         const dx = target.centre.x - p.x;
         const dy = target.centre.y - p.y;
@@ -249,16 +255,18 @@ export class Tower extends Sprite {
 
       ctx.restore();
 
-      if (!target || target.isDead) return false;
+      // Damage whichever living unit the shot actually overlaps — not
+      // only the unit it was originally aimed at. Without this, projectiles
+      // visibly pass through other units in a cluster without hurting them.
+      const hit = list.find((u) => {
+        if (!u || u.isDead || typeof u.takeDamage !== "function") return false;
+        const dx = u.centre.x - p.x;
+        const dy = u.centre.y - p.y;
+        return Math.hypot(dx, dy) <= u.width / 2 + this.projectileSize;
+      });
 
-      const dx = target.centre.x - p.x;
-      const dy = target.centre.y - p.y;
-      const distance = Math.hypot(dx, dy);
-
-      if (distance <= 10) {
-        if (typeof target.takeDamage === "function") {
-          target.takeDamage(p.damage);
-        }
+      if (hit) {
+        hit.takeDamage(p.damage);
 
         this.hitEffects.push({
           x: p.x,
@@ -266,6 +274,19 @@ export class Tower extends Sprite {
           createdAt: performance.now(),
         });
 
+        return false;
+      }
+
+      // Drop spent shots that leave the field (e.g. their target died and
+      // they connected with nothing) so they don't fly on forever.
+      const canvas = ctx.canvas;
+      if (
+        canvas &&
+        (p.x < -20 ||
+          p.y < -20 ||
+          p.x > canvas.width + 20 ||
+          p.y > canvas.height + 20)
+      ) {
         return false;
       }
 
@@ -281,7 +302,7 @@ export class Tower extends Sprite {
 
     this.findTarget(units);
     this.attack();
-    this.updateProjectiles();
+    this.updateProjectiles(units);
     this.render();
     this.renderHitEffects();
   }

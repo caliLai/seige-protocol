@@ -45,6 +45,9 @@ export class Archer extends Unit {
     static walkImage = null;
     static walkImageLoaded = false;
 
+    static deathImage = null;
+    static deathImageLoaded = false;
+
     static projectileImage = null;
     static projectileImageLoaded = false;
 
@@ -82,6 +85,12 @@ export class Archer extends Unit {
                 Archer.walkImageLoaded = true;
             };
             Archer.walkImage.src = "/assets/Archer/Archer/Archer-Walk.png";
+        }
+
+        if (!Archer.deathImage) {
+            Archer.deathImage = new Image();
+            Archer.deathImage.onload = () => { Archer.deathImageLoaded = true; };
+            Archer.deathImage.src = "/assets/Archer/Archer/Archer-Death.png";
         }
 
         if (!Archer.projectileImage) {

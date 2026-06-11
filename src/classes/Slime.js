@@ -42,6 +42,9 @@ export class Slime extends MeleeUnit {
     static walkImage = null;
     static walkImageLoaded = false;
 
+    static deathImage = null;
+    static deathImageLoaded = false;
+
     constructor(position, gameCanvas) {
         super(position, gameCanvas);
         Slime.loadAssets();
@@ -70,6 +73,12 @@ export class Slime extends MeleeUnit {
                 Slime.walkImageLoaded = true;
             };
             Slime.walkImage.src = "/assets/Slime/Slime/Slime-Walk.png";
+        }
+
+        if (!Slime.deathImage) {
+            Slime.deathImage = new Image();
+            Slime.deathImage.onload = () => { Slime.deathImageLoaded = true; };
+            Slime.deathImage.src = "/assets/Slime/Slime/Slime-Death.png";
         }
     }
 

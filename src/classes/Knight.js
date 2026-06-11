@@ -41,6 +41,9 @@ export class Knight extends Unit {
     static walkImage = null;
     static walkImageLoaded = false;
 
+    static deathImage = null;
+    static deathImageLoaded = false;
+
     constructor(position, gameCanvas) {
         super(position, gameCanvas);
         Knight.loadAssets();
@@ -75,6 +78,12 @@ export class Knight extends Unit {
                 Knight.walkImageLoaded = true;
             };
             Knight.walkImage.src = "/assets/Knight/Knight/Knight-Walk.png";
+        }
+
+        if (!Knight.deathImage) {
+            Knight.deathImage = new Image();
+            Knight.deathImage.onload = () => { Knight.deathImageLoaded = true; };
+            Knight.deathImage.src = "/assets/Knight/Knight/Knight-Death.png";
         }
     }
 

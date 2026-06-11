@@ -42,6 +42,9 @@ export class ArmoredAxeman extends MeleeUnit {
     static walkImage = null;
     static walkImageLoaded = false;
 
+    static deathImage = null;
+    static deathImageLoaded = false;
+
     constructor(position, gameCanvas) {
         super(position, gameCanvas);
         ArmoredAxeman.loadAssets();
@@ -70,6 +73,12 @@ export class ArmoredAxeman extends MeleeUnit {
                 ArmoredAxeman.walkImageLoaded = true;
             };
             ArmoredAxeman.walkImage.src = "/assets/Armored Axeman/Armored Axeman/Armored Axeman-Walk.png";
+        }
+
+        if (!ArmoredAxeman.deathImage) {
+            ArmoredAxeman.deathImage = new Image();
+            ArmoredAxeman.deathImage.onload = () => { ArmoredAxeman.deathImageLoaded = true; };
+            ArmoredAxeman.deathImage.src = "/assets/Armored Axeman/Armored Axeman/Armored Axeman-Death.png";
         }
     }
 

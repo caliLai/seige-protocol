@@ -26,6 +26,19 @@ export class Unit extends Sprite {
   ownerId = null;
   team = null;
 
+  // Death animation. When health hits 0 the unit enters a dying state and
+  // plays its <Name>-Death.png sheet once (frames advance off diedAt)
+  // before battle.js removes it via isGone. Units without a death sheet
+  // (the plain base Unit) fade out instead.
+  diedAt = 0;
+  deathFrameDurationMs = 90;
+  deathFallbackMs = 450;
+
+  // Subclasses each assign their own static death sheet; declared here so
+  // this.constructor.deathImage is always defined (null) for the base Unit.
+  static deathImage = null;
+  static deathImageLoaded = false;
+
   constructor(position, gameCanvas) {
     super(position, gameCanvas);
     this.pathRef = null;
@@ -33,6 +46,23 @@ export class Unit extends Sprite {
     this.ownerId = null;
     this.team = null;
     this.deathRecorded = false;
+  }
+
+  // True once the death animation has finished playing. battle.js removes
+  // units on isGone (not isDead) so the dying animation has time to show.
+  get isGone() {
+    if (!this.isDead) return false;
+    if (!this.diedAt) return true; // died outside takeDamage — nothing to play
+    return performance.now() - this.diedAt >= this.deathAnimationMs();
+  }
+
+  deathAnimationMs() {
+    const img = this.constructor.deathImage;
+    if (img && this.constructor.deathImageLoaded && img.height) {
+      const frames = Math.max(1, Math.floor(img.width / img.height));
+      return frames * this.deathFrameDurationMs;
+    }
+    return this.deathFallbackMs;
   }
 
   set target(newTarget) {
@@ -89,12 +119,87 @@ export class Unit extends Sprite {
     if (this.health <= 0) {
       this.health = 0;
 
+      if (!this.diedAt) this.diedAt = performance.now(); // start death animation
+
       if (!this.deathRecorded) {
         this.deathRecorded = true;
         const owningTeam = this.team || this.ownerId || null;
         creditUnitDeath(owningTeam);
       }
     }
+  }
+
+  // Plays the unit's death sheet once, frame-stepped off diedAt. Falls back
+  // to a fade-and-shrink of the plain marker when no sheet is available.
+  // Centralised here so every subclass animates death without overriding it.
+  renderDeath() {
+    const DeathImg = this.constructor.deathImage;
+
+    if (DeathImg && this.constructor.deathImageLoaded && DeathImg.height) {
+      const frameSize = DeathImg.height;
+      const frameCount = Math.max(1, Math.floor(DeathImg.width / frameSize));
+      const elapsed = this.diedAt ? performance.now() - this.diedAt : Infinity;
+      const frameIndex = Math.min(
+        frameCount - 1,
+        Math.floor(elapsed / this.deathFrameDurationMs),
+      );
+      const sx = frameIndex * frameSize;
+
+      const drawW = this.drawWidth || this.width;
+      const drawH = this.drawHeight || this.height;
+      const drawX = this.position.x - (drawW - this.width) / 2;
+      const drawY = this.position.y - (drawH - this.height) / 2;
+
+      const facing =
+        typeof this.facingDirection === "number" ? this.facingDirection : 1;
+      const ctx = this.gameCanvas;
+
+      if (facing >= 0) {
+        ctx.drawImage(
+          DeathImg,
+          sx,
+          0,
+          frameSize,
+          frameSize,
+          drawX,
+          drawY,
+          drawW,
+          drawH,
+        );
+      } else {
+        ctx.save();
+        ctx.translate(drawX + drawW / 2, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(
+          DeathImg,
+          sx,
+          0,
+          frameSize,
+          frameSize,
+          -drawW / 2,
+          drawY,
+          drawW,
+          drawH,
+        );
+        ctx.restore();
+      }
+      return;
+    }
+
+    // Fallback: fade + shrink the plain marker for units with no death sheet.
+    const elapsed = this.diedAt
+      ? performance.now() - this.diedAt
+      : this.deathFallbackMs;
+    const progress = Math.min(1, elapsed / this.deathFallbackMs);
+    const size = this.width * (1 - progress * 0.4);
+    const offset = (this.width - size) / 2;
+    const ctx = this.gameCanvas;
+
+    ctx.save();
+    ctx.globalAlpha = 1 - progress;
+    ctx.fillStyle = this.team === "ally" ? "#4da6ff" : "red";
+    ctx.fillRect(this.position.x + offset, this.position.y + offset, size, size);
+    ctx.restore();
   }
 
   attack() {
@@ -222,7 +327,10 @@ export class Unit extends Sprite {
   }
 
   updateFrame() {
-    if (this.isDead) return;
+    if (this.isDead) {
+      this.renderDeath();
+      return;
+    }
 
     this.render();
 

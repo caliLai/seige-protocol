@@ -45,6 +45,9 @@ export class SkeletonArcher extends Unit {
     static walkImage = null;
     static walkImageLoaded = false;
 
+    static deathImage = null;
+    static deathImageLoaded = false;
+
     static projectileImage = null;
     static projectileImageLoaded = false;
 
@@ -76,6 +79,12 @@ export class SkeletonArcher extends Unit {
                 SkeletonArcher.walkImageLoaded = true;
             };
             SkeletonArcher.walkImage.src = "/assets/Skeleton Archer/Skeleton Archer/Skeleton Archer-Walk.png";
+        }
+
+        if (!SkeletonArcher.deathImage) {
+            SkeletonArcher.deathImage = new Image();
+            SkeletonArcher.deathImage.onload = () => { SkeletonArcher.deathImageLoaded = true; };
+            SkeletonArcher.deathImage.src = "/assets/Skeleton Archer/Skeleton Archer/Skeleton Archer-Death.png";
         }
 
         if (!SkeletonArcher.projectileImage) {

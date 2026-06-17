@@ -19,28 +19,19 @@ export class Tower extends Sprite {
   lastAttackAt = 0;
 
   target = null;
-
-  // Team that landed the last hit on this tower. battle.js reads this
-  // when the tower dies so the killing-blow side gets towers_destroyed
-  // credit and the per-side gold reward.
   lastAttackerTeam = null;
 
   projectiles = [];
   projectileSpeed = 5;
-  projectileSize = 8;
+  projectileSize = 6;
+
+  hitEffects = [];
 
   lastHitBy = null;
   rewardGranted = false;
 
   static image = null;
   static loaded = false;
-
-  constructor(position, gameCanvas) {
-    super(position, gameCanvas);
-    Tower.loadAssets();
-
-    this.hitEffects = [];
-  }
 
   static loadAssets() {
     if (!Tower.image) {
@@ -52,42 +43,140 @@ export class Tower extends Sprite {
     }
   }
 
-  render() {
-    if (!Tower.image || !Tower.loaded) return;
-
-    if (this.lastShotTime && performance.now() - this.lastShotTime < 100) {
-      this.gameCanvas.globalAlpha = 0.7;
-    }
-
-    this.gameCanvas.drawImage(
-      Tower.image,
-      this.position.x - (this.drawWidth - this.width) / 2,
-      this.position.y - (this.drawHeight - this.height),
-      this.drawWidth,
-      this.drawHeight,
+  constructor(position, gameCanvas, options = {}) {
+    // Incoming tower position = centre point
+    super(
+      {
+        x: position.x - 25,
+        y: position.y - 25,
+      },
+      gameCanvas
     );
 
-    this.drawHealthBar();
-    this.gameCanvas.globalAlpha = 1;
+    Tower.loadAssets();
+
+    this.showSprite = options.showSprite !== false;
+    this.anchorX = position.x;
+    this.anchorY = position.y;
   }
 
-  drawHealthBar() {
-    const x = this.position.x;
-    const y = this.position.y - 10;
+  render() {
+    const ctx = this.gameCanvas;
 
-    this.gameCanvas.fillStyle = "#3a3a3a";
-    this.gameCanvas.fillRect(x, y, this.width, 6);
+    // Stable integer positions to reduce visual twitch
+    const spriteX = Math.round(this.anchorX - this.drawWidth / 2);
+    const spriteY = Math.round(this.anchorY - this.drawHeight + 10);
 
-    const hpRatio = this.health / this.maxHealth;
+    ctx.save();
 
-    if (hpRatio > 0.6) this.gameCanvas.fillStyle = "limegreen";
-    else if (hpRatio > 0.3) this.gameCanvas.fillStyle = "yellow";
-    else this.gameCanvas.fillStyle = "#ff3b30";
+    if (this.lastShotTime && performance.now() - this.lastShotTime < 90) {
+      ctx.globalAlpha = 0.82;
+    }
 
-    this.gameCanvas.fillRect(x, y, this.width * hpRatio, 6);
+    if (Tower.image && Tower.loaded) {
+      ctx.drawImage(
+        Tower.image,
+        spriteX,
+        spriteY,
+        this.drawWidth,
+        this.drawHeight
+      );
+    } else {
+      // fallback block while image loads
+      ctx.fillStyle = "#7a5a2a";
+      ctx.fillRect(
+        Math.round(this.anchorX - 24),
+        Math.round(this.anchorY - 36),
+        48,
+        48
+      );
+    }
 
-    this.gameCanvas.strokeStyle = "black";
-    this.gameCanvas.strokeRect(x, y, this.width, 6);
+    ctx.restore();
+
+    this.drawProjectiles();
+    this.drawHitEffects();
+
+    this.drawHealthBar(
+      Math.round(this.anchorX - this.width / 2),
+      Math.round(spriteY - 10)
+    );
+  }
+
+  drawHealthBar(x = this.anchorX - this.width / 2, y = this.anchorY - 55) {
+    const ctx = this.gameCanvas;
+
+    ctx.fillStyle = "#3a3a3a";
+    ctx.fillRect(x, y, this.width, 6);
+
+    const hpRatio = Math.max(0, this.health / this.maxHealth);
+
+    if (hpRatio > 0.6) ctx.fillStyle = "limegreen";
+    else if (hpRatio > 0.3) ctx.fillStyle = "yellow";
+    else ctx.fillStyle = "#ff3b30";
+
+    ctx.fillRect(x, y, this.width * hpRatio, 6);
+
+    ctx.strokeStyle = "black";
+    ctx.strokeRect(x, y, this.width, 6);
+  }
+
+  drawProjectiles() {
+    const ctx = this.gameCanvas;
+
+    for (const p of this.projectiles) {
+      ctx.save();
+
+      // glow
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, this.projectileSize + 2, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 160, 60, 0.30)";
+      ctx.fill();
+
+      // main shot
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, this.projectileSize, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffb347";
+      ctx.fill();
+
+      // bright core
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(2, this.projectileSize / 2), 0, Math.PI * 2);
+      ctx.fillStyle = "#fff5cc";
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  drawHitEffects() {
+    const ctx = this.gameCanvas;
+    const now = performance.now();
+
+    this.hitEffects = this.hitEffects.filter((fx) => {
+      const age = now - fx.createdAt;
+      if (age > 140) return false;
+
+      const alpha = 1 - age / 140;
+      const radius = 4 + age * 0.05;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      ctx.beginPath();
+      ctx.arc(fx.x, fx.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff0a0";
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(fx.x, fx.y, radius * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = "#ff7a00";
+      ctx.fill();
+
+      ctx.restore();
+
+      return true;
+    });
   }
 
   takeDamage(amount, attackerId = null) {
@@ -130,7 +219,6 @@ export class Tower extends Sprite {
       return;
     }
 
-    // Keep current target if still valid and still in range
     if (this.target && !this.target.isDead) {
       const dx = this.target.centre.x - this.centre.x;
       const dy = this.target.centre.y - this.centre.y;
@@ -188,36 +276,7 @@ export class Tower extends Sprite {
 
     this.lastAttackAt = now;
     this.spawnProjectile(this.target);
-
-    // Flash effect
     this.lastShotTime = performance.now();
-  }
-
-  renderHitEffects() {
-    const now = performance.now();
-
-    this.hitEffects = this.hitEffects.filter((effect) => {
-      const elapsed = now - effect.createdAt;
-      const duration = 200;
-
-      const progress = elapsed / duration;
-      if (progress >= 1) return false;
-
-      const radius = 5 + progress * 15;
-      const alpha = 1 - progress;
-
-      this.gameCanvas.save();
-      this.gameCanvas.globalAlpha = alpha;
-
-      this.gameCanvas.fillStyle = "orange";
-      this.gameCanvas.beginPath();
-      this.gameCanvas.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
-      this.gameCanvas.fill();
-
-      this.gameCanvas.restore();
-
-      return true;
-    });
   }
 
   updateProjectiles() {
@@ -227,7 +286,6 @@ export class Tower extends Sprite {
       if (target && !target.isDead) {
         const dx = target.centre.x - p.x;
         const dy = target.centre.y - p.y;
-
         const angle = Math.atan2(dy, dx);
 
         p.vx = Math.cos(angle) * this.projectileSpeed;
@@ -236,18 +294,6 @@ export class Tower extends Sprite {
 
       p.x += p.vx;
       p.y += p.vy;
-
-      const ctx = this.gameCanvas;
-
-      ctx.save();
-      ctx.shadowColor = "rgba(255, 80, 0, 0.6)";
-      ctx.shadowBlur = 6;
-      ctx.fillStyle = "#cc3300";
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, this.projectileSize, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
 
       if (!target || target.isDead) return false;
 
@@ -274,15 +320,15 @@ export class Tower extends Sprite {
   }
 
   updateFrame(units) {
-    if (this.isDead) {
-      this.renderHitEffects();
-      return;
-    }
+    if (this.isDead) return;
 
     this.findTarget(units);
     this.attack();
     this.updateProjectiles();
     this.render();
-    this.renderHitEffects();
+  }
+
+  get isDead() {
+    return this.health <= 0;
   }
 }

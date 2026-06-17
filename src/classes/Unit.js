@@ -1,11 +1,12 @@
 import { Sprite } from "./Sprite.js";
-import { path } from "../data/path.js";
 import { sim } from "../runtime/sim.js";
 import { creditUnitDeath } from "../runtime/leaderboard.js";
 
 export class Unit extends Sprite {
+
   width = 50;
   height = 50;
+
   pathIndex = 0;
   moveSpeedPxPerSecond = 60;
 
@@ -28,6 +29,7 @@ export class Unit extends Sprite {
 
   constructor(position, gameCanvas) {
     super(position, gameCanvas);
+
     this.pathRef = null;
     this.laneOffset = 0;
     this.ownerId = null;
@@ -37,34 +39,28 @@ export class Unit extends Sprite {
 
   set target(newTarget) {
     this._target = newTarget;
- } 
+  }
 
   get target() {
     return this._target;
   }
 
   render() {
-    this.gameCanvas.fillStyle = "red";
-    this.gameCanvas.fillRect(
-      this.position.x,
-      this.position.y,
-      this.width,
-      this.height,
-    );
+    const ctx = this.gameCanvas;
+    ctx.fillStyle = "red";
+    ctx.fillRect(this.position.x, this.position.y, this.width, this.height);
     this.drawHealthBar();
   }
 
   drawHealthBar() {
     const x = this.position.x;
     const y = this.position.y - 10;
-
     const ctx = this.gameCanvas;
 
     ctx.fillStyle = "#3a3a3a";
     ctx.fillRect(x, y, this.width, 5);
 
     const hpRatio = this.health / this.maxHealth;
-
     const isAlly = this.team === "ally";
 
     if (hpRatio > 0.6) {
@@ -134,17 +130,14 @@ export class Unit extends Sprite {
         projectile.x,
         projectile.y,
         this.projectileSize,
-        this.projectileSize,
+        this.projectileSize
       );
 
       const target = projectile.target;
       if (!target || target.isDead) return false;
 
-      const projectileCenterX = projectile.x + this.projectileSize / 2;
-      const projectileCenterY = projectile.y + this.projectileSize / 2;
-
-      const dx = target.centre.x - projectileCenterX;
-      const dy = target.centre.y - projectileCenterY;
+      const dx = target.centre.x - (projectile.x + this.projectileSize / 2);
+      const dy = target.centre.y - (projectile.y + this.projectileSize / 2);
 
       if (Math.hypot(dx, dy) <= this.projectileSize + 4) {
         target.takeDamage(projectile.damage, projectile.ownerId);
@@ -156,22 +149,19 @@ export class Unit extends Sprite {
   }
 
   calculateAndUpdatePathMovement() {
-    const activePath =
-      this.pathRef && Array.isArray(this.pathRef) && this.pathRef.length
-        ? this.pathRef
-        : path;
+    if (!this.pathRef || !this.pathRef.length) return;
 
-    const pathPoint = activePath[this.pathIndex];
+    const path = this.pathRef;
+    const pathPoint = path[this.pathIndex];
     if (!pathPoint) return;
 
-    const laneOffset =
-      typeof this.laneOffset === "number" ? this.laneOffset : 0;
+    const laneOffset = this.laneOffset || 0;
 
     let dirX = 0;
     let dirY = 0;
 
-    const nextPoint = activePath[this.pathIndex + 1];
-    const prevPoint = activePath[this.pathIndex - 1];
+    const nextPoint = path[this.pathIndex + 1];
+    const prevPoint = path[this.pathIndex - 1];
 
     if (nextPoint) {
       dirX = nextPoint.x - pathPoint.x;
@@ -196,11 +186,7 @@ export class Unit extends Sprite {
 
     const distance = Math.hypot(dx, dy);
 
-    const waypointReachDistance = 8;
-    if (
-      distance <= waypointReachDistance &&
-      this.pathIndex < activePath.length - 1
-    ) {
+    if (distance <= 8 && this.pathIndex < path.length - 1) {
       this.pathIndex++;
       return;
     }
@@ -214,11 +200,9 @@ export class Unit extends Sprite {
 
   resetAttackState() {
     if (typeof this.isAttacking === "boolean") this.isAttacking = false;
-    if (typeof this.hasReleasedProjectile === "boolean")
-      this.hasReleasedProjectile = false;
+    if (typeof this.hasReleasedProjectile === "boolean") this.hasReleasedProjectile = false;
     if (typeof this.hasAppliedHit === "boolean") this.hasAppliedHit = false;
-    if (typeof this.currentAttackFrame === "number")
-      this.currentAttackFrame = 0;
+    if (typeof this.currentAttackFrame === "number") this.currentAttackFrame = 0;
   }
 
   updateFrame() {

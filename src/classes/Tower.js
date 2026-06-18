@@ -17,6 +17,8 @@ export class Tower extends Sprite {
   attackDamage = 10;
   attackCooldownMs = 800;
   lastAttackAt = 0;
+  volleySize = 3;
+  volleySpreadRadians = 0.18;
 
   target = null;
   lastAttackerTeam = null;
@@ -248,7 +250,27 @@ export class Tower extends Sprite {
     this.target = nearest;
   }
 
-  spawnProjectile(target) {
+  findTargetsInRange(units) {
+    if (!Array.isArray(units) || units.length === 0) return [];
+
+    return units
+      .filter((unit) => {
+        if (!unit || unit.isDead) return false;
+
+        const dx = unit.centre.x - this.centre.x;
+        const dy = unit.centre.y - this.centre.y;
+        return Math.hypot(dx, dy) <= this.attackRadius;
+      })
+      .sort((a, b) => {
+        const adx = a.centre.x - this.centre.x;
+        const ady = a.centre.y - this.centre.y;
+        const bdx = b.centre.x - this.centre.x;
+        const bdy = b.centre.y - this.centre.y;
+        return Math.hypot(adx, ady) - Math.hypot(bdx, bdy);
+      });
+  }
+
+  spawnProjectile(target, angleOffset = 0) {
     const from = {
       x: this.centre.x,
       y: this.centre.y,
@@ -256,7 +278,7 @@ export class Tower extends Sprite {
 
     const dx = target.centre.x - from.x;
     const dy = target.centre.y - from.y;
-    const angle = Math.atan2(dy, dx);
+    const angle = Math.atan2(dy, dx) + angleOffset;
 
     this.projectiles.push({
       x: from.x,
@@ -265,17 +287,27 @@ export class Tower extends Sprite {
       vy: Math.sin(angle) * this.projectileSpeed,
       damage: this.attackDamage,
       target,
+      angleOffset,
     });
   }
 
-  attack() {
-    if (!this.target) return;
+  attack(units) {
+    const targets = this.findTargetsInRange(units);
+    if (targets.length === 0) return;
 
     const now = performance.now();
     if (now - this.lastAttackAt < this.attackCooldownMs) return;
 
     this.lastAttackAt = now;
-    this.spawnProjectile(this.target);
+
+    for (let i = 0; i < this.volleySize; i++) {
+      const target = targets[i % targets.length];
+      const middle = (this.volleySize - 1) / 2;
+      const angleOffset = (i - middle) * this.volleySpreadRadians;
+      this.spawnProjectile(target, angleOffset);
+    }
+
+    // Flash effect
     this.lastShotTime = performance.now();
   }
 
@@ -295,35 +327,56 @@ export class Tower extends Sprite {
       p.x += p.vx;
       p.y += p.vy;
 
-      if (!target || target.isDead) return false;
+      const hitTarget = this.findProjectileHitTarget(p, target);
+      if (!hitTarget) return Boolean(target && !target.isDead);
 
-      const dx = target.centre.x - p.x;
-      const dy = target.centre.y - p.y;
-      const distance = Math.hypot(dx, dy);
-
-      if (distance <= 10) {
-        if (typeof target.takeDamage === "function") {
-          target.takeDamage(p.damage);
-        }
-
-        this.hitEffects.push({
-          x: p.x,
-          y: p.y,
-          createdAt: performance.now(),
-        });
-
-        return false;
+      if (typeof hitTarget.takeDamage === "function") {
+        hitTarget.takeDamage(p.damage);
       }
 
-      return true;
+      this.hitEffects.push({
+        x: p.x,
+        y: p.y,
+        createdAt: performance.now(),
+      });
+
+      return false;
     });
+  }
+
+  findProjectileHitTarget(projectile, preferredTarget) {
+    const candidates = [];
+    if (preferredTarget && !preferredTarget.isDead) candidates.push(preferredTarget);
+    if (Array.isArray(this.currentUnits)) {
+      for (const unit of this.currentUnits) {
+        if (unit && !unit.isDead && unit !== preferredTarget) candidates.push(unit);
+      }
+    }
+
+    let nearest = null;
+    let nearestDistance = Infinity;
+    const hitRadius = this.projectileSize + 10;
+
+    for (const unit of candidates) {
+      const dx = unit.centre.x - projectile.x;
+      const dy = unit.centre.y - projectile.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance <= hitRadius && distance < nearestDistance) {
+        nearest = unit;
+        nearestDistance = distance;
+      }
+    }
+
+    return nearest;
   }
 
   updateFrame(units) {
     if (this.isDead) return;
 
+    this.currentUnits = Array.isArray(units) ? units : [];
     this.findTarget(units);
-    this.attack();
+    this.attack(units);
     this.updateProjectiles();
     this.render();
   }

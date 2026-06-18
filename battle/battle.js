@@ -7,7 +7,7 @@
 
 import { supabase } from '/lib/supabase.js';
 import { enforceSingleSession } from '/lib/single-session.js';
-import { UNITS_BY_ID, idleSpriteUrl, deployCost, deployCostById } from '/lib/units.js';
+import { UNITS, UNITS_BY_ID, idleSpriteUrl, deployCost, deployCostById } from '/lib/units.js';
 import { path } from '/src/data/path.js';
 import { towerLocations } from '/src/data/towerLocations.js';
 import { Archer } from '/src/classes/Archer.js';
@@ -22,6 +22,7 @@ import { Tower } from '/src/classes/Tower.js';
 import { Unit } from '/src/classes/Unit.js';
 import { sim } from '/src/runtime/sim.js';
 import { contribution, resetContribution, creditTowerKill } from '/src/runtime/contribution.js';
+import { initTowerMatchups, getTowerMatchupSummary } from '/src/runtime/towerMatchups.js';
 
 import {
   resetLeaderboard,
@@ -766,6 +767,9 @@ const createUnitFromId = (unitId, position, laneOffset) => {
   else if (lower === 'slime') unit = new Slime(position, gameCanvas);
   else if (lower === 'skeleton') unit = new Skeleton(position, gameCanvas);
   else unit = new PlaceholderUnit(position, gameCanvas, id);
+  // Catalog id (e.g. 'Archer', 'Skeleton Archer') — used by the stone-tower
+  // matchup system to look up this unit's damage multipliers vs towers.
+  unit.unitType = id;
   unit.laneOffset = (typeof laneOffset === 'number') ? laneOffset : 0;
   unit.pathRef = path;
   return unit;
@@ -1098,6 +1102,73 @@ battleEvents.addEventListener('tower-destroyed', (e) => {
   }
 });
 
+// ── WAVE-FAILED SUMMARY POPUP ──
+// On a repulsed wave we show a per-side breakdown of what died and how much
+// tower damage was dealt THIS wave, then let either player advance both.
+// Tower damage per wave is the contribution total diffed against a baseline
+// captured at wave start (contribution itself accumulates across the match).
+let waveStartDamage = { host: 0, ally: 0 };
+
+const waveSummaryOverlay = document.getElementById('waveSummaryOverlay');
+const waveSummaryTitleEl = document.getElementById('waveSummaryTitle');
+const waveSummaryGridEl = document.getElementById('waveSummaryGrid');
+const waveNextBtn = document.getElementById('waveNextBtn');
+
+const countByType = (queue) => {
+  const m = new Map();
+  (queue || []).forEach((id) => m.set(id, (m.get(id) || 0) + 1));
+  return [...m.entries()];
+};
+
+const sideSummaryHtml = (label, queue, dmg) => {
+  const rows = countByType(queue);
+  const list = rows.length
+    ? rows.map(([id, n]) => `<li><span>${id}</span><span>×${n}</span></li>`).join('')
+    : '<li class="wave-sum-empty">— none deployed —</li>';
+  return `
+    <div class="wave-sum-col">
+      <div class="wave-sum-side">${label}</div>
+      <ul class="wave-sum-list">${list}</ul>
+      <div class="wave-sum-foot">
+        <div><span>UNITS LOST</span><span>${(queue || []).length}</span></div>
+        <div><span>TOWER DMG</span><span>${Math.max(0, Math.round(dmg))}</span></div>
+      </div>
+    </div>`;
+};
+
+const showWaveSummary = (waveNum) => {
+  if (!waveSummaryOverlay) return;
+  const hostDmg = contribution.host.damage_dealt - waveStartDamage.host;
+  const allyDmg = contribution.ally.damage_dealt - waveStartDamage.ally;
+  waveSummaryTitleEl.textContent = `⚔ WAVE ${waveNum} REPULSED ⚔`;
+  waveSummaryGridEl.innerHTML =
+    sideSummaryHtml(leaderboardState.host.label, siege.host_queue, hostDmg) +
+    sideSummaryHtml(leaderboardState.ally.label, siege.ally_queue, allyDmg);
+  if (waveNextBtn) {
+    waveNextBtn.disabled = false;
+    waveNextBtn.textContent = `⚔ ADVANCE TO WAVE ${waveNum + 1} ⚔`;
+  }
+  waveSummaryOverlay.classList.remove('hidden');
+  waveSummaryOverlay.setAttribute('aria-hidden', 'false');
+};
+
+const hideWaveSummary = () => {
+  if (!waveSummaryOverlay) return;
+  waveSummaryOverlay.classList.add('hidden');
+  waveSummaryOverlay.setAttribute('aria-hidden', 'true');
+};
+
+if (waveNextBtn) {
+  waveNextBtn.addEventListener('click', async () => {
+    waveNextBtn.disabled = true;
+    // advance_wave is idempotent on phase: whichever player clicks first
+    // bumps current_wave; the prep echo flips both clients (and hides the
+    // other player's popup via applySiegeUpdate).
+    await callBattleRpc('advance_wave', { p_siege: siege.id }, false);
+    hideWaveSummary();
+  });
+}
+
 // All towers destroyed = victory, regardless of which wave we're on.
 // Clearing the map early is the win condition; remaining waves are
 // "you had room to spare," not unfinished work.
@@ -1121,13 +1192,10 @@ battleEvents.addEventListener('wave-failed', async () => {
     if (isHost) await showEndOverlay('defeat');
     return;
   }
-  // Wave bump now allowed from EITHER player (mig 011). If the host
-  // refreshed mid-wave, only the ally's sim will reach wave-failed,
-  // and we need the ally to be able to bump the counter — otherwise
-  // the match hangs. The RPC is idempotent on phase, so if both
-  // clients call simultaneously the second one silently no-ops
-  // instead of double-bumping current_wave.
-  await callBattleRpc('advance_wave', { p_siege: siege.id }, false);
+  // Show the wave summary instead of auto-advancing. Advancing is now a
+  // manual "Go to Next Wave" click (see waveNextBtn) — either player's
+  // click fires the idempotent advance_wave RPC and flips both to prep.
+  showWaveSummary(current);
 });
 
 const updateWaveProgress = () => {
@@ -1501,6 +1569,63 @@ const unitCanReachTower = (unit, tower) => {
   return distance <= unit.attackRadius + towerBuffer + meleeAdjustment;
 };
 
+// ── TOWER INFORMATION PANEL ──
+// Click a tower on the map to inspect it. All stone towers share the same
+// matchup roll (the "stone tower type"), so the panel shows this match's
+// weaknesses/resistances plus the clicked tower's live HP.
+const towerInfoEl = document.getElementById('towerInfo');
+let selectedTower = null;
+
+const towerHitTest = (t, x, y) => {
+  const left = t.position.x - (t.drawWidth - t.width) / 2;
+  const top = t.position.y - (t.drawHeight - t.height);
+  return x >= left && x <= left + t.drawWidth && y >= top && y <= top + t.drawHeight;
+};
+
+const towerIsDestroyed = (t) => !t || t.isDead || !towers.includes(t);
+
+const renderTowerInfo = () => {
+  if (!towerInfoEl) return;
+  if (!selectedTower) {
+    towerInfoEl.classList.remove('has-info');
+    towerInfoEl.textContent = '— SELECT A TOWER —';
+    return;
+  }
+  towerInfoEl.classList.add('has-info');
+
+  const { weakTo, resists } = getTowerMatchupSummary();
+  const destroyed = towerIsDestroyed(selectedTower);
+  const hpText = destroyed
+    ? 'DESTROYED'
+    : `${Math.max(0, Math.round(selectedTower.health))} / ${selectedTower.maxHealth}`;
+
+  towerInfoEl.innerHTML = `
+    <div class="tower-info-row"><span class="tower-info-key">TYPE</span><span class="tower-info-val">STONE TOWER</span></div>
+    <div class="tower-info-row"><span class="tower-info-key">HP</span><span class="tower-info-val" id="towerInfoHp">${hpText}</span></div>
+    <div class="tower-info-row tower-info-weak"><span class="tower-info-key">WEAK TO</span><span class="tower-info-val">${weakTo.length ? weakTo.join(', ') : '—'}</span></div>
+    <div class="tower-info-row tower-info-resist"><span class="tower-info-key">RESISTS</span><span class="tower-info-val">${resists.length ? resists.join(', ') : '—'}</span></div>
+  `;
+};
+
+// Cheap per-frame refresh of just the HP value while a tower is selected.
+const updateTowerInfoHp = () => {
+  if (!selectedTower) return;
+  const el = document.getElementById('towerInfoHp');
+  if (!el) return;
+  el.textContent = towerIsDestroyed(selectedTower)
+    ? 'DESTROYED'
+    : `${Math.max(0, Math.round(selectedTower.health))} / ${selectedTower.maxHealth}`;
+};
+
+gameCanvasElement.addEventListener('click', (e) => {
+  const rect = gameCanvasElement.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const x = (e.clientX - rect.left) * (gameCanvasElement.width / rect.width);
+  const y = (e.clientY - rect.top) * (gameCanvasElement.height / rect.height);
+  const tower = towers.find(t => towerHitTest(t, x, y));
+  if (tower) { selectedTower = tower; renderTowerInfo(); }
+});
+
 const animate = () => {
   animationId = requestAnimationFrame(animate);
   if (!mapLoaded) return;
@@ -1517,6 +1642,7 @@ const animate = () => {
   if (observingMode) {
     renderObservedState();
     updateAndRenderExplosions();
+    updateTowerInfoHp();
     return;
   }
 
@@ -1558,6 +1684,7 @@ const animate = () => {
     tower.updateFrame(attackUnits);
   });
   updateAndRenderExplosions();
+  updateTowerInfoHp();
 
   renderLeaderboard();
 
@@ -1683,6 +1810,11 @@ const beginWaveSpawn = () => {
   // first wave the totals just keep climbing.
   if ((siege.current_wave ?? 1) === 1) resetContribution();
 
+  // Baseline for the wave-failed summary's per-wave tower-damage figure,
+  // and clear any summary popup left over from the previous attempt.
+  waveStartDamage = { host: contribution.host.damage_dealt, ally: contribution.ally.damage_dealt };
+  hideWaveSummary();
+
   bothReadyBanner.classList.remove('hidden');
   setTimeout(() => bothReadyBanner.classList.add('hidden'), 1400);
   spawnWaveQueues();
@@ -1738,6 +1870,7 @@ const applySiegeUpdate = (fresh) => {
     if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
     attackUnits = [];
     unitsDeployedCount = 0;
+    hideWaveSummary();       // ← the other player advanced; dismiss our popup
     updateWaveProgress();
   }
 
@@ -1805,6 +1938,10 @@ if (!siege) {
   isHost = siege.host_id === user.id;
   startingGold = goldForDifficulty(siege.difficulty);
   queueCap = queueCapForDifficulty(siege.difficulty);
+
+  // Roll this match's stone-tower weaknesses/resistances. Seeded from the
+  // siege id so both clients derive the identical table with no DB write.
+  initTowerMatchups(siege.id, UNITS.map(u => u.id));
 
   resetLeaderboard();
   setCurrentWave(siege.current_wave || 1);

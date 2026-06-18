@@ -200,7 +200,7 @@ export class MeleeUnit extends Unit {
         const releaseFrame = Math.min(this.attackReleaseFrame, this.attackFrameCount - 1);
         if (!this.hasAppliedHit && this.currentAttackFrame >= releaseFrame) {
             if (!this.target.isDead && this.isCloseEnoughToHit()) {
-                this.target.takeDamage(this.attackStrength, this.team || this.ownerId || null);
+                this.target.takeDamage(this.attackStrength, this.team || this.ownerId || null, this.unitType);
             }
             this.hasAppliedHit = true;
         }

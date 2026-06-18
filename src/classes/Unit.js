@@ -252,7 +252,7 @@ export class Unit extends Sprite {
       const dy = target.centre.y - projectileCenterY;
 
       if (Math.hypot(dx, dy) <= this.projectileSize + 4) {
-        target.takeDamage(projectile.damage, projectile.ownerId);
+        target.takeDamage(projectile.damage, projectile.ownerId, this.unitType);
         return false;
       }
 

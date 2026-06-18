@@ -1,5 +1,9 @@
 import { Sprite } from "./Sprite.js";
 import { creditDamage } from "../runtime/contribution.js";
+import {
+  damageToTowerMultiplier,
+  damageFromTowerMultiplier,
+} from "../runtime/towerMatchups.js";
 
 export class Tower extends Sprite {
   width = 50;
@@ -88,18 +92,23 @@ export class Tower extends Sprite {
     this.gameCanvas.strokeRect(x, y, this.width, 6);
   }
 
-  takeDamage(amount, attackerId = null) {
+  takeDamage(amount, attackerId = null, attackerUnitType = null) {
     if (this.isDead) return;
+
+    // Stone-tower matchup: units this tower type is weak to hit harder,
+    // units it resists hit softer. Credit the team with the ACTUAL damage
+    // landed so the reward split reflects what really happened.
+    const dealt = amount * damageToTowerMultiplier(attackerUnitType);
 
     if (attackerId) {
       this.lastHitBy = attackerId;
       if (attackerId === "host" || attackerId === "ally") {
         this.lastAttackerTeam = attackerId;
-        creditDamage(attackerId, amount);
+        creditDamage(attackerId, dealt);
       }
     }
 
-    this.health -= amount;
+    this.health -= dealt;
 
     if (this.health <= 0) {
       this.grantRewardOnce();
@@ -260,7 +269,9 @@ export class Tower extends Sprite {
       });
 
       if (hit) {
-        hit.takeDamage(p.damage);
+        // Matchup also shapes outgoing fire: the tower hits units it
+        // resists harder, and units it's weak to more gently.
+        hit.takeDamage(p.damage * damageFromTowerMultiplier(hit.unitType));
 
         this.hitEffects.push({
           x: p.x,

@@ -184,7 +184,7 @@ export class Knight extends Unit {
         if (!this.hasAppliedHit && this.currentAttackFrame >= releaseFrame) {
             if (!this.target.isDead) {
                 const attackerId = this.team || this.ownerId || null;
-                this.target.takeDamage(this.attackStrength, attackerId);
+                this.target.takeDamage(this.attackStrength, attackerId, this.unitType);
             }
             this.hasAppliedHit = true;
         }

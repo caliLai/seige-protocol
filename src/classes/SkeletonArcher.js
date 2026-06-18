@@ -267,7 +267,7 @@ export class SkeletonArcher extends Unit {
             const distance = Math.hypot(dx, dy);
 
             if (distance <= this.projectileSize + 4) {
-                target.takeDamage(projectile.damage, projectile.ownerId || this.team || this.ownerId || null);
+                target.takeDamage(projectile.damage, projectile.ownerId || this.team || this.ownerId || null, this.unitType);
                 return false;
             }
 

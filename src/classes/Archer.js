@@ -273,7 +273,7 @@ export class Archer extends Unit {
 
             if (Math.hypot(dx, dy) <= this.projectileSize + 4) {
                 const attackerId = projectile.ownerId || this.team || this.ownerId || null;
-                target.takeDamage(projectile.damage, attackerId);
+                target.takeDamage(projectile.damage, attackerId, this.unitType);
                 return false;
             }
 

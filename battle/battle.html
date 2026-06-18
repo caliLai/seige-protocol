@@ -354,39 +354,6 @@
       </div>
     </div>
 
-    <!-- Level Complete overlay -->
-    <div id="levelCompleteOverlay" class="game-victory-overlay hidden" role="dialog" aria-modal="true"
-      aria-labelledby="levelCompleteTitle" aria-hidden="true">
-      <div class="game-victory-card">
-        <div class="game-victory-corner tl"></div>
-        <div class="game-victory-corner tr"></div>
-        <div class="game-victory-corner bl"></div>
-        <div class="game-victory-corner br"></div>
-        <div class="game-victory-content">
-          <div id="levelCompleteTitle" class="game-victory-title">⚔ LEVEL COMPLETE ⚔</div>
-          <div class="game-victory-divider">
-            <div class="dash-line"></div><span class="divider-icon">⚜</span>
-            <div class="dash-line"></div>
-          </div>
-          <div id="levelCompleteBody" class="game-victory-body">
-            THY HOSTS HAVE CONQUERED THIS FIELD.
-          </div>
-
-          <div class="game-victory-stats">
-            <div class="game-victory-stat"><span>TOWERS DESTROYED</span><span id="levelStatTowers">—</span></div>
-            <div class="game-victory-stat"><span>LIVES REMAINING</span><span id="levelStatLives">—</span></div>
-            <div class="game-victory-stat"><span>UNITS DEPLOYED</span><span id="levelStatUnits">—</span></div>
-          </div>
-
-          <div class="game-victory-actions">
-            <button type="button" id="nextLevelBtn" class="px-btn setup-ready-btn">
-              ▶ MARCH TO NEXT LEVEL
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Abandon confirmation — triggered from the settings menu.
          Reuses the existing .confirm-overlay / .confirm-card-danger
          styles from lobby-styles.css so it matches the lobby's

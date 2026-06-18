@@ -8,7 +8,8 @@
 import { supabase } from '/lib/supabase.js';
 import { enforceSingleSession } from '/lib/single-session.js';
 import { UNITS, UNITS_BY_ID, idleSpriteUrl, deployCost, deployCostById } from '/lib/units.js';
-import { getMap, getMapKeyForWave } from '/src/data/maps.js';
+import { path } from '/src/data/path.js';
+import { towerLocations } from '/src/data/towerLocations.js';
 import { Archer } from '/src/classes/Archer.js';
 import { Knight } from '/src/classes/Knight.js';
 import { Orc } from '/src/classes/Orc.js';
@@ -22,7 +23,6 @@ import { Unit } from '/src/classes/Unit.js';
 import { sim } from '/src/runtime/sim.js';
 import { contribution, resetContribution, creditTowerKill } from '/src/runtime/contribution.js';
 import { initTowerMatchups, getTowerMatchupSummary } from '/src/runtime/towerMatchups.js';
-
 
 import {
   resetLeaderboard,
@@ -39,7 +39,7 @@ blastImage.onload = () => {
   blastLoaded = true;
 };
 
-blastImage.src = "/assets/effects/blast.png";
+blastImage.src = "../assets/effects/blast.png";
 
 // Tower-death explosion frames exported from the Animate source
 // (assets/Tower/PNG/54–61): a burst -> fireball -> smoke -> dissipate
@@ -57,7 +57,6 @@ const STARTING_GOLD = { recruit: 300, veteran: 250, elite: 200 };
 const QUEUE_CAP = { recruit: 10, veteran: 8, elite: 6 };
 const goldForDifficulty = (d) => STARTING_GOLD[d] ?? 250;
 const queueCapForDifficulty = (d) => QUEUE_CAP[d] ?? 8;
-const DEMO_TOTAL_WAVES = 3;
 
 // ── CANVAS ──
 const gameCanvasElement = document.getElementById('gameCanvas');
@@ -102,13 +101,6 @@ const readyBtn = document.getElementById('readyBtn');
 const otherReadyEl = document.getElementById('otherReady');
 const bothReadyBanner = document.getElementById('bothReadyBanner');
 const alertEl = document.getElementById('alertBanner');
-const levelCompleteOverlay = document.getElementById('levelCompleteOverlay');
-const levelCompleteTitleEl = document.getElementById('levelCompleteTitle');
-const levelCompleteBodyEl = document.getElementById('levelCompleteBody');
-const levelStatTowersEl = document.getElementById('levelStatTowers');
-const levelStatLivesEl = document.getElementById('levelStatLives');
-const levelStatUnitsEl = document.getElementById('levelStatUnits');
-const nextLevelBtn = document.getElementById('nextLevelBtn');
 
 // Reconnect indicator on the ally side. Toggled from the presence
 // channel subscription (see further down). The badge sits on the
@@ -141,7 +133,6 @@ let siege = null;
 let isHost = false;
 let startingGold = 250;
 let queueCap = 8;
-let currentMapConfig = null;
 
 // Profiles loaded once at battle entry — used for the POINTS counter in
 // the HUD. Not refreshed mid-match (points only change via the payout RPC
@@ -159,114 +150,10 @@ let towersDestroyedCount = 0;
 let totalTowers = 0;
 let unitsDeployedCount = 0;
 let explosions = [];
-let path = [];
-let towerLocations = [];
-let currentMapKey = null;
 // Single end-of-match guard (used for both victory and defeat) so the
 // spawn timeline, settle timer, and overlay flips all key off the same
 // flag instead of victory-only logic.
 let matchEnded = false;
-let levelCompleteOpen = false;
-
-// Observer / reconnect state
-let observingMode = false;
-let latestSnapshot = null;
-let latestSnapshotIsSeed = false;
-
-let battleBroadcastTimer = null;
-let snapshotPersistTimer = null;
-let battleBroadcastChannel = null;
-
-const clearBattleSyncTimers = () => {
-  if (battleBroadcastTimer) {
-    clearInterval(battleBroadcastTimer);
-    battleBroadcastTimer = null;
-  }
-  if (snapshotPersistTimer) {
-    clearInterval(snapshotPersistTimer);
-    snapshotPersistTimer = null;
-  }
-};
-
-const startBattleSyncTimers = () => {
-  if (!battleBroadcastChannel) return;
-
-  clearBattleSyncTimers();
-
-  const sendSnapshotNow = () => {
-    if (!battleStarted || observingMode) return;
-    if (siege?.outcome) return;
-
-    const payload = buildBattleSnapshot();
-    battleBroadcastChannel.send({
-      type: 'broadcast',
-      event: 'snapshot',
-      payload,
-    });
-
-    return payload;
-  };
-
-  // Immediate push so observer doesn't start empty
-  const firstPayload = sendSnapshotNow();
-
-  battleBroadcastTimer = setInterval(() => {
-    sendSnapshotNow();
-  }, 200);
-
-  snapshotPersistTimer = setInterval(() => {
-    if (!battleStarted || observingMode) return;
-    if (siege?.outcome) return;
-
-    const payload = buildBattleSnapshot();
-
-    supabase
-      .rpc('upsert_siege_snapshot', {
-        p_siege: siege.id,
-        p_state: payload,
-      })
-      .then(({ error }) => {
-        if (error) console.warn('snapshot persist failed', error);
-      });
-  }, 500);
-
-  return firstPayload;
-};
-
-const buildBattleSnapshot = () => ({
-  ts: Date.now(),
-  wave: siege?.current_wave ?? 1,
-  mapKey: currentMapKey,
-  phase: siege?.phase ?? null,
-
-  units: attackUnits
-    .filter(u => !u.isDead)
-    .map(u => ({
-      x: Math.round(u.position?.x ?? 0),
-      y: Math.round(u.position?.y ?? 0),
-      t: u.team,
-      u: u.unitId || u.constructor?.name || 'Soldier',
-      h: Math.max(0, Math.round(u.health ?? 0)),
-      m: Math.max(1, Math.round(u.maxHealth ?? 1)),
-      a: (u.target && (u.target.health ?? 1) > 0) ? 1 : 0,
-    })),
-
-  towers: towers.map((t, i) => ({
-    i: towersDestroyedCount + i,
-    h: Math.max(0, Math.round(t.health ?? 0)),
-    m: Math.max(1, Math.round(t.maxHealth ?? 1)),
-  })),
-
-  projectiles: towers.flatMap((tower, towerIndex) =>
-    (tower.projectiles || []).map((p, projectileIndex) => ({
-      id: `${towerIndex}-${projectileIndex}`,
-      x: Math.round(p.x),
-      y: Math.round(p.y),
-    }))
-  ),
-
-  td: towersDestroyedCount,
-});
 
 // "Observing" mode — set when this client lands on battle.html with a
 // wave already in flight on the OTHER client (refresh / reconnect
@@ -274,12 +161,15 @@ const buildBattleSnapshot = () => ({
 // most recent broadcast snapshot (see battleBroadcast channel near
 // the bottom of init). Reset to false when the wave resolves
 // (applySiegeUpdate's 'prep' transition).
+let observingMode = false;
+let latestSnapshot = null;
 // True while latestSnapshot came from a one-shot DB read (seed or
 // watchdog refetch) rather than a live broadcast / Postgres CDC push.
 // Promotion is intentionally NOT triggered off seed-only data within
 // the first few seconds — the DB seed can be moments old AND units in
 // it can be near the spawn point, so promoting from it would visually
 // "rewind" the wave on the refreshing client.
+let latestSnapshotIsSeed = false;
 
 // "Lives" in the HUD represents wave-attempts remaining — the team can
 // fail one wave per remaining attempt. Derived from current_wave /
@@ -290,11 +180,10 @@ const buildBattleSnapshot = () => ({
 
 const livesRemaining = () => {
   const current = siege?.current_wave ?? 1;
-  const total = Math.min(siege?.total_waves ?? DEMO_TOTAL_WAVES, DEMO_TOTAL_WAVES);
+  const total = siege?.total_waves ?? 15;
   return Math.max(0, total - current + 1);
 };
-
-const livesMax = () => Math.min(siege?.total_waves ?? DEMO_TOTAL_WAVES, DEMO_TOTAL_WAVES);
+const livesMax = () => siege?.total_waves ?? 15;
 
 // ── SIMULATION EVENT BUS ──
 // Single hook point for discrete combat events. Local listeners drive HUD
@@ -321,87 +210,6 @@ const showAlert = (msg, type = 'info') => {
   alertEl.style.background = type === 'error' ? '#7b241c' : '#7a600c';
   clearTimeout(alertEl._t);
   alertEl._t = setTimeout(() => { alertEl.style.display = 'none'; }, 2400);
-};
-
-const getLevelBannerText = (wave) => {
-  if (wave === 1) return '⚔ LEVEL 1 — CALISTA ⚔';
-  if (wave === 2) return '⚔ LEVEL 2 — ARSHDEEP MAP ⚔';
-  if (wave <= 4) return '⚔ LEVEL 3 — CANYON ⚔';
-  return '⚔ LEVEL 4 — FORTRESS ⚔';
-};
-
-// Supports either of these maps.js styles:
-//   getMap('calista')
-// or
-//   getMap(1)
-const resolveMapConfig = (wave) => {
-  const key = getMapKeyForWave(wave);
-
-  const byKey = getMap(key);
-  if (byKey && Array.isArray(byKey.path) && Array.isArray(byKey.towers)) {
-    return { key, config: byKey };
-  }
-
-  const byWave = getMap(wave);
-  if (byWave && Array.isArray(byWave.path) && Array.isArray(byWave.towers)) {
-    return { key, config: byWave };
-  }
-
-  return { key, config: null };
-};
-
-const applyMapForWave = (wave, { force = false, announce = false } = {}) => {
-  const { key: mapKey, config: mapConfig } = resolveMapConfig(wave);
-  if (!mapConfig) {
-    console.error('[battle] map config not found for wave', wave, mapKey);
-    return false;
-  }
-
-  currentMapConfig = mapConfig;
-
-  // Always keep these current so units/pathing use the right layout
-  path = mapConfig.path.map(p => ({ x: p.x, y: p.y }));
-
-  towerLocations = mapConfig.towers.map(t => ({ x: t.x, y: t.y }));
-
-  // If the level did not actually change, do not reload/reset
-  if (!force && mapKey === currentMapKey) {
-    return false;
-  }
-
-  currentMapKey = mapKey;
-
-  // Reset battlefield for the new level
-  mapLoaded = false;
-
-  attackUnits = [];
-  towers.length = 0;
-  unitsDeployedCount = 0;
-  explosions = [];
-  waveJudged = false;
-
-  towersDestroyedCount = 0;
-  totalTowers = 0;
-  latestSnapshot = null;
-  latestSnapshotIsSeed = false;
-  observingMode = false;
-  observedDisplayPos.clear();
-
-
-  if (waveSettleTimer) {
-    clearTimeout(waveSettleTimer);
-    waveSettleTimer = null;
-  }
-
-  clearBattleSyncTimers();
-
-  backgroundImage.src = mapConfig.background;
-
-  if (announce) {
-    showAlert(getLevelBannerText(wave), 'info');
-  }
-
-  return true;
 };
 
 const smoothNavigate = (url) => {
@@ -814,12 +622,12 @@ const callBattleRpc = async (name, args, applyShape, silentErrors = []) => {
     }
     const msg = ({
       insufficient_gold: '✗ NOT ENOUGH GOLD',
-      queue_full: '✗ QUEUE FULL',
-      unit_not_owned: '✗ UNIT NOT IN THY HOST',
-      empty_queue: '✗ QUEUE AT LEAST ONE UNIT FIRST',
-      wrong_phase: '✗ THE MOMENT HAS PASSED',
-      host_only: '✗ ONLY THE HOST MAY DO THAT',
-      not_a_player: '✗ THOU ART NOT IN THIS SIEGE',
+      queue_full:        '✗ QUEUE FULL',
+      unit_not_owned:    '✗ UNIT NOT IN THY HOST',
+      empty_queue:       '✗ QUEUE AT LEAST ONE UNIT FIRST',
+      wrong_phase:       '✗ THE MOMENT HAS PASSED',
+      host_only:         '✗ ONLY THE HOST MAY DO THAT',
+      not_a_player:      '✗ THOU ART NOT IN THIS SIEGE',
       final_wave_no_advance: '✗ NO WAVES REMAIN',
     })[code] || `✗ ${code.toUpperCase().replace(/_/g, ' ')}`;
     console.error(`${name} failed`, error);
@@ -891,19 +699,9 @@ readyBtn.addEventListener('click', toggleReady);
 // ── BATTLE RUNTIME ──
 const initialiseTowers = () => {
   towers.length = 0;
-
-  const showSprite = currentMapConfig?.drawGeneratedTowers !== false;
-
   for (const location of towerLocations) {
-    towers.push(
-      new Tower(location, gameCanvas, {
-        showSprite,
-        barOffsetX: location.barOffsetX || 0,
-        barOffsetY: location.barOffsetY || 0,
-      })
-    );
+    towers.push(new Tower(location, gameCanvas));
   }
-
   totalTowers = towers.length;
 };
 
@@ -974,7 +772,6 @@ const createUnitFromId = (unitId, position, laneOffset) => {
   unit.unitType = id;
   unit.laneOffset = (typeof laneOffset === 'number') ? laneOffset : 0;
   unit.pathRef = path;
-  unit.pathIndex = 1;   // ✅ VERY IMPORTANT
   return unit;
 };
 
@@ -1035,7 +832,6 @@ const spawnWaveQueues = () => {
   // units to finish marching and dying before we judge.
   const longest = Math.max(hostQueue.length, allyQueue.length);
   const settleMs = longest * spawnGap + 6000;
-
   if (waveSettleTimer) clearTimeout(waveSettleTimer);
   waveSettleTimer = setTimeout(checkWaveOutcome, settleMs);
 };
@@ -1072,7 +868,6 @@ const showEndOverlay = async (outcome) => {
   if (matchEnded) return;
   matchEnded = true;
   if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
-  clearBattleSyncTimers();
 
   const overlay = outcome === 'victory' ? victoryOverlay : defeatOverlay;
   const statsOf = outcome === 'victory'
@@ -1080,8 +875,8 @@ const showEndOverlay = async (outcome) => {
     : { towers: statTowersDefeatEl, lives: statLivesDefeatEl, units: statUnitsDefeatEl };
 
   if (statsOf.towers) statsOf.towers.textContent = `${towersDestroyedCount} / ${totalTowers}`;
-  if (statsOf.lives) statsOf.lives.textContent = `${livesRemaining()} / ${livesMax()}`;
-  if (statsOf.units) statsOf.units.textContent = String(unitsDeployedCount);
+  if (statsOf.lives)  statsOf.lives.textContent = `${livesRemaining()} / ${livesMax()}`;
+  if (statsOf.units)  statsOf.units.textContent = String(unitsDeployedCount);
 
   overlay.classList.remove('hidden');
   overlay.setAttribute('aria-hidden', 'false');
@@ -1125,22 +920,21 @@ const showEndOverlay = async (outcome) => {
 // host never paid themselves (the ally's call still updated the DB, so
 // the host's points DID get bumped server-side, but the host's HUD
 // never reflected it). Using the parameter sidesteps that.
-
 const claimRewards = async (outcome) => {
   if (!siege || (outcome !== 'victory' && outcome !== 'defeat')) return;
 
-  // Only host performs payout RPC
-  if (isHost) {
-    const { error } = await supabase.rpc('award_match_points', { p_siege: siege.id });
-    const alreadyPaid = error && String(error.message || '').includes('already_paid');
-
-    if (error && !alreadyPaid) {
-      console.error('award_match_points failed', error);
-      return;
-    }
+  const { error } = await supabase.rpc('award_match_points', { p_siege: siege.id });
+  const alreadyPaid = error && String(error.message || '').includes('already_paid');
+  if (error && !alreadyPaid) {
+    console.error('award_match_points failed', error);
+    return;
   }
 
-  // Both clients refresh profile totals afterwards
+  // Whichever client called the RPC first did the actual UPDATE; the
+  // other got 'already_paid'. Either way, profiles.points now holds
+  // the new totals on both sides, so re-fetch and compute the delta
+  // from our cached pre-match values. This approach is uniform across
+  // both clients and survives the race.
   const otherUid = isHost ? siege.ally_id : siege.host_id;
   const [meFresh, themFresh] = await Promise.all([
     supabase.from('profiles').select('points').eq('user_id', user.id).maybeSingle(),
@@ -1149,9 +943,9 @@ const claimRewards = async (outcome) => {
       : Promise.resolve({ data: null }),
   ]);
 
-  const oldMine = mySelf?.profile?.points ?? 0;
-  const newMine = meFresh?.data?.points ?? oldMine;
-  const myAward = newMine - oldMine;
+  const oldMine  = mySelf?.profile?.points ?? 0;
+  const newMine  = meFresh?.data?.points ?? oldMine;
+  const myAward  = newMine - oldMine;
 
   if (mySelf?.profile) {
     mySelf.profile.points = newMine;
@@ -1163,6 +957,8 @@ const claimRewards = async (outcome) => {
     if (otherPointsEl) otherPointsEl.textContent = String(themFresh.data.points);
   }
 
+  // End-screen reward line ("+ N POINTS") — show the delta we just
+  // earned so the player sees what changed, not just the new total.
   const target = outcome === 'victory' ? rewardPointsEl : rewardPointsDefeatEl;
   if (target) target.textContent = `+ ${Math.max(0, myAward)}`;
 };
@@ -1377,65 +1173,8 @@ if (waveNextBtn) {
 // Clearing the map early is the win condition; remaining waves are
 // "you had room to spare," not unfinished work.
 battleEvents.addEventListener('wave-completed', async () => {
-  const current = siege.current_wave || 1;
-
-  // FINAL LEVEL → custom ending
-  if (current >= 3) {   // 👈 IMPORTANT (since you said Level 3 is final)
-
-    // Change overlay text BEFORE showing it
-    if (victoryOverlay) {
-      const title = document.getElementById('victoryTitle');
-      const body = victoryOverlay.querySelector('.game-victory-body');
-
-      if (title) title.textContent = '🏆 ALL LEVELS CLEARED 🏆';
-      if (body) body.innerHTML = `
-        THOU HAST CONQUERED EVERY BATTLEFIELD.<br/>
-        THE REALM STANDS SECURE.
-      `;
-    }
-
-    await showEndOverlay('victory');
-    return;
-  }
-
-  showLevelCompleteOverlay(current);
+  await showEndOverlay('victory');
 });
-
-const closeLevelCompleteOverlay = () => {
-  levelCompleteOpen = false;
-  if (!levelCompleteOverlay) return;
-  levelCompleteOverlay.classList.add('hidden');
-  levelCompleteOverlay.setAttribute('aria-hidden', 'true');
-  if (nextLevelBtn) nextLevelBtn.disabled = false;
-};
-
-const showLevelCompleteOverlay = (wave) => {
-  levelCompleteOpen = true;
-
-  if (levelCompleteTitleEl) {
-    levelCompleteTitleEl.textContent = `⚔ ${getLevelBannerText(wave)} COMPLETE ⚔`;
-  }
-
-  if (levelCompleteBodyEl) {
-    levelCompleteBodyEl.innerHTML = `THE FIELD HATH BEEN CONQUERED.<br/>PREPARE THY HOST FOR THE NEXT ASSAULT.`;
-  }
-
-  if (levelStatTowersEl) levelStatTowersEl.textContent = `${towersDestroyedCount} / ${totalTowers}`;
-  if (levelStatLivesEl) levelStatLivesEl.textContent = `${livesRemaining()} / ${livesMax()}`;
-  if (levelStatUnitsEl) levelStatUnitsEl.textContent = String(unitsDeployedCount);
-
-  if (nextLevelBtn) {
-    nextLevelBtn.disabled = !isHost;
-    nextLevelBtn.textContent = isHost
-      ? '▶ MARCH TO NEXT LEVEL'
-      : '⌛ AWAITING HOST';
-  }
-
-  if (levelCompleteOverlay) {
-    levelCompleteOverlay.classList.remove('hidden');
-    levelCompleteOverlay.setAttribute('aria-hidden', 'false');
-  }
-};
 
 // Wave failed (all friendly units dead, towers still standing). The team
 // gets to try again on the next wave — the HUD heart counter is derived
@@ -1447,9 +1186,9 @@ const showLevelCompleteOverlay = (wave) => {
 // current_wave + clears the queues so both clients re-enter prep.
 battleEvents.addEventListener('wave-failed', async () => {
   const current = siege.current_wave || 1;
-  const total = livesMax();
-
+  const total = siege.total_waves || 15;
   if (current >= total) {
+    // Defeat write stays host-only (set_match_outcome enforces it).
     if (isHost) await showEndOverlay('defeat');
     return;
   }
@@ -1495,7 +1234,7 @@ const nearestPathSegmentEnd = (x, y) => {
   let bestDistSq = Infinity;
   let bestEnd = 1;
   for (let i = 0; i < path.length - 1; i++) {
-    const ax = path[i].x, ay = path[i].y;
+    const ax = path[i].x,     ay = path[i].y;
     const bx = path[i + 1].x, by = path[i + 1].y;
     const dx = bx - ax, dy = by - ay;
     const lenSq = dx * dx + dy * dy;
@@ -1513,9 +1252,36 @@ const nearestPathSegmentEnd = (x, y) => {
 };
 
 const promoteToSimmer = () => {
-  // Disabled for now to keep host authoritative and both players in sync.
-  // Observer client should never take over simulation automatically.
-  return false;
+  if (!latestSnapshot || !Array.isArray(latestSnapshot.units)) return false;
+
+  // Rebuild attackUnits from the snapshot. createUnitFromId returns a
+  // properly-typed instance (Archer / Soldier / etc.) and we then patch
+  // its position / HP / path bookkeeping to match the snapshot.
+  const rebuilt = [];
+  for (const u of latestSnapshot.units) {
+    const unitType = u.u || 'Soldier';
+    const pos = { x: u.x, y: u.y };
+    const laneOffset = u.t === 'host' ? -14 : 14;
+    const unit = createUnitFromId(unitType, pos, laneOffset);
+    unit.team = u.t;
+    unit.position.x = u.x;
+    unit.position.y = u.y;
+    unit.health = Math.max(1, u.h);
+    if (u.m && u.m > unit.maxHealth) unit.maxHealth = u.m;
+    unit.pathRef = path;
+    unit.pathIndex = nearestPathSegmentEnd(u.x, u.y);
+    rebuilt.push(unit);
+  }
+
+  attackUnits = rebuilt;
+  // Re-arm wave-outcome detection. While observing, waveJudged is forced
+  // to true so the observer doesn't double-judge a wave the other peer
+  // is finishing. Now that WE are simming, checkWaveOutcome must run.
+  waveJudged = false;
+  waveAttemptId++;
+  observingMode = false;     // ← start broadcasting + simming again
+  console.info('[battle] promoted to simmer; rebuilt %d units', rebuilt.length);
+  return true;
 };
 
 let stuckWatchdogTimer = null;
@@ -1528,7 +1294,7 @@ let observingSince = 0;
 // has clearly failed.
 const STUCK_MIN_OBSERVING_MS = 2500;
 const STUCK_SNAPSHOT_MAX_AGE = 2500;        // gap for FRESH (live) data
-const STUCK_DB_REFETCH_AGE = 1500;
+const STUCK_DB_REFETCH_AGE   = 1500;
 const STUCK_SEED_FALLBACK_MS = 8000;        // only promote off seed after this
 
 const startStuckWaveWatchdog = () => {
@@ -1556,16 +1322,12 @@ const startStuckWaveWatchdog = () => {
       lastDbRefetchAt = Date.now();
       const { data } = await supabase.rpc('get_siege_snapshot', { p_siege: siege.id });
       if (!observingMode) return;
-      if (data) {
-        // Reject stale / wrong-wave / wrong-map snapshots
-        if ((data.wave ?? 1) !== (siege?.current_wave ?? 1)) return;
-        if (data.mapKey && currentMapKey && data.mapKey !== currentMapKey) return;
-
+      if (data && Array.isArray(data.units)) {
         const dbTs = data.ts || 0;
         const curTs = latestSnapshot?.ts || 0;
         if (dbTs >= curTs) {
           latestSnapshot = data;
-          latestSnapshotIsSeed = true;
+          latestSnapshotIsSeed = true;  // DB origin, not a live broadcast
         }
       }
     }
@@ -1606,28 +1368,6 @@ const startStuckWaveWatchdog = () => {
   }, 500);
 };
 
-if (nextLevelBtn) {
-  nextLevelBtn.addEventListener('click', async () => {
-    if (!siege || matchEnded) return;
-
-    if (!isHost) {
-      showAlert('⌛ AWAITING HOST TO MARCH', 'info');
-      return;
-    }
-
-    nextLevelBtn.disabled = true;
-
-    // Host advances the shared row
-    const data = await callBattleRpc('advance_wave', { p_siege: siege.id }, false);
-
-    // Apply the returned row immediately on the host too,
-    // so the host does not wait for realtime echo.
-    const row = Array.isArray(data) ? data[0] : data;
-    if (row) {
-      applySiegeUpdate({ ...siege, ...row });
-    }
-  });
-}
 // Tracks each observed unit's *displayed* position so we can ease it
 // toward the latest snapshot position instead of teleporting 200ms at
 // a time. Keyed by `${team}|${unitType}|${index}` — units broadcast
@@ -1639,7 +1379,7 @@ const observedKey = (u, i) => `${u.t}|${u.u}|${i}`;
 
 const renderObservedState = () => {
   if (!latestSnapshot) {
-    towers.forEach(t => t.render());
+    towers.forEach(t => t.updateFrame(null));
     return;
   }
   const snap = latestSnapshot;
@@ -1664,29 +1404,8 @@ const renderObservedState = () => {
   // doesn't pop up when both refresh" — without it, an ally who reached
   // the final tower locally could hang waiting for the host's sim to
   // catch up. Guarded by !matchEnded so it only fires once per match.
-
-  const currentWave = siege?.current_wave ?? 1;
-  const allTowersGone =
-    totalTowers > 0 &&
-    towers.length === 0 &&
-    towersDestroyedCount >= totalTowers &&
-    Array.isArray(snap.towers) &&
-    snap.towers.length === 0;
-
-  if (!matchEnded && allTowersGone) {
-    // Final level -> victory
-    if (currentWave >= DEMO_TOTAL_WAVES) {
-      showEndOverlay('victory');
-      return;
-    }
-
-    // Non-final level -> both players should see level complete
-    if (!levelCompleteOpen) {
-      battleStarted = false;
-      observingMode = false;
-      clearBattleSyncTimers();
-      showLevelCompleteOverlay(currentWave);
-    }
+  if (!matchEnded && towers.length === 0 && towersDestroyedCount >= totalTowers) {
+    showEndOverlay('victory');
     return;
   }
 
@@ -1697,8 +1416,7 @@ const renderObservedState = () => {
       towers[idx].health = t.h;
     }
   }
-
-  towers.forEach(tower => tower.render());
+  towers.forEach(tower => tower.updateFrame(null));
 
   // Frame-rate-independent ease toward each unit's snapshot position.
   // The result is smooth motion at the canvas's full refresh rate even
@@ -1712,20 +1430,17 @@ const renderObservedState = () => {
     const u = units[i];
     const key = observedKey(u, i);
     seenKeys.add(key);
-
     let disp = observedDisplayPos.get(key);
     if (!disp) {
+      // Fresh sighting — snap directly to the broadcast position.
       disp = { x: u.x, y: u.y };
       observedDisplayPos.set(key, disp);
     } else {
       disp.x += (u.x - disp.x) * alpha;
       disp.y += (u.y - disp.y) * alpha;
     }
-
     drawObservedUnit(u, disp.x, disp.y);
   }
-
-  drawObservedProjectiles(snap.projectiles || []);
   // Purge stale entries so the map doesn't grow unboundedly across waves.
   if (observedDisplayPos.size > seenKeys.size * 2) {
     for (const k of observedDisplayPos.keys()) {
@@ -1762,9 +1477,9 @@ const ensureObservedSprite = (unitId, kind = 'idle') => {
   };
   meta.img.onload = () => {
     meta.frameHeight = meta.img.naturalHeight;
-    meta.frameWidth = meta.img.naturalHeight;  // assume square frames
-    meta.sheetWidth = meta.img.naturalWidth;
-    meta.frameCount = Math.max(1, Math.round(meta.sheetWidth / meta.frameWidth));
+    meta.frameWidth  = meta.img.naturalHeight;  // assume square frames
+    meta.sheetWidth  = meta.img.naturalWidth;
+    meta.frameCount  = Math.max(1, Math.round(meta.sheetWidth / meta.frameWidth));
     meta.loaded = true;
   };
   meta.img.onerror = () => {
@@ -1791,9 +1506,9 @@ const ensureObservedSprite = (unitId, kind = 'idle') => {
 // the live sim's drawHealthBar() — same background colour, same
 // HP-ratio-based fill, same black border — so visual continuity is
 // preserved across a refresh.
-const OBSERVED_UNIT_WIDTH = 50;
+const OBSERVED_UNIT_WIDTH  = 50;
 const OBSERVED_UNIT_HEIGHT = 50;
-const OBSERVED_DRAW_SIZE = 120;
+const OBSERVED_DRAW_SIZE   = 120;
 const OBSERVED_VISUAL_OFFSET = (OBSERVED_DRAW_SIZE - OBSERVED_UNIT_WIDTH) / 2; // 35
 
 const drawObservedUnit = (u, x = u.x, y = u.y) => {
@@ -1804,7 +1519,7 @@ const drawObservedUnit = (u, x = u.x, y = u.y) => {
   // show the idle pose (which is already cached) as a graceful fallback.
   const unitId = u.u || 'Soldier';
   const attackMeta = u.a ? ensureObservedSprite(unitId, 'attack') : null;
-  const idleMeta = ensureObservedSprite(unitId, 'idle');
+  const idleMeta   = ensureObservedSprite(unitId, 'idle');
   const meta = (attackMeta && attackMeta.loaded) ? attackMeta : idleMeta;
 
   if (meta.loaded) {
@@ -1837,34 +1552,11 @@ const drawObservedUnit = (u, x = u.x, y = u.y) => {
     const ratio = Math.max(0, Math.min(1, u.h / u.m));
     gameCanvas.fillStyle =
       ratio > 0.6 ? 'limegreen' :
-        ratio > 0.3 ? 'yellow' :
-          '#ff3b30';
+      ratio > 0.3 ? 'yellow'    :
+                    '#ff3b30';
     gameCanvas.fillRect(bx, by, barW * ratio, barH);
     gameCanvas.strokeStyle = 'black';
     gameCanvas.strokeRect(bx, by, barW, barH);
-  }
-};
-
-const drawObservedProjectiles = (projectiles = []) => {
-  for (const p of projectiles) {
-    gameCanvas.save();
-
-    gameCanvas.beginPath();
-    gameCanvas.arc(p.x, p.y, 8, 0, Math.PI * 2);
-    gameCanvas.fillStyle = 'rgba(255,160,60,0.25)';
-    gameCanvas.fill();
-
-    gameCanvas.beginPath();
-    gameCanvas.arc(p.x, p.y, 5, 0, Math.PI * 2);
-    gameCanvas.fillStyle = '#ffb347';
-    gameCanvas.fill();
-
-    gameCanvas.beginPath();
-    gameCanvas.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
-    gameCanvas.fillStyle = '#fff5cc';
-    gameCanvas.fill();
-
-    gameCanvas.restore();
   }
 };
 
@@ -1934,8 +1626,6 @@ gameCanvasElement.addEventListener('click', (e) => {
   if (tower) { selectedTower = tower; renderTowerInfo(); }
 });
 
-const DEBUG_DRAW = false; // ← toggle this ON/OFF
-
 const animate = () => {
   animationId = requestAnimationFrame(animate);
   if (!mapLoaded) return;
@@ -1943,24 +1633,12 @@ const animate = () => {
   const now = performance.now();
   sim.dt = Math.min(100, now - lastFrameTime);
   lastFrameTime = now;
-  drawBackground();
 
-  // ── DEBUG DRAW (PATH + TOWERS) ─────────────────────────
-  if (DEBUG_DRAW) {
-    // Path points
-    path.forEach(p => {
-      gameCanvas.fillStyle = 'red';
-      gameCanvas.fillRect(p.x - 3, p.y - 3, 6, 6);
-    });
+  gameCanvas.drawImage(backgroundImage, 0, 0);
 
-    // Tower placement markers
-    towerLocations.forEach(t => {
-      gameCanvas.fillStyle = 'blue';
-      gameCanvas.fillRect(t.x - 5, t.y - 5, 10, 10);
-    });
-  }
-
-  // ── OBSERVING MODE ─────────────────────────────────────
+  // Observing mode skips the local sim entirely and renders the most
+  // recent broadcast snapshot. Explosions still play locally so the
+  // tower destructions we catch up to are visually punctuated.
   if (observingMode) {
     renderObservedState();
     updateAndRenderExplosions();
@@ -1968,67 +1646,51 @@ const animate = () => {
     return;
   }
 
-  // ── TARGETING + TOWER DESTRUCTION ─────────────────────
-  // ── TARGETING + TOWER DESTRUCTION ─────────────────────
-
-  // First, remove any dead towers cleanly
-  while (towers.length > 0 && towers[0].isDead) {
-    const dead = towers.shift();
-    towersDestroyedCount++;
-
-    updateWaveProgress();
-    renderHeader();
-
-    emit('tower-destroyed', {
-      towerIndex: towersDestroyedCount - 1,
-      lastAttackerTeam: dead?.lastAttackerTeam ?? null,
-      reward: dead?.reward ?? 0,
-      x: dead?.centre?.x ?? dead?.position?.x ?? 0,
-      y: dead?.centre?.y ?? dead?.position?.y ?? 0,
-    });
-  }
-
-  // Then allow units to attack ANY reachable tower
-  for (let i = 0; i < attackUnits.length; i++) {
+  for (let i = 0; i < attackUnits.length && towers.length; i++) {
     const unit = attackUnits[i];
-    if (!unit) continue;
+    const tower = towers[0];
+    if (!unit || !tower) continue;
 
-    let reachableTower = null;
+    if (!tower.isDead && unitCanReachTower(unit, tower)) {
+      unit.target = tower;
+    } else {
+      if (tower.isDead) {
+        const dead = towers.shift();
+        towersDestroyedCount++;
+        updateWaveProgress();
+        renderHeader();
+        emit('tower-destroyed', {
+          towerIndex: towersDestroyedCount - 1,
+          lastAttackerTeam: dead?.lastAttackerTeam ?? null,
+          reward: dead?.reward ?? 0,
+          x: dead?.centre?.x ?? dead?.position?.x ?? 0,
+          y: dead?.centre?.y ?? dead?.position?.y ?? 0,
+        });
 
-    for (const tower of towers) {
-      if (!tower || tower.isDead) continue;
-      if (unitCanReachTower(unit, tower)) {
-        reachableTower = tower;
-        break;
+        if (towers.length === 0) checkWaveOutcome();
       }
+      unit.target = null;
     }
-
-    unit.target = reachableTower;
   }
 
-  if (towers.length === 0) {
-    checkWaveOutcome();
-  }
-
-  // ── UNIT UPDATES ───────────────────────────────────────
+  
   // Keep dying units around until their death animation finishes (isGone),
   // not the instant they hit 0 HP (isDead) — otherwise they'd vanish before
   // a single death frame could render. They're excluded from "alive" checks
   // and broadcasts by isDead, so this is purely a local visual lifetime.
   attackUnits = attackUnits.filter(u => !u.isGone);
   attackUnits.forEach(u => u.updateFrame());
-
-  // ── TOWER UPDATES ──────────────────────────────────────
   towers.forEach(tower => {
     tower.updateFrame(attackUnits);
   });
+  updateAndRenderExplosions();
   updateTowerInfoHp();
 
-  // ── VFX + UI ───────────────────────────────────────────
-  updateAndRenderExplosions();
   renderLeaderboard();
 
-  // ── WAVE CHECK ─────────────────────────────────────────
+  // Continuously check whether the wave has resolved so failure feedback
+  // is instant. The settle timer in spawnWaveQueues() is still kept as a
+  // belt-and-braces fallback in case unitsDeployedCount somehow undercounts.
   if (battleStarted) checkWaveOutcome();
 };
 
@@ -2094,45 +1756,13 @@ const startWave = () => {
     supabase
       .rpc('get_siege_snapshot', { p_siege: siege.id })
       .then(({ data, error }) => {
-        if (error) {
-          console.warn('snapshot seed failed', error);
-          return;
-        }
-        if (!observingMode || !data) return;
-
-        if ((data.wave ?? 1) !== (siege?.current_wave ?? 1)) return;
-        if (data.mapKey && currentMapKey && data.mapKey !== currentMapKey) return;
-
+        if (error) { console.warn('snapshot seed failed', error); return; }
+        if (!observingMode) return;        // we may have left observing already
+        if (!data) return;                 // no DB row yet — fall through to broadcast
         if (latestSnapshot && (latestSnapshot.ts || 0) >= (data.ts || 0)) return;
-
         latestSnapshot = data;
-        latestSnapshotIsSeed = true;
+        latestSnapshotIsSeed = true;       // DB origin — gate promotion accordingly
       });
-
-    // Keep retrying briefly until we get the first valid snapshot
-    let observerSeedTries = 0;
-    const observerSeedTimer = setInterval(async () => {
-      if (!observingMode || latestSnapshot) {
-        clearInterval(observerSeedTimer);
-        return;
-      }
-
-      observerSeedTries++;
-      if (observerSeedTries > 12) {
-        clearInterval(observerSeedTimer);
-        return;
-      }
-
-      const { data, error } = await supabase.rpc('get_siege_snapshot', { p_siege: siege.id });
-      if (error || !data || !observingMode) return;
-
-      if ((data.wave ?? 1) !== (siege?.current_wave ?? 1)) return;
-      if (data.mapKey && currentMapKey && data.mapKey !== currentMapKey) return;
-
-      latestSnapshot = data;
-      latestSnapshotIsSeed = true;
-      clearInterval(observerSeedTimer);
-    }, 250);
 
     startStuckWaveWatchdog();
     showAlert('⚔ WAVE IN PROGRESS — AWAITING THINE ALLY', 'info');
@@ -2160,16 +1790,25 @@ const startWave = () => {
 const beginWaveSpawn = () => {
   if (!mapLoaded || matchEnded) return;
   if (battleStarted) return;
+  if (observingMode) return;  // refreshers stay observing instead of spawning
 
   battleStarted = true;
   waveJudged = false;
   waveAttemptId++;
   attackUnits = [];
-
-  // Always rebuild towers for the current map
-  initialiseTowers();
+  // Towers persist across waves — damage and destruction from previous
+  // waves carries over. Only seed the full set on the very first wave
+  // (or if the page reloaded mid-match and the local tower array is
+  // empty). towersDestroyedCount is local-only and tracks per-match
+  // progress; don't reset it between waves.
+  if (towers.length === 0 && towersDestroyedCount === 0) {
+    initialiseTowers();
+  }
   updateWaveProgress();
-  renderWaveTrack(siege.current_wave || 1, livesMax());
+  // Per-wave contribution accumulates into the same totals across the
+  // whole match — only zero it once per match (first wave). After the
+  // first wave the totals just keep climbing.
+  if ((siege.current_wave ?? 1) === 1) resetContribution();
 
   // Baseline for the wave-failed summary's per-wave tower-damage figure,
   // and clear any summary popup left over from the previous attempt.
@@ -2178,83 +1817,8 @@ const beginWaveSpawn = () => {
 
   bothReadyBanner.classList.remove('hidden');
   setTimeout(() => bothReadyBanner.classList.add('hidden'), 1400);
-
-  // HOST runs the simulation
-  if (isHost) {
-    observingMode = false;
-    latestSnapshot = null;
-    latestSnapshotIsSeed = false;
-    observedDisplayPos.clear();
-
-    if ((siege.current_wave ?? 1) === 1) resetContribution();
-
-    spawnWaveQueues();
-    render();
-
-    // Restart broadcasting for THIS wave
-    startBattleSyncTimers();
-
-    return;
-  }
-
-  // ALLY observes host snapshots
-  observingMode = true;
-  latestSnapshot = null;
-  latestSnapshotIsSeed = false;
-  observedDisplayPos.clear();
-
-  const preload = new Set([
-    ...(siege.host_units || []),
-    ...(siege.ally_units || []),
-    ...(siege.host_queue || []),
-    ...(siege.ally_queue || []),
-  ]);
-  preload.forEach(id => { if (id) ensureObservedSprite(id); });
-
-  // Immediately seed the observer with the latest saved snapshot
-  supabase
-    .rpc('get_siege_snapshot', { p_siege: siege.id })
-    .then(({ data, error }) => {
-      if (error) {
-        console.warn('observer snapshot seed failed', error);
-        return;
-      }
-      if (!observingMode || !data) return;
-
-      if ((data.wave ?? 1) !== (siege?.current_wave ?? 1)) return;
-      if (data.mapKey && currentMapKey && data.mapKey !== currentMapKey) return;
-
-      latestSnapshot = data;
-      latestSnapshotIsSeed = true;
-    });
-
-  // Retry briefly until the first valid snapshot arrives
-  let observerSeedTries = 0;
-  const observerSeedTimer = setInterval(async () => {
-    if (!observingMode || latestSnapshot) {
-      clearInterval(observerSeedTimer);
-      return;
-    }
-
-    observerSeedTries++;
-    if (observerSeedTries > 12) {
-      clearInterval(observerSeedTimer);
-      return;
-    }
-
-    const { data, error } = await supabase.rpc('get_siege_snapshot', { p_siege: siege.id });
-    if (error || !data || !observingMode) return;
-
-    if ((data.wave ?? 1) !== (siege?.current_wave ?? 1)) return;
-    if (data.mapKey && currentMapKey && data.mapKey !== currentMapKey) return;
-
-    latestSnapshot = data;
-    latestSnapshotIsSeed = true;
-    clearInterval(observerSeedTimer);
-  }, 250);
-
-  startStuckWaveWatchdog();
-  showAlert('⚔ HOST COMMANDS THE FIELD — SYNCING BATTLE', 'info');
+  spawnWaveQueues();
+  renderWaveTrack(siege.current_wave || 1, siege.total_waves || 15);
   render();
 };
 
@@ -2268,133 +1832,82 @@ const phaseOrder = { lobby: 0, setup: 1, prep: 2, battle: 3, complete: 4 };
 
 const applySiegeUpdate = (fresh) => {
   if (!fresh || fresh.id !== siege?.id) return;
-
-  // ── STALE UPDATE GUARD ─────────────────────────
+  // Drop rows that are strictly older than what we already have.
+  // - Lower current_wave: stale.
+  // - Same wave but lower phase order: stale (e.g. echo of 'battle'
+  //   arriving after we've optimistically flipped to 'prep' for the
+  //   re-attempt). Outcome is a one-way door — once set, never unset.
   if (siege) {
     const freshWave = fresh.current_wave ?? 1;
     const liveWave = siege.current_wave ?? 1;
-
     if (freshWave < liveWave) return;
-
     if (freshWave === liveWave) {
       const freshPhaseOrd = phaseOrder[fresh.phase] ?? 0;
       const livePhaseOrd = phaseOrder[siege.phase] ?? 0;
       if (freshPhaseOrd < livePhaseOrd) return;
     }
-
     if (siege.outcome && !fresh.outcome) return;
   }
-
   const prevPhase = siege?.phase;
-  const prevWave = siege?.current_wave ?? 1;
-
   siege = fresh;
 
-  const waveChanged = (siege.current_wave ?? 1) !== prevWave;
-
-  // ── UPDATE WAVE TRACK ─────────────────────────
-  if (waveChanged) {
-    renderWaveTrack(siege.current_wave || 1, livesMax());
-  }
-
-  // Close overlay when moving to next level
-  if (waveChanged && levelCompleteOpen) {
-    closeLevelCompleteOverlay();
-  }
-
-  // ── LOAD NEW MAP IF NEEDED ─────────────────────
-  const mapChanged = applyMapForWave(siege.current_wave ?? 1, {
-    announce: waveChanged,
-  });
-
-  // Reset battle state when wave changes
-  if (waveChanged && !matchEnded && !siege.outcome) {
-    battleStarted = false;
-    waveJudged = false;
-    attackUnits = [];
-    unitsDeployedCount = 0;
-  }
-
+  // Phase flipped back to 'prep' — wave failed and the host bumped
+  // current_wave. Drop the battle-running state so the queue UI re-enables
+  // and clear the in-flight unit list, but DO NOT touch towersDestroyedCount
+  // or the towers array — map state persists across waves so the next wave
+  // continues the assault on whatever's left standing. unitsDeployedCount
+  // resets per wave so the new wave's expected-total check works.
+  //
+  // Flip state BEFORE rendering so renderTypes() / renderReadyControls()
+  // see the post-prep `battleStarted = false` and enable the queue UI.
+  // Pre-this fix, render() ran first with the stale `battleStarted = true`
+  // and the ally's type cards stayed disabled until the next echo.
   if (siege.phase === 'prep' && prevPhase !== 'prep') {
     battleStarted = false;
     waveJudged = false;
-    observingMode = false;
+    observingMode = false;   // ← back to normal sim for the next wave
     latestSnapshot = null;
-    observedDisplayPos.clear();
-
-    if (waveSettleTimer) {
-      clearTimeout(waveSettleTimer);
-      waveSettleTimer = null;
-    }
-
-    clearBattleSyncTimers();
-
+    if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
     attackUnits = [];
     unitsDeployedCount = 0;
     hideWaveSummary();       // ← the other player advanced; dismiss our popup
-
-    if (!mapChanged) {
-      updateWaveProgress();
-    }
+    updateWaveProgress();
   }
 
-  // ── START BATTLE WHEN SERVER COMMITS ──────────
-  if (
-    siege.phase === 'battle' &&
-    prevPhase === 'prep' &&
-    !battleStarted &&
-    !observingMode &&
-    !matchEnded
-  ) {
+  // Server has just committed the prep → battle transition. Spawn the
+  // queues NOW so both clients spawn off the same event instead of off
+  // their own lock-in moments (which previously raced the RPC commit
+  // and let a refresher re-spawn fresh while the other client's sim was
+  // already mid-flight).
+  if (siege.phase === 'battle' && prevPhase === 'prep' && !battleStarted && !observingMode && !matchEnded) {
     beginWaveSpawn();
   }
-
-  // ── UPDATE UI ────────────────────────────────
   render();
 
-  // ── HANDLE MATCH END ─────────────────────────
+  // End-of-match overlay if the host wrote outcome from the other client.
   if (siege.outcome && !matchEnded) {
     showEndOverlay(siege.outcome);
     return;
   }
-
-  // ── BOTH READY → START WAVE ──────────────────
+  // Both sides ready — start (or re-start, between waves) the current wave.
   const bothReady = !!siege.host_queue_ready && !!siege.ally_queue_ready;
-  if (bothReady && !battleStarted && !matchEnded) {
-    startWave();
-  }
+  if (bothReady && !battleStarted && !matchEnded) startWave();
 };
 
 // ── MAP LOAD ──
 const backgroundImage = new Image();
-
-const drawBackground = () => {
-  if (!backgroundImage.complete) return;
-
-  gameCanvas.clearRect(0, 0, gameCanvasElement.width, gameCanvasElement.height);
-
-  gameCanvas.drawImage(
-    backgroundImage,
-    0,
-    0,
-    gameCanvasElement.width,
-    gameCanvasElement.height
-  );
-};
-
 backgroundImage.onload = () => {
   mapLoaded = true;
   initialiseTowers();
-  drawBackground();
+  gameCanvas.drawImage(backgroundImage, 0, 0);
   towers.forEach(t => t.render());
   updateWaveProgress();
   if (!animationId) animate();
-
+  // startWave() has the refresh-recovery guard inside it — if we land
+  // here with phase='battle' (mid-wave reconnect), it'll suppress the
+  // spawn and show the AWAITING ALLY banner instead. Safe to call
+  // unconditionally when both sides are ready.
   if (siege && siege.host_queue_ready && siege.ally_queue_ready) startWave();
-};
-
-backgroundImage.onerror = () => {
-  console.error('[battle] failed to load background image:', backgroundImage.src);
 };
 
 // ── INIT ──
@@ -2445,7 +1958,7 @@ if (!siege) {
     loadProfile(myUid),
     otherUid ? loadProfile(otherUid) : Promise.resolve(null),
   ]);
-  mySelf = { profile: meProfile || { points: 0 } };
+  mySelf  = { profile: meProfile || { points: 0 } };
   myOther = { profile: themProfile || { points: 0 } };
   if (meProfile?.username) siege[isHost ? 'host_username' : 'ally_username'] = meProfile.username;
   if (themProfile?.username) siege[isHost ? 'ally_username' : 'host_username'] = themProfile.username;
@@ -2466,187 +1979,235 @@ if (!siege) {
     // Paint the map background once so the canvas behind the overlay
     // isn't blank. Doesn't matter that towers aren't drawn — the
     // overlay covers them.
-    applyMapForWave(siege.current_wave || 1, { force: true });
-
-    if (backgroundImage.complete) {
-      drawBackground();
-    }
-
+    backgroundImage.onload = () => {
+      gameCanvas.drawImage(backgroundImage, 0, 0);
+    };
+    backgroundImage.src = siege.map_src || '/assets/maps/calista-map.png';
     await showEndOverlay(siege.outcome);
   } else {
 
-    // Both players call enter_prep_phase on first battle entry. The RPC
-    // is idempotent and the second caller's seed branch no-ops once gold
-    // is non-zero (FOR UPDATE row lock makes the check race-safe). Doing
-    // this from both sides — not just the host — covers two edge cases:
-    //   • Host's RPC fails / slow connection: ally still gets a seed
-    //   • Ally lands on battle.html before host's RPC echoes via realtime
-    // The RPC also catches legacy sieges where phase advanced before
-    // migration 008/009 were applied (so the seed was silently dropped).
-    {
-      const { data, error } = await supabase.rpc('enter_prep_phase', { p_siege: siege.id });
-      if (error) console.error('enter_prep_phase failed', error);
-      const row = Array.isArray(data) ? data[0] : data;
-      if (row) applySiegeUpdate({ ...siege, ...row });
-    }
+  // Both players call enter_prep_phase on first battle entry. The RPC
+  // is idempotent and the second caller's seed branch no-ops once gold
+  // is non-zero (FOR UPDATE row lock makes the check race-safe). Doing
+  // this from both sides — not just the host — covers two edge cases:
+  //   • Host's RPC fails / slow connection: ally still gets a seed
+  //   • Ally lands on battle.html before host's RPC echoes via realtime
+  // The RPC also catches legacy sieges where phase advanced before
+  // migration 008/009 were applied (so the seed was silently dropped).
+  {
+    const { data, error } = await supabase.rpc('enter_prep_phase', { p_siege: siege.id });
+    if (error) console.error('enter_prep_phase failed', error);
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row) applySiegeUpdate({ ...siege, ...row });
+  }
 
-    renderWaveTrack(siege.current_wave || 1, livesMax());
-    render();
+  renderWaveTrack(siege.current_wave || 1, siege.total_waves || 15);
+  render();
 
-    // Map + tower init kicks off via backgroundImage.onload below.
-    applyMapForWave(siege.current_wave || 1, { force: true });
+  // Map + tower init kicks off via backgroundImage.onload below.
+  backgroundImage.src = siege.map_src || '/assets/maps/calista-map.png';
 
-    supabase
-      .channel(`game-${siege.id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sieges', filter: `id=eq.${siege.id}` },
-        (payload) => applySiegeUpdate(payload.new))
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'sieges', filter: `id=eq.${siege.id}` },
-        () => {
-          // After the match has ended, the row delete is just cleanup
-          // triggered by either player clicking Lobby on the end overlay.
-          // Don't bounce — let the user read their reward and leave when
-          // they want via their own button.
-          if (matchEnded) return;
-          showAlert('☠ THE SIEGE WAS DISBANDED', 'error');
-          setTimeout(returnToLobby, 900);
-        })
-      .subscribe();
-
-    // ── REAL-TIME BATTLE-STATE BROADCAST ─────────
-    // Every actively-simming client (i.e. !observingMode) broadcasts a
-    // small snapshot of the battlefield ~5x per second. Observing
-    // clients consume the snapshots and render them, so a player who
-    // refreshed into an active wave actually SEES units moving and
-    // towers being destroyed instead of staring at an empty canvas.
-    //
-    // ── SERVER-AUTH NOTE ─────────────────────────
-    // This is a transient Realtime BROADCAST (channel.send) — values
-    // are NOT persisted and NOT used for any gold / queue / outcome /
-    // payout decision. Authoritative gold flows via award_tower_kill
-    // RPC; wave progression via advance_wave; outcome via
-    // set_match_outcome. The snapshot is pure presentation catch-up.
-    // A tampered client lying in their broadcast can't cheat — they'd
-    // just paint wrong pixels on the observing client's canvas.
-    battleBroadcastChannel = supabase.channel(`battle-broadcast-${siege.id}`, {
-      config: { broadcast: { self: false } },
-    });
-    const battleBroadcast = battleBroadcastChannel;
-
-    // Track the last broadcast payload so the periodic DB-persist tick can
-    // forward it without re-building.
-
-    battleBroadcast
-      .on('broadcast', { event: 'snapshot' }, (msg) => {
-        if (!observingMode || !msg?.payload) return;
-
-        const snap = msg.payload;
-
-        // Ignore stale / wrong-wave / wrong-map / wrong-phase snapshots
-        if ((snap.wave ?? 1) !== (siege?.current_wave ?? 1)) return;
-        if (snap.mapKey && currentMapKey && snap.mapKey !== currentMapKey) return;
-
-        latestSnapshot = snap;
-        latestSnapshotIsSeed = false;
+  supabase
+    .channel(`game-${siege.id}`)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sieges', filter: `id=eq.${siege.id}` },
+      (payload) => applySiegeUpdate(payload.new))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'sieges', filter: `id=eq.${siege.id}` },
+      () => {
+        // After the match has ended, the row delete is just cleanup
+        // triggered by either player clicking Lobby on the end overlay.
+        // Don't bounce — let the user read their reward and leave when
+        // they want via their own button.
+        if (matchEnded) return;
+        showAlert('☠ THE SIEGE WAS DISBANDED', 'error');
+        setTimeout(returnToLobby, 900);
       })
-      .subscribe((status) => {
-        if (status !== 'SUBSCRIBED') return;
+    .subscribe();
 
-        // If battle is already running on this client when the channel comes up,
-        // start sync timers immediately.
-        if (battleStarted && !observingMode && !siege?.outcome) {
-          startBattleSyncTimers();
-        }
-      });
+  // ── REAL-TIME BATTLE-STATE BROADCAST ─────────
+  // Every actively-simming client (i.e. !observingMode) broadcasts a
+  // small snapshot of the battlefield ~5x per second. Observing
+  // clients consume the snapshots and render them, so a player who
+  // refreshed into an active wave actually SEES units moving and
+  // towers being destroyed instead of staring at an empty canvas.
+  //
+  // ── SERVER-AUTH NOTE ─────────────────────────
+  // This is a transient Realtime BROADCAST (channel.send) — values
+  // are NOT persisted and NOT used for any gold / queue / outcome /
+  // payout decision. Authoritative gold flows via award_tower_kill
+  // RPC; wave progression via advance_wave; outcome via
+  // set_match_outcome. The snapshot is pure presentation catch-up.
+  // A tampered client lying in their broadcast can't cheat — they'd
+  // just paint wrong pixels on the observing client's canvas.
+  const battleBroadcast = supabase.channel(`battle-broadcast-${siege.id}`, {
+    config: { broadcast: { self: false } },  // don't echo our own sends
+  });
 
-    // ── DB SNAPSHOT FALLBACK ─────────────────────────────────────
-    // Listen for siege_snapshots row UPDATEs so a client in observingMode
-    // gets the latest battlefield state through Postgres CDC even when
-    // the other peer's BROADCAST channel isn't reaching us (slow network,
-    // momentary disconnect, etc.). This is the "B always has data" half
-    // of disconnect-resilience.
-    supabase
-      .channel(`siege-snap-${siege.id}`)
-      .on('postgres_changes',
+  // Track the last broadcast payload so the periodic DB-persist tick can
+  // forward it without re-building. Persistence happens at half the
+  // broadcast rate (~2Hz) to keep DB writes modest while still giving a
+  // cold-reconnecting client recent state.
+  let lastBroadcastPayload = null;
+
+  battleBroadcast
+    .on('broadcast', { event: 'snapshot' }, (msg) => {
+      // Only apply if we're actually observing — non-observing
+      // clients have their own authoritative local sim.
+      if (observingMode && msg?.payload) {
+        latestSnapshot = msg.payload;
+        latestSnapshotIsSeed = false;  // live data — promotion may use it
+      }
+    })
+    .subscribe((status) => {
+      if (status !== 'SUBSCRIBED') return;
+      // 5Hz snapshot. Payload keys are 1-char to keep packet small:
+      //   ts: send timestamp,
+      //   units: [{x, y, t (team), u (unit type id), h (hp), m (maxHp)}],
+      //   towers: [{i (original index), h, m}],
+      //   td: towersDestroyedCount (so observer can catch up shifts).
+      //
+      // The broadcast guard intentionally does NOT include matchEnded —
+      // we keep broadcasting after the local sim ends so an observer
+      // who refreshes in the brief window before set_match_outcome
+      // echoes through realtime still sees the final battlefield
+      // state (all towers gone, no units) instead of staring at full
+      // towers. Once siege.outcome is set on the row (RPC landed),
+      // observers get the news via postgres_changes and we stop.
+      setInterval(() => {
+        if (!battleStarted || observingMode) return;
+        if (siege?.outcome) return;
+        const payload = {
+          ts: Date.now(),
+          units: attackUnits
+            .filter(u => !u.isDead)
+            .map(u => ({
+              x: Math.round(u.position?.x ?? 0),
+              y: Math.round(u.position?.y ?? 0),
+              t: u.team,
+              u: u.unitId || u.constructor?.name || 'Soldier',  // sprite key
+              h: Math.max(0, Math.round(u.health ?? 0)),
+              m: Math.max(1, Math.round(u.maxHealth ?? 1)),
+              // a = 1 when the unit has a live attack target. Observed
+              // clients use this to swap to the Attack sprite sheet so
+              // refreshed players see units actually attacking towers
+              // instead of just standing in idle.
+              a: (u.target && (u.target.health ?? 1) > 0) ? 1 : 0,
+            })),
+          towers: towers.map((t, i) => ({
+            i: towersDestroyedCount + i,  // original (pre-destruction) index
+            h: Math.max(0, Math.round(t.health ?? 0)),
+            m: Math.max(1, Math.round(t.maxHealth ?? 1)),
+          })),
+          td: towersDestroyedCount,
+        };
+        lastBroadcastPayload = payload;
+        battleBroadcast.send({ type: 'broadcast', event: 'snapshot', payload });
+      }, 200);
+
+      // ── DB SNAPSHOT PERSIST ──────────────────────────────────
+      // Upsert the latest payload into public.siege_snapshots every
+      // 500ms while we're simming. This is what lets a client that
+      // refreshes mid-wave (or both peers disconnecting briefly) pick
+      // back up from real battlefield state instead of staring at an
+      // empty canvas. The watchdog (migration 012) terminates matches
+      // whose row goes stale for >60s.
+      setInterval(() => {
+        if (!battleStarted || observingMode) return;
+        if (siege?.outcome) return;
+        if (!lastBroadcastPayload) return;
+        supabase
+          .rpc('upsert_siege_snapshot', { p_siege: siege.id, p_state: lastBroadcastPayload })
+          .then(({ error }) => { if (error) console.warn('snapshot persist failed', error); });
+      }, 500);
+    });
+
+  // ── DB SNAPSHOT FALLBACK ─────────────────────────────────────
+  // Listen for siege_snapshots row UPDATEs so a client in observingMode
+  // gets the latest battlefield state through Postgres CDC even when
+  // the other peer's BROADCAST channel isn't reaching us (slow network,
+  // momentary disconnect, etc.). This is the "B always has data" half
+  // of disconnect-resilience.
+  supabase
+    .channel(`siege-snap-${siege.id}`)
+    .on('postgres_changes',
         { event: '*', schema: 'public', table: 'siege_snapshots', filter: `siege_id=eq.${siege.id}` },
         (payload) => {
           if (!observingMode) return;
           const state = payload.new?.state;
           if (state) {
-            if ((state.wave ?? 1) !== (siege?.current_wave ?? 1)) return;
-            if (state.mapKey && currentMapKey && state.mapKey !== currentMapKey) return;
-
             latestSnapshot = state;
+            // A CDC push of a row that the OTHER peer just wrote IS
+            // fresh in the only sense that matters here (the peer is
+            // alive and persisting). Treat the same as a live broadcast.
             latestSnapshotIsSeed = false;
           }
         })
-      .subscribe();
+    .subscribe();
 
-    // ── PRESENCE CHANNEL ─────────────────────────
-    // Tracks WHO is currently connected to this siege so the HUD can
-    // surface a "RECONNECTING…" indicator on the ally's profile when
-    // they lose connection (closed tab / network drop / signed out).
-    //
-    // ── SERVER-AUTH NOTE ─────────────────────────
-    // Presence intentionally lives in the Realtime layer only — NEVER
-    // persist it to public.sieges or any other auth-relevant table.
-    // Otherwise a tampered client could spoof "I'm online" to dodge
-    // teammate-disconnect penalties, or spoof "they're offline" to
-    // trigger them. Today presence affects ZERO gameplay decisions
-    // (gold, queue, outcome, payout, …) — it's a pure UI hint. Keep
-    // it that way. If a future feature needs "disconnect for N seconds
-    // triggers X", build that off the server clock + a dedicated
-    // server-side heartbeat, not off this channel.
-    const renderConnectionIndicator = (onlineUserIds) => {
-      // user.id is always considered online from its own client's
-      // POV — we only render the indicator for the OTHER player.
-      if (!otherUid) {
-        otherReconnectingEl.classList.add('hidden');
-        otherStatusEl.classList.add('hidden');
-        otherPlayerEl?.classList.remove('is-reconnecting');
-        return;
+  // ── PRESENCE CHANNEL ─────────────────────────
+  // Tracks WHO is currently connected to this siege so the HUD can
+  // surface a "RECONNECTING…" indicator on the ally's profile when
+  // they lose connection (closed tab / network drop / signed out).
+  //
+  // ── SERVER-AUTH NOTE ─────────────────────────
+  // Presence intentionally lives in the Realtime layer only — NEVER
+  // persist it to public.sieges or any other auth-relevant table.
+  // Otherwise a tampered client could spoof "I'm online" to dodge
+  // teammate-disconnect penalties, or spoof "they're offline" to
+  // trigger them. Today presence affects ZERO gameplay decisions
+  // (gold, queue, outcome, payout, …) — it's a pure UI hint. Keep
+  // it that way. If a future feature needs "disconnect for N seconds
+  // triggers X", build that off the server clock + a dedicated
+  // server-side heartbeat, not off this channel.
+  const renderConnectionIndicator = (onlineUserIds) => {
+    // user.id is always considered online from its own client's
+    // POV — we only render the indicator for the OTHER player.
+    if (!otherUid) {
+      otherReconnectingEl.classList.add('hidden');
+      otherStatusEl.classList.add('hidden');
+      otherPlayerEl?.classList.remove('is-reconnecting');
+      return;
+    }
+    const otherOnline = onlineUserIds.has(otherUid);
+    otherReconnectingEl.classList.toggle('hidden', otherOnline);
+    otherStatusEl.classList.toggle('hidden', otherOnline);
+    otherPlayerEl?.classList.toggle('is-reconnecting', !otherOnline);
+  };
+
+  // Start in the "ally is reconnecting" state until their presence
+  // sync confirms them online — better to flash the indicator
+  // briefly than to falsely claim everything's fine while we wait.
+  renderConnectionIndicator(new Set());
+
+  const presenceChannel = supabase.channel(`presence-${siege.id}`, {
+    config: { presence: { key: user.id } },
+  });
+
+  presenceChannel
+    .on('presence', { event: 'sync' }, () => {
+      // presenceState() returns an object keyed by presence key
+      // (user.id in our config). One key per connected client.
+      const state = presenceChannel.presenceState();
+      renderConnectionIndicator(new Set(Object.keys(state)));
+    })
+    .subscribe(async (status) => {
+      // Only track ourselves once the channel is actually live —
+      // otherwise track() rejects with "channel not subscribed".
+      if (status === 'SUBSCRIBED') {
+        await presenceChannel.track({
+          user_id: user.id,
+          online_at: new Date().toISOString(),
+        });
       }
-      const otherOnline = onlineUserIds.has(otherUid);
-      otherReconnectingEl.classList.toggle('hidden', otherOnline);
-      otherStatusEl.classList.toggle('hidden', otherOnline);
-      otherPlayerEl?.classList.toggle('is-reconnecting', !otherOnline);
-    };
-
-    // Start in the "ally is reconnecting" state until their presence
-    // sync confirms them online — better to flash the indicator
-    // briefly than to falsely claim everything's fine while we wait.
-    renderConnectionIndicator(new Set());
-
-    const presenceChannel = supabase.channel(`presence-${siege.id}`, {
-      config: { presence: { key: user.id } },
     });
 
-    presenceChannel
-      .on('presence', { event: 'sync' }, () => {
-        // presenceState() returns an object keyed by presence key
-        // (user.id in our config). One key per connected client.
-        const state = presenceChannel.presenceState();
-        renderConnectionIndicator(new Set(Object.keys(state)));
-      })
-      .subscribe(async (status) => {
-        // Only track ourselves once the channel is actually live —
-        // otherwise track() rejects with "channel not subscribed".
-        if (status === 'SUBSCRIBED') {
-          await presenceChannel.track({
-            user_id: user.id,
-            online_at: new Date().toISOString(),
-          });
-        }
-      });
-
-    // Clean teardown on page unload so the OTHER client sees us drop
-    // off the presence list immediately, not after the WebSocket's
-    // ~30s timeout. Belt-and-braces: closing the tab tears down the
-    // socket anyway, but explicit untrack lets a clean navigation
-    // (e.g. clicking RETURN TO WAR ROOM) flip the ally's UI right
-    // away instead of leaving them with a stale "ally still here".
-    window.addEventListener('beforeunload', () => {
-      clearBattleSyncTimers();
-      try { presenceChannel.untrack(); } catch { /* socket already gone */ }
-    });
+  // Clean teardown on page unload so the OTHER client sees us drop
+  // off the presence list immediately, not after the WebSocket's
+  // ~30s timeout. Belt-and-braces: closing the tab tears down the
+  // socket anyway, but explicit untrack lets a clean navigation
+  // (e.g. clicking RETURN TO WAR ROOM) flip the ally's UI right
+  // away instead of leaving them with a stale "ally still here".
+  window.addEventListener('beforeunload', () => {
+    try { presenceChannel.untrack(); } catch { /* socket already gone */ }
+  });
   } // end refresh-into-completed-match else
 }

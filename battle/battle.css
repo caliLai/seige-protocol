@@ -1343,6 +1343,33 @@ body {
   color: #7dd3fc;
 }
 
+/* ── UNIT INFORMATION PANEL ── */
+/* Populated by hovering a card in AVAILABLE UNIT TYPES; keeps the last
+   hovered unit on screen. Reuses .game-info-body.has-info column layout. */
+.game-info-name {
+  color: #ffd87a;
+  font-size: 8px;
+  letter-spacing: 0.16em;
+}
+
+.game-info-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: #fff7d6;
+}
+
+.game-info-stats b {
+  color: #a89880;
+  font-weight: normal;
+}
+
+.game-info-desc {
+  color: #a89880;
+  line-height: 1.6;
+  text-align: left;
+}
+
 /* ── WAVE-FAILED SUMMARY POPUP ── */
 .game-wavesum-title {
   color: #f5c518;

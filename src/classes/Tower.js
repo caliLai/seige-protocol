@@ -38,6 +38,11 @@ export class Tower extends Sprite {
   lastHitBy = null;
   rewardGranted = false;
 
+  // Set by battle.js when this tower is clicked for the info panel. Drives
+  // the subtle white highlight in render() so the player can see which tower
+  // the panel is describing.
+  selected = false;
+
   static image = null;
   static loaded = false;
 
@@ -61,13 +66,32 @@ export class Tower extends Sprite {
   render() {
     if (!Tower.image || !Tower.loaded) return;
 
-    this.gameCanvas.drawImage(
-      Tower.image,
-      this.position.x - (this.drawWidth - this.width) / 2,
-      this.position.y - (this.drawHeight - this.height),
-      this.drawWidth,
-      this.drawHeight,
-    );
+    const drawX = this.position.x - (this.drawWidth - this.width) / 2;
+    const drawY = this.position.y - (this.drawHeight - this.height);
+
+    if (this.selected) {
+      // Brighten the sprite toward white so the clicked tower stands out
+      // while its stats show in the info panel. The filter only affects this
+      // draw, so it tints the tower shape itself, not the surrounding tiles.
+      this.gameCanvas.save();
+      this.gameCanvas.filter = "brightness(1.5)";
+      this.gameCanvas.drawImage(
+        Tower.image,
+        drawX,
+        drawY,
+        this.drawWidth,
+        this.drawHeight,
+      );
+      this.gameCanvas.restore();
+    } else {
+      this.gameCanvas.drawImage(
+        Tower.image,
+        drawX,
+        drawY,
+        this.drawWidth,
+        this.drawHeight,
+      );
+    }
 
     this.drawHealthBar();
     this.gameCanvas.globalAlpha = 1;

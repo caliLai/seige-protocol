@@ -53,9 +53,9 @@ const explosionFrames = EXPLOSION_FRAME_IDS.map((id) => {
 });
 
 // ── DIFFICULTY KNOBS ──
-const STARTING_GOLD = { recruit: 300, veteran: 250, elite: 200 };
+const STARTING_GOLD = { recruit: 50, veteran: 50, elite: 50 };
 const QUEUE_CAP = { recruit: 10, veteran: 8, elite: 6 };
-const goldForDifficulty = (d) => STARTING_GOLD[d] ?? 250;
+const goldForDifficulty = (d) => STARTING_GOLD[d] ?? 50;
 const queueCapForDifficulty = (d) => QUEUE_CAP[d] ?? 8;
 
 // ── CANVAS ──
@@ -127,11 +127,12 @@ const waveTrackEl = document.getElementById('waveTrack');
 const towersRemainingEl = document.getElementById('towersRemainingLabel');
 const waveProgressLabelEl = document.getElementById('waveProgressLabel');
 const waveProgressBarEl = document.getElementById('waveProgressBar');
+const unitInfoEl = document.getElementById('unitInfo');
 
 // ── STATE ──
 let siege = null;
 let isHost = false;
-let startingGold = 250;
+let startingGold = 50;
 let queueCap = 8;
 
 // Profiles loaded once at battle entry — used for the POINTS counter in
@@ -362,6 +363,27 @@ const loadSiege = async (siegeId) => {
 };
 
 // ── RENDER: types (the 3 picks) ──
+// Fill the UNIT INFORMATION panel with a unit's stats + flavour. Driven by
+// hovering a card in either AVAILABLE UNIT TYPES list. We deliberately never
+// clear it on mouseleave, so the panel keeps showing the last unit hovered.
+const showUnitInfo = (id) => {
+  if (!unitInfoEl) return;
+  const unit = UNITS_BY_ID.get(id);
+  if (!unit) return;
+
+  unitInfoEl.classList.add('has-info');
+  unitInfoEl.innerHTML = `
+    <div class="game-info-name">${escapeHtml(id.toUpperCase())}</div>
+    <div class="game-info-stats">
+      <span><b>COST</b> ◆${deployCost(unit)}</span>
+      <span><b>HP</b> ${unit.hp}</span>
+      <span><b>DMG</b> ${unit.damage}</span>
+      <span><b>SPD</b> ${unit.speed}</span>
+    </div>
+    ${unit.desc ? `<div class="game-info-desc">${escapeHtml(unit.desc)}</div>` : ''}
+  `;
+};
+
 const renderTypes = (containerEl, types, interactive, remainingGold, queueFull, countEl) => {
   containerEl.innerHTML = '';
   countEl.textContent = `(${types.length}/3)`;
@@ -384,6 +406,7 @@ const renderTypes = (containerEl, types, interactive, remainingGold, queueFull, 
     `;
     const spriteEl = card.querySelector('.game-type-sprite');
     animateSprite(spriteEl, id, 1.6);
+    card.addEventListener('mouseenter', () => showUnitInfo(id));
     if (interactive && canAfford) card.addEventListener('click', () => addToQueue(id));
     containerEl.appendChild(card);
   }
@@ -1201,8 +1224,8 @@ battleEvents.addEventListener('wave-failed', async () => {
 const updateWaveProgress = () => {
   const destroyed = towersDestroyedCount;
   const pct = totalTowers ? Math.round((destroyed / totalTowers) * 100) : 0;
-  waveProgressLabelEl.textContent = `${pct}%`;
-  waveProgressBarEl.style.width = `${pct}%`;
+  if (waveProgressLabelEl) waveProgressLabelEl.textContent = `${pct}%`;
+  if (waveProgressBarEl) waveProgressBarEl.style.width = `${pct}%`;
   towersRemainingEl.textContent = `TOWERS REMAINING: ${totalTowers - destroyed}`;
 };
 
@@ -1623,7 +1646,13 @@ gameCanvasElement.addEventListener('click', (e) => {
   const x = (e.clientX - rect.left) * (gameCanvasElement.width / rect.width);
   const y = (e.clientY - rect.top) * (gameCanvasElement.height / rect.height);
   const tower = towers.find(t => towerHitTest(t, x, y));
-  if (tower) { selectedTower = tower; renderTowerInfo(); }
+  if (tower) {
+    // Move the white highlight from the previously selected tower to this one.
+    if (selectedTower) selectedTower.selected = false;
+    selectedTower = tower;
+    selectedTower.selected = true;
+    renderTowerInfo();
+  }
 });
 
 const animate = () => {
@@ -1646,31 +1675,47 @@ const animate = () => {
     return;
   }
 
-  for (let i = 0; i < attackUnits.length && towers.length; i++) {
-    const unit = attackUnits[i];
-    const tower = towers[0];
-    if (!unit || !tower) continue;
+  // Clear out any destroyed towers — anywhere in the array, not just the
+  // front of the line. Units can now bring towers down out of order, so a
+  // dead one may sit at any index. Each removal credits the killing side.
+  for (let i = towers.length - 1; i >= 0; i--) {
+    if (!towers[i].isDead) continue;
+    const dead = towers.splice(i, 1)[0];
+    towersDestroyedCount++;
+    updateWaveProgress();
+    renderHeader();
+    emit('tower-destroyed', {
+      towerIndex: towersDestroyedCount - 1,
+      lastAttackerTeam: dead?.lastAttackerTeam ?? null,
+      reward: dead?.reward ?? 0,
+      x: dead?.centre?.x ?? dead?.position?.x ?? 0,
+      y: dead?.centre?.y ?? dead?.position?.y ?? 0,
+    });
+  }
+  if (towers.length === 0) checkWaveOutcome();
 
-    if (!tower.isDead && unitCanReachTower(unit, tower)) {
-      unit.target = tower;
-    } else {
-      if (tower.isDead) {
-        const dead = towers.shift();
-        towersDestroyedCount++;
-        updateWaveProgress();
-        renderHeader();
-        emit('tower-destroyed', {
-          towerIndex: towersDestroyedCount - 1,
-          lastAttackerTeam: dead?.lastAttackerTeam ?? null,
-          reward: dead?.reward ?? 0,
-          x: dead?.centre?.x ?? dead?.position?.x ?? 0,
-          y: dead?.centre?.y ?? dead?.position?.y ?? 0,
-        });
+  // Each unit locks onto the nearest tower it can actually reach — scanning
+  // ALL towers, not just towers[0]. Previously a unit only ever checked the
+  // front-of-line tower, so it walked straight past any other tower it was
+  // standing next to instead of attacking it.
+  for (const unit of attackUnits) {
+    if (!unit) continue;
 
-        if (towers.length === 0) checkWaveOutcome();
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const tower of towers) {
+      if (!tower || tower.isDead) continue;
+      if (!unitCanReachTower(unit, tower)) continue;
+      const d = Math.hypot(
+        tower.centre.x - unit.centre.x,
+        tower.centre.y - unit.centre.y,
+      );
+      if (d < nearestDistance) {
+        nearest = tower;
+        nearestDistance = d;
       }
-      unit.target = null;
     }
+    unit.target = nearest;
   }
 
   

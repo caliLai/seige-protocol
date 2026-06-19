@@ -146,7 +146,6 @@ let battleStarted = false;
 let towersDestroyedCount = 0;
 let totalTowers = 0;
 let unitsDeployedCount = 0;
-let totalUnitsDeployedCount = 0;
 let explosions = [];
 let path = [];
 let towerLocations = [];
@@ -241,7 +240,7 @@ const buildBattleSnapshot = () => ({
     })),
 
   towers: towers.map((t, i) => ({
-    i: t.originalIndex ?? i,
+    i: towersDestroyedCount + i,
     h: Math.max(0, Math.round(t.health ?? 0)),
     m: Math.max(1, Math.round(t.maxHealth ?? 1)),
   })),
@@ -394,7 +393,6 @@ const applyMapForWave = (wave, { force = false, announce = false } = {}) => {
 };
 
 const smoothNavigate = (url) => {
-  console.info('[battle:navigate]', { from: window.location.href, to: url });
   document.body.style.transition = 'opacity 0.35s ease';
   document.body.style.opacity = '0';
   setTimeout(() => { window.location.href = url; }, 400);
@@ -898,15 +896,15 @@ const initialiseTowers = () => {
 
   const showSprite = currentMapConfig?.drawGeneratedTowers !== false;
 
-  towerLocations.forEach((location, index) => {
-    const tower = new Tower(location, gameCanvas, {
-      showSprite,
-      barOffsetX: location.barOffsetX || 0,
-      barOffsetY: location.barOffsetY || 0,
-    });
-    tower.originalIndex = index;
-    towers.push(tower);
-  });
+  for (const location of towerLocations) {
+    towers.push(
+      new Tower(location, gameCanvas, {
+        showSprite,
+        barOffsetX: location.barOffsetX || 0,
+        barOffsetY: location.barOffsetY || 0,
+      })
+    );
+  }
 
   totalTowers = towers.length;
 };
@@ -1024,7 +1022,6 @@ const spawnWaveQueues = () => {
         unit.position.y -= dir.y * pathSpacing;
         attackUnits.push(unit);
         unitsDeployedCount++;
-        totalUnitsDeployedCount++;
       }, i * spawnGap);
     });
   };
@@ -1073,7 +1070,6 @@ const checkWaveOutcome = () => {
 const showEndOverlay = async (outcome) => {
   if (matchEnded) return;
   matchEnded = true;
-  console.info('[battle:end]', { outcome, origin: window.location.origin, href: window.location.href });
   if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
   clearBattleSyncTimers();
 
@@ -1083,8 +1079,8 @@ const showEndOverlay = async (outcome) => {
     : { towers: statTowersDefeatEl, lives: statLivesDefeatEl, units: statUnitsDefeatEl };
 
   if (statsOf.towers) statsOf.towers.textContent = `${towersDestroyedCount} / ${totalTowers}`;
-  if (statsOf.lives)  statsOf.lives.textContent = `${livesRemaining()} / ${livesMax()}`;
-  if (statsOf.units)  statsOf.units.textContent = String(totalUnitsDeployedCount);
+  if (statsOf.lives) statsOf.lives.textContent = `${livesRemaining()} / ${livesMax()}`;
+  if (statsOf.units) statsOf.units.textContent = String(unitsDeployedCount);
 
   overlay.classList.remove('hidden');
   overlay.setAttribute('aria-hidden', 'false');
@@ -1578,22 +1574,14 @@ const renderObservedState = () => {
   }
   const snap = latestSnapshot;
 
-  // Catch up tower destructions by stable per-level tower index. Towers
-  // can die out of order now, so shifting from the front would desync
-  // observers from the simming client.
-  const liveTowerIds = new Set((snap.towers || []).map(t => t.i));
-  for (let i = 0; i < towers.length;) {
-    const tower = towers[i];
-    const towerId = tower?.originalIndex ?? i;
-    if (liveTowerIds.has(towerId)) {
-      i++;
-      continue;
-    }
-
-    const dead = towers.splice(i, 1)[0];
+  // Catch up tower destructions. snap.td is the simming client's
+  // running towersDestroyedCount; we shift towers off our local
+  // array (and spawn explosions) until we match.
+  while (towersDestroyedCount < snap.td && towers.length > 0) {
+    const dead = towers.shift();
+    towersDestroyedCount++;
     if (dead?.centre) spawnExplosion(dead.centre.x, dead.centre.y);
   }
-  towersDestroyedCount = Math.max(towersDestroyedCount, snap.td ?? towersDestroyedCount);
   updateWaveProgress();
 
   // OBSERVED VICTORY DETECTION ─────────────────────────────────
@@ -1634,8 +1622,10 @@ const renderObservedState = () => {
 
   // Sync remaining towers' HP from the snapshot.
   for (const t of snap.towers || []) {
-    const tower = towers.find(candidate => (candidate.originalIndex ?? -1) === t.i);
-    if (tower) tower.health = t.h;
+    const idx = t.i - snap.td;
+    if (idx >= 0 && idx < towers.length) {
+      towers[idx].health = t.h;
+    }
   }
 
   towers.forEach(tower => tower.render());
@@ -1819,34 +1809,6 @@ const unitCanReachTower = (unit, tower) => {
 
 const DEBUG_DRAW = false; // ← toggle this ON/OFF
 
-const clearDestroyedTowers = () => {
-  let clearedAny = false;
-
-  for (let i = 0; i < towers.length;) {
-    const tower = towers[i];
-    if (!tower?.isDead) {
-      i++;
-      continue;
-    }
-
-    const dead = towers.splice(i, 1)[0];
-    towersDestroyedCount++;
-    clearedAny = true;
-    emit('tower-destroyed', {
-      towerIndex: dead?.originalIndex ?? towersDestroyedCount - 1,
-      lastAttackerTeam: dead?.lastAttackerTeam ?? null,
-      reward: dead?.reward ?? 0,
-      x: dead?.centre?.x ?? dead?.position?.x ?? 0,
-      y: dead?.centre?.y ?? dead?.position?.y ?? 0,
-    });
-  }
-
-  if (!clearedAny) return;
-  updateWaveProgress();
-  renderHeader();
-  if (towers.length === 0) checkWaveOutcome();
-};
-
 const animate = () => {
   animationId = requestAnimationFrame(animate);
   if (!mapLoaded) return;
@@ -1881,7 +1843,22 @@ const animate = () => {
   // ── TARGETING + TOWER DESTRUCTION ─────────────────────
   // ── TARGETING + TOWER DESTRUCTION ─────────────────────
 
-  clearDestroyedTowers();
+  // First, remove any dead towers cleanly
+  while (towers.length > 0 && towers[0].isDead) {
+    const dead = towers.shift();
+    towersDestroyedCount++;
+
+    updateWaveProgress();
+    renderHeader();
+
+    emit('tower-destroyed', {
+      towerIndex: towersDestroyedCount - 1,
+      lastAttackerTeam: dead?.lastAttackerTeam ?? null,
+      reward: dead?.reward ?? 0,
+      x: dead?.centre?.x ?? dead?.position?.x ?? 0,
+      y: dead?.centre?.y ?? dead?.position?.y ?? 0,
+    });
+  }
 
   // Then allow units to attack ANY reachable tower
   for (let i = 0; i < attackUnits.length; i++) {
@@ -1912,7 +1889,6 @@ const animate = () => {
   towers.forEach(tower => {
     tower.updateFrame(attackUnits);
   });
-  clearDestroyedTowers();
 
   // ── VFX + UI ───────────────────────────────────────────
   updateAndRenderExplosions();

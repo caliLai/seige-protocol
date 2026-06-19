@@ -146,6 +146,7 @@ let battleStarted = false;
 let towersDestroyedCount = 0;
 let totalTowers = 0;
 let unitsDeployedCount = 0;
+let totalUnitsDeployedCount = 0;
 let explosions = [];
 let path = [];
 let towerLocations = [];
@@ -393,6 +394,7 @@ const applyMapForWave = (wave, { force = false, announce = false } = {}) => {
 };
 
 const smoothNavigate = (url) => {
+  console.info('[battle:navigate]', { from: window.location.href, to: url });
   document.body.style.transition = 'opacity 0.35s ease';
   document.body.style.opacity = '0';
   setTimeout(() => { window.location.href = url; }, 400);
@@ -1022,6 +1024,7 @@ const spawnWaveQueues = () => {
         unit.position.y -= dir.y * pathSpacing;
         attackUnits.push(unit);
         unitsDeployedCount++;
+        totalUnitsDeployedCount++;
       }, i * spawnGap);
     });
   };
@@ -1070,6 +1073,7 @@ const checkWaveOutcome = () => {
 const showEndOverlay = async (outcome) => {
   if (matchEnded) return;
   matchEnded = true;
+  console.info('[battle:end]', { outcome, origin: window.location.origin, href: window.location.href });
   if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
   clearBattleSyncTimers();
 
@@ -1079,8 +1083,8 @@ const showEndOverlay = async (outcome) => {
     : { towers: statTowersDefeatEl, lives: statLivesDefeatEl, units: statUnitsDefeatEl };
 
   if (statsOf.towers) statsOf.towers.textContent = `${towersDestroyedCount} / ${totalTowers}`;
-  if (statsOf.lives) statsOf.lives.textContent = `${livesRemaining()} / ${livesMax()}`;
-  if (statsOf.units) statsOf.units.textContent = String(unitsDeployedCount);
+  if (statsOf.lives)  statsOf.lives.textContent = `${livesRemaining()} / ${livesMax()}`;
+  if (statsOf.units)  statsOf.units.textContent = String(totalUnitsDeployedCount);
 
   overlay.classList.remove('hidden');
   overlay.setAttribute('aria-hidden', 'false');
@@ -1809,6 +1813,34 @@ const unitCanReachTower = (unit, tower) => {
 
 const DEBUG_DRAW = false; // ← toggle this ON/OFF
 
+const clearDestroyedTowers = () => {
+  let clearedAny = false;
+
+  for (let i = 0; i < towers.length;) {
+    const tower = towers[i];
+    if (!tower?.isDead) {
+      i++;
+      continue;
+    }
+
+    const dead = towers.splice(i, 1)[0];
+    towersDestroyedCount++;
+    clearedAny = true;
+    emit('tower-destroyed', {
+      towerIndex: towersDestroyedCount - 1,
+      lastAttackerTeam: dead?.lastAttackerTeam ?? null,
+      reward: dead?.reward ?? 0,
+      x: dead?.centre?.x ?? dead?.position?.x ?? 0,
+      y: dead?.centre?.y ?? dead?.position?.y ?? 0,
+    });
+  }
+
+  if (!clearedAny) return;
+  updateWaveProgress();
+  renderHeader();
+  if (towers.length === 0) checkWaveOutcome();
+};
+
 const animate = () => {
   animationId = requestAnimationFrame(animate);
   if (!mapLoaded) return;
@@ -1843,22 +1875,7 @@ const animate = () => {
   // ── TARGETING + TOWER DESTRUCTION ─────────────────────
   // ── TARGETING + TOWER DESTRUCTION ─────────────────────
 
-  // First, remove any dead towers cleanly
-  while (towers.length > 0 && towers[0].isDead) {
-    const dead = towers.shift();
-    towersDestroyedCount++;
-
-    updateWaveProgress();
-    renderHeader();
-
-    emit('tower-destroyed', {
-      towerIndex: towersDestroyedCount - 1,
-      lastAttackerTeam: dead?.lastAttackerTeam ?? null,
-      reward: dead?.reward ?? 0,
-      x: dead?.centre?.x ?? dead?.position?.x ?? 0,
-      y: dead?.centre?.y ?? dead?.position?.y ?? 0,
-    });
-  }
+  clearDestroyedTowers();
 
   // Then allow units to attack ANY reachable tower
   for (let i = 0; i < attackUnits.length; i++) {
@@ -1889,6 +1906,7 @@ const animate = () => {
   towers.forEach(tower => {
     tower.updateFrame(attackUnits);
   });
+  clearDestroyedTowers();
 
   // ── VFX + UI ───────────────────────────────────────────
   updateAndRenderExplosions();

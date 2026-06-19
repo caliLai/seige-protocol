@@ -14,7 +14,7 @@ export class Tower extends Sprite {
   reward = 80;
 
   attackRadius = 200;
-  attackDamage = 10;
+  attackDamage = 5;
   attackCooldownMs = 800;
   lastAttackAt = 0;
   volleySize = 3;

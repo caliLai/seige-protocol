@@ -125,6 +125,11 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   hideAlert();
 
+  /// EMULATION OF USING MICROSERVICE ARCHITECTURE
+  fetch("https://mircoservice.vercel.app/ping");
+
+  /// END EMULATION
+
   let valid = true;
   const emailErr = document.getElementById('emailError');
   const passErr = document.getElementById('passwordError');

@@ -206,7 +206,7 @@ export class Unit extends Sprite {
     if (!this.target) return;
 
     const now = performance.now();
-    if (now - this.lastAttackAt < this.attackCooldownMs) return;
+    if ((now - this.lastAttackAt) * sim.speed < this.attackCooldownMs) return;
 
     this.lastAttackAt = now;
 
@@ -311,7 +311,7 @@ export class Unit extends Sprite {
     }
 
     const angle = Math.atan2(dy, dx);
-    const frameStep = Math.min(this.moveSpeedPxPerSecond / 60, distance);
+    const frameStep = Math.min((this.moveSpeedPxPerSecond / 60) * sim.speed, distance);
 
     this.position.x += Math.cos(angle) * frameStep;
     this.position.y += Math.sin(angle) * frameStep;

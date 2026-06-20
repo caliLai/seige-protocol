@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Siege Protocol — Hall of Conquerors</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/login/login-styles.css" />
+  <link rel="stylesheet" href="/start-screen/start-screen-styles.css" />
+  <link rel="stylesheet" href="/leaderboard/leaderboard-styles.css" />
+</head>
+<body>
+
+  <div class="game-frame lobby-bg">
+    <div class="scanlines-overlay"></div>
+
+    <div class="menu-card-wrapper lb-card-wrapper">
+      <div class="menu-card lb-card">
+        <div class="menu-card-inner-border"></div>
+        <div class="menu-card-corner tl"></div>
+        <div class="menu-card-corner tr"></div>
+        <div class="menu-card-corner bl"></div>
+        <div class="menu-card-corner br"></div>
+
+        <div class="menu-card-content">
+
+          <div class="title-block">
+            <div class="title-line lb-title">🏆 HALL OF CONQUERORS</div>
+            <div class="subtitle">— TOWERS FELLED ACROSS ALL SIEGES —</div>
+          </div>
+
+          <div class="divider">
+            <div class="dash-line"></div>
+            <span class="divider-icon">⚔</span>
+            <div class="dash-line"></div>
+          </div>
+
+          <div class="lb-head">
+            <span>RANK</span>
+            <span>CONQUEROR</span>
+            <span>POINTS</span>
+          </div>
+
+          <div id="lbBody" class="lb-body">
+            <div class="lb-empty">█ TALLYING THE CONQUESTS… █</div>
+          </div>
+
+          <div class="menu-buttons lb-actions">
+            <button id="backBtn" class="px-btn menu-btn">↩ RETURN TO THE WARROOM</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="frame-edge frame-edge-top"></div>
+    <div class="frame-edge frame-edge-left"></div>
+    <div class="frame-edge frame-edge-right"></div>
+  </div>
+
+  <script type="module" src="/leaderboard/leaderboard.js"></script>
+</body>
+</html>

@@ -21,7 +21,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22' # Change to match your local project version
-          cache: 'npm'       # Caches dependencies for faster subsequent runs
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
 
       # Step 3: Install project dependencies
       - name: Install Dependencies

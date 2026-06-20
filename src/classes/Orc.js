@@ -42,6 +42,9 @@ export class Orc extends MeleeUnit {
     static walkImage = null;
     static walkImageLoaded = false;
 
+    static deathImage = null;
+    static deathImageLoaded = false;
+
     constructor(position, gameCanvas) {
         super(position, gameCanvas);
         Orc.loadAssets();
@@ -70,6 +73,12 @@ export class Orc extends MeleeUnit {
                 Orc.walkImageLoaded = true;
             };
             Orc.walkImage.src = "/assets/Orc/Orc/Orc-Walk.png";
+        }
+
+        if (!Orc.deathImage) {
+            Orc.deathImage = new Image();
+            Orc.deathImage.onload = () => { Orc.deathImageLoaded = true; };
+            Orc.deathImage.src = "/assets/Orc/Orc/Orc-Death.png";
         }
     }
 

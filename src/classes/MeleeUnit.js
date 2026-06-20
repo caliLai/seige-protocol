@@ -1,4 +1,5 @@
 import { Unit } from "./Unit.js";
+import { sim } from "../runtime/sim.js";
 
 export class MeleeUnit extends Unit {
     isRecenteringToPath = false;
@@ -87,7 +88,7 @@ export class MeleeUnit extends Unit {
         if (distance <= desiredDistance) return;
 
         const angle = Math.atan2(dy, dx);
-        const frameStep = (this.moveSpeedPxPerSecond / 60) * 0.9;
+        const frameStep = (this.moveSpeedPxPerSecond / 60) * 0.9 * sim.speed;
         const maxStep = Math.max(0, distance - desiredDistance);
         const step = Math.min(frameStep, maxStep);
 
@@ -160,7 +161,7 @@ export class MeleeUnit extends Unit {
         }
 
         const angle = Math.atan2(dy, dx);
-        const frameStep = Math.min(this.moveSpeedPxPerSecond / 60, distance);
+        const frameStep = Math.min((this.moveSpeedPxPerSecond / 60) * sim.speed, distance);
         const step = Math.min(frameStep, distance);
 
         this.position.x += Math.cos(angle) * step;
@@ -179,10 +180,20 @@ export class MeleeUnit extends Unit {
         this.updateFacingDirectionToTarget();
         this.moveCloserToTargetWhileAttacking();
 
+        // Walk up to the tower before swinging. With the wider target-
+        // acquisition radius a unit locks onto a tower while still some way
+        // off, so don't start the attack animation until it's actually in
+        // striking range — until then it's just marching toward it.
+        if (!this.isAttacking && !this.isCloseEnoughToHit()) {
+            this.isMoving = true;
+            return;
+        }
+        this.isMoving = false;
+
         const now = performance.now();
 
         if (!this.isAttacking) {
-            if (now - this.lastAttackAt < this.attackCooldownMs) return;
+            if ((now - this.lastAttackAt) * sim.speed < this.attackCooldownMs) return;
 
             this.isAttacking = true;
             this.hasAppliedHit = false;
@@ -200,7 +211,7 @@ export class MeleeUnit extends Unit {
         const releaseFrame = Math.min(this.attackReleaseFrame, this.attackFrameCount - 1);
         if (!this.hasAppliedHit && this.currentAttackFrame >= releaseFrame) {
             if (!this.target.isDead && this.isCloseEnoughToHit()) {
-                this.target.takeDamage(this.attackStrength, this.team || this.ownerId || null);
+                this.target.takeDamage(this.attackStrength, this.team || this.ownerId || null, this.unitType);
             }
             this.hasAppliedHit = true;
         }

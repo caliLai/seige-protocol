@@ -1,4 +1,5 @@
 import { Unit } from "./Unit.js";
+import { sim } from "../runtime/sim.js";
 
 export class SkeletonArcher extends Unit {
     role = 'Undead Marksman';
@@ -45,6 +46,9 @@ export class SkeletonArcher extends Unit {
     static walkImage = null;
     static walkImageLoaded = false;
 
+    static deathImage = null;
+    static deathImageLoaded = false;
+
     static projectileImage = null;
     static projectileImageLoaded = false;
 
@@ -76,6 +80,12 @@ export class SkeletonArcher extends Unit {
                 SkeletonArcher.walkImageLoaded = true;
             };
             SkeletonArcher.walkImage.src = "/assets/Skeleton Archer/Skeleton Archer/Skeleton Archer-Walk.png";
+        }
+
+        if (!SkeletonArcher.deathImage) {
+            SkeletonArcher.deathImage = new Image();
+            SkeletonArcher.deathImage.onload = () => { SkeletonArcher.deathImageLoaded = true; };
+            SkeletonArcher.deathImage.src = "/assets/Skeleton Archer/Skeleton Archer/Skeleton Archer-Death.png";
         }
 
         if (!SkeletonArcher.projectileImage) {
@@ -184,7 +194,7 @@ export class SkeletonArcher extends Unit {
         const now = performance.now();
 
         if (!this.isAttacking) {
-            if (now - this.lastAttackAt < this.attackCooldownMs) return;
+            if ((now - this.lastAttackAt) * sim.speed < this.attackCooldownMs) return;
 
             this.isAttacking = true;
             this.hasReleasedProjectile = false;
@@ -258,7 +268,7 @@ export class SkeletonArcher extends Unit {
             const distance = Math.hypot(dx, dy);
 
             if (distance <= this.projectileSize + 4) {
-                target.takeDamage(projectile.damage, projectile.ownerId || this.team || this.ownerId || null);
+                target.takeDamage(projectile.damage, projectile.ownerId || this.team || this.ownerId || null, this.unitType);
                 return false;
             }
 

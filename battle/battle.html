@@ -157,7 +157,7 @@
           <div class="game-leaderboard-head">
             <span>RANK</span>
             <span>PLAYER</span>
-            <span>DEATHS</span>
+            <span>POINTS</span>
           </div>
 
           <div id="leaderboardBody" class="game-leaderboard-body"></div>
@@ -199,27 +199,6 @@
         </div>
       </div>
 
-      <div class="game-panel">
-        <div class="setup-pool-label">▶ WAVE INFORMATION</div>
-        <div class="game-wave-info">
-          <div class="game-wi-row"><span>WAVE TYPE</span><span class="game-wi-val">STANDARD</span></div>
-          <div class="game-wi-row"><span>RECOMMENDED POWER</span><span class="game-wi-val">3,200</span></div>
-          <div class="game-wi-row">
-            <span>WAVE REWARD</span>
-            <span class="game-wi-rewards-row">
-              <span class="game-coin">◆</span><span class="game-wi-val">120</span>
-              <span class="game-shard">◇</span><span class="game-wi-val">80</span>
-              <span class="game-badge">⛨</span><span class="game-wi-val">2</span>
-            </span>
-          </div>
-          <div class="game-wi-row">
-            <span>WAVE PROGRESS</span><span class="game-wi-val" id="waveProgressLabel">0%</span>
-          </div>
-          <div class="game-wi-bar">
-            <div class="game-wi-bar-fill" id="waveProgressBar"></div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- ═══ FOOTER LEGEND ═══ -->
@@ -326,38 +305,57 @@
       </div>
     </div>
 
-    <!-- Level Complete overlay -->
-    <div id="levelCompleteOverlay" class="game-victory-overlay hidden" role="dialog" aria-modal="true"
-      aria-labelledby="levelCompleteTitle" aria-hidden="true">
-      <div class="game-victory-card">
+    <!-- Wave-failed summary — all deployed units died, towers still stand.
+         Shows what each side lost and the tower damage they dealt this wave,
+         with a manual "advance to next wave" button. Either player's click
+         fires advance_wave (idempotent) and flips both clients to prep. -->
+    <div id="waveSummaryOverlay" class="game-victory-overlay game-wavesum-overlay hidden" role="dialog"
+      aria-modal="true" aria-labelledby="waveSummaryTitle" aria-hidden="true">
+      <div class="game-victory-card game-wavesum-card">
         <div class="game-victory-corner tl"></div>
         <div class="game-victory-corner tr"></div>
         <div class="game-victory-corner bl"></div>
         <div class="game-victory-corner br"></div>
         <div class="game-victory-content">
-          <div id="levelCompleteTitle" class="game-victory-title">⚔ LEVEL COMPLETE ⚔</div>
+          <div id="waveSummaryTitle" class="game-victory-title game-wavesum-title">⚔ WAVE REPULSED ⚔</div>
           <div class="game-victory-divider">
             <div class="dash-line"></div><span class="divider-icon">⚜</span>
             <div class="dash-line"></div>
           </div>
-          <div id="levelCompleteBody" class="game-victory-body">
-            THY HOSTS HAVE CONQUERED THIS FIELD.
-          </div>
+          <div class="game-victory-body">THINE HOST IS SPENT — THE WALLS YET STAND.</div>
 
-          <div class="game-victory-stats">
-            <div class="game-victory-stat"><span>TOWERS DESTROYED</span><span id="levelStatTowers">—</span></div>
-            <div class="game-victory-stat"><span>LIVES REMAINING</span><span id="levelStatLives">—</span></div>
-            <div class="game-victory-stat"><span>UNITS DEPLOYED</span><span id="levelStatUnits">—</span></div>
-          </div>
+          <div id="waveSummaryGrid" class="wave-sum-grid"></div>
 
           <div class="game-victory-actions">
-            <button type="button" id="nextLevelBtn" class="px-btn setup-ready-btn">
-              ▶ MARCH TO NEXT LEVEL
-            </button>
+            <button type="button" id="waveNextBtn" class="px-btn setup-ready-btn">⚔ ADVANCE TO NEXT WAVE ⚔</button>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Tower-destruction reward — three cards, each player picks ONE
+         independently. One card is always gold; the other two are run-long
+         buffs to one of the player's chosen unit types. Populated + wired in
+         battle.js (showRewardChoice). -->
+    <div id="rewardOverlay" class="game-victory-overlay reward-overlay hidden" role="dialog"
+      aria-modal="true" aria-labelledby="rewardTitle" aria-hidden="true">
+      <div class="reward-card-frame">
+        <div class="game-victory-corner tl"></div>
+        <div class="game-victory-corner tr"></div>
+        <div class="game-victory-corner bl"></div>
+        <div class="game-victory-corner br"></div>
+        <div class="reward-content">
+          <div id="rewardTitle" class="game-victory-title reward-title">⚔ TOWER FELLED ⚔</div>
+          <div class="reward-subtitle">— CLAIM THY SPOILS —</div>
+          <div class="game-victory-divider">
+            <div class="dash-line"></div><span class="divider-icon">⚜</span>
+            <div class="dash-line"></div>
+          </div>
+          <div id="rewardCards" class="reward-cards"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Abandon confirmation — triggered from the settings menu.
          Reuses the existing .confirm-overlay / .confirm-card-danger
          styles from lobby-styles.css so it matches the lobby's

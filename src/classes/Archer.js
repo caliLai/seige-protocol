@@ -1,4 +1,5 @@
 import { Unit } from "./Unit.js";
+import { sim } from "../runtime/sim.js";
 
 export class Archer extends Unit {
     role = 'Ranged Damage Dealer';
@@ -45,6 +46,9 @@ export class Archer extends Unit {
     static walkImage = null;
     static walkImageLoaded = false;
 
+    static deathImage = null;
+    static deathImageLoaded = false;
+
     static projectileImage = null;
     static projectileImageLoaded = false;
 
@@ -82,6 +86,12 @@ export class Archer extends Unit {
                 Archer.walkImageLoaded = true;
             };
             Archer.walkImage.src = "/assets/Archer/Archer/Archer-Walk.png";
+        }
+
+        if (!Archer.deathImage) {
+            Archer.deathImage = new Image();
+            Archer.deathImage.onload = () => { Archer.deathImageLoaded = true; };
+            Archer.deathImage.src = "/assets/Archer/Archer/Archer-Death.png";
         }
 
         if (!Archer.projectileImage) {
@@ -192,7 +202,7 @@ export class Archer extends Unit {
         const now = performance.now();
 
         if (!this.isAttacking) {
-            if (now - this.lastAttackAt < this.attackCooldownMs) return;
+            if ((now - this.lastAttackAt) * sim.speed < this.attackCooldownMs) return;
 
             this.isAttacking = true;
             this.hasReleasedProjectile = false;
@@ -264,7 +274,7 @@ export class Archer extends Unit {
 
             if (Math.hypot(dx, dy) <= this.projectileSize + 4) {
                 const attackerId = projectile.ownerId || this.team || this.ownerId || null;
-                target.takeDamage(projectile.damage, attackerId);
+                target.takeDamage(projectile.damage, attackerId, this.unitType);
                 return false;
             }
 

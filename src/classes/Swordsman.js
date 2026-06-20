@@ -42,6 +42,9 @@ export class Swordsman extends MeleeUnit {
     static walkImage = null;
     static walkImageLoaded = false;
 
+    static deathImage = null;
+    static deathImageLoaded = false;
+
     constructor(position, gameCanvas) {
         super(position, gameCanvas);
         Swordsman.loadAssets();
@@ -70,6 +73,12 @@ export class Swordsman extends MeleeUnit {
                 Swordsman.walkImageLoaded = true;
             };
             Swordsman.walkImage.src = "/assets/Swordsman/Swordsman/Swordsman-Walk.png";
+        }
+
+        if (!Swordsman.deathImage) {
+            Swordsman.deathImage = new Image();
+            Swordsman.deathImage.onload = () => { Swordsman.deathImageLoaded = true; };
+            Swordsman.deathImage.src = "/assets/Swordsman/Swordsman/Swordsman-Death.png";
         }
     }
 

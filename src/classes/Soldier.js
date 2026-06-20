@@ -44,6 +44,9 @@ export class Soldier extends MeleeUnit {
     static walkImage = null;
     static walkImageLoaded = false;
 
+    static deathImage = null;
+    static deathImageLoaded = false;
+
     constructor(position, gameCanvas) {
         super(position, gameCanvas);
         Soldier.loadAssets();
@@ -72,6 +75,12 @@ export class Soldier extends MeleeUnit {
                 Soldier.walkImageLoaded = true;
             };
             Soldier.walkImage.src = "/assets/Soldier/Soldier/Soldier-Walk.png";
+        }
+
+        if (!Soldier.deathImage) {
+            Soldier.deathImage = new Image();
+            Soldier.deathImage.onload = () => { Soldier.deathImageLoaded = true; };
+            Soldier.deathImage.src = "/assets/Soldier/Soldier/Soldier-Death.png";
         }
     }
 

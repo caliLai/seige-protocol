@@ -42,6 +42,9 @@ export class Skeleton extends MeleeUnit {
     static walkImage = null;
     static walkImageLoaded = false;
 
+    static deathImage = null;
+    static deathImageLoaded = false;
+
     constructor(position, gameCanvas) {
         super(position, gameCanvas);
         Skeleton.loadAssets();
@@ -70,6 +73,12 @@ export class Skeleton extends MeleeUnit {
                 Skeleton.walkImageLoaded = true;
             };
             Skeleton.walkImage.src = "/assets/Skeleton/Skeleton/Skeleton-Walk.png";
+        }
+
+        if (!Skeleton.deathImage) {
+            Skeleton.deathImage = new Image();
+            Skeleton.deathImage.onload = () => { Skeleton.deathImageLoaded = true; };
+            Skeleton.deathImage.src = "/assets/Skeleton/Skeleton/Skeleton-Death.png";
         }
     }
 

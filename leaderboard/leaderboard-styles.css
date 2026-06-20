@@ -1,0 +1,97 @@
+/* ═══════════════════════════════════════════════
+   HALL OF CONQUERORS — global leaderboard table styles.
+   Frame/card chrome is inherited from start-screen-styles.css; this only
+   styles the ranked list and a couple of layout tweaks for the wider card.
+   ═══════════════════════════════════════════════ */
+
+.lb-card-wrapper {
+  width: min(92vw, 560px);
+}
+
+.lb-card {
+  width: 100%;
+}
+
+.lb-title {
+  color: #f5c518;
+  font-size: 14px;
+}
+
+.lb-head,
+.lb-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 90px;
+  gap: 10px;
+  align-items: center;
+  font-family: 'Press Start 2P', monospace;
+}
+
+.lb-head {
+  padding: 0 10px 8px;
+  margin-top: 6px;
+  border-bottom: 2px dashed #4a4540;
+  font-size: 7px;
+  letter-spacing: 0.12em;
+  color: #8c7040;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.lb-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 10px 2px;
+}
+
+.lb-row {
+  padding: 9px 10px;
+  background: linear-gradient(180deg, #3a3228 0%, #1f1a14 100%);
+  border: 2px solid #1a1510;
+  box-shadow: 2px 2px 0 #0a0604;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  color: #f0d9a0;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.lb-row.is-top {
+  box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 1px rgba(245, 197, 24, 0.30);
+}
+
+.lb-row.is-me {
+  background: linear-gradient(180deg, #4a3f24 0%, #2a2110 100%);
+  box-shadow: 2px 2px 0 #0a0604, inset 0 0 0 2px rgba(245, 197, 24, 0.55);
+}
+
+.lb-rank {
+  color: #f5c518;
+}
+
+.lb-name {
+  color: #fff7d6;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.lb-points {
+  text-align: right;
+  color: #f5c518;
+}
+
+.lb-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 24px 8px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  color: #8c7040;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.lb-actions {
+  margin-top: 14px;
+}

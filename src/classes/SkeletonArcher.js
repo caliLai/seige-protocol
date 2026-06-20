@@ -1,4 +1,5 @@
 import { Unit } from "./Unit.js";
+import { sim } from "../runtime/sim.js";
 
 export class SkeletonArcher extends Unit {
     role = 'Undead Marksman';
@@ -193,7 +194,7 @@ export class SkeletonArcher extends Unit {
         const now = performance.now();
 
         if (!this.isAttacking) {
-            if (now - this.lastAttackAt < this.attackCooldownMs) return;
+            if ((now - this.lastAttackAt) * sim.speed < this.attackCooldownMs) return;
 
             this.isAttacking = true;
             this.hasReleasedProjectile = false;

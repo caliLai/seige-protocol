@@ -357,7 +357,7 @@ document.getElementById('rosterBtn').addEventListener('click', () => {
 });
 
 document.getElementById('achievementsBtn').addEventListener('click', () => {
-  showAlert('★ NO DEEDS RECORDED YET. GO FORTH AND CONQUER!');
+  smoothNavigate('/leaderboard/leaderboard.html');
 });
 
 document.getElementById('settingsBtn').addEventListener('click', () => {

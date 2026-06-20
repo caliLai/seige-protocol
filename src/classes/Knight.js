@@ -1,4 +1,5 @@
 import { Unit } from "./Unit.js";
+import { sim } from "../runtime/sim.js";
 
 export class Knight extends Unit {
     role = 'Frontline Bruiser';
@@ -162,10 +163,28 @@ export class Knight extends Unit {
             return;
         }
 
+        // Close in to striking range before swinging. The Knight is melee, but
+        // with the wider target-acquisition radius it locks onto a tower while
+        // still well away from it — walk up first (walk animation), and only
+        // start the attack animation once in contact range.
+        const dx = this.target.centre.x - this.centre.x;
+        const dy = this.target.centre.y - this.centre.y;
+        const dist = Math.hypot(dx, dy);
+        const contact = (this.width + this.target.width) / 2 + 8;
+        if (!this.isAttacking && dist > contact + 6) {
+            const ang = Math.atan2(dy, dx);
+            const step = Math.min((this.moveSpeedPxPerSecond / 60) * 0.9 * sim.speed, dist - contact);
+            this.position.x += Math.cos(ang) * step;
+            this.position.y += Math.sin(ang) * step;
+            this.isMoving = true;
+            return;
+        }
+        this.isMoving = false;
+
         const now = performance.now();
 
         if (!this.isAttacking) {
-            if (now - this.lastAttackAt < this.attackCooldownMs) return;
+            if ((now - this.lastAttackAt) * sim.speed < this.attackCooldownMs) return;
 
             this.isAttacking = true;
             this.hasAppliedHit = false;

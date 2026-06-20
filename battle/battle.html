@@ -157,7 +157,7 @@
           <div class="game-leaderboard-head">
             <span>RANK</span>
             <span>PLAYER</span>
-            <span>DEATHS</span>
+            <span>POINTS</span>
           </div>
 
           <div id="leaderboardBody" class="game-leaderboard-body"></div>
@@ -329,6 +329,29 @@
           <div class="game-victory-actions">
             <button type="button" id="waveNextBtn" class="px-btn setup-ready-btn">⚔ ADVANCE TO NEXT WAVE ⚔</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tower-destruction reward — three cards, each player picks ONE
+         independently. One card is always gold; the other two are run-long
+         buffs to one of the player's chosen unit types. Populated + wired in
+         battle.js (showRewardChoice). -->
+    <div id="rewardOverlay" class="game-victory-overlay reward-overlay hidden" role="dialog"
+      aria-modal="true" aria-labelledby="rewardTitle" aria-hidden="true">
+      <div class="reward-card-frame">
+        <div class="game-victory-corner tl"></div>
+        <div class="game-victory-corner tr"></div>
+        <div class="game-victory-corner bl"></div>
+        <div class="game-victory-corner br"></div>
+        <div class="reward-content">
+          <div id="rewardTitle" class="game-victory-title reward-title">⚔ TOWER FELLED ⚔</div>
+          <div class="reward-subtitle">— CLAIM THY SPOILS —</div>
+          <div class="game-victory-divider">
+            <div class="dash-line"></div><span class="divider-icon">⚜</span>
+            <div class="dash-line"></div>
+          </div>
+          <div id="rewardCards" class="reward-cards"></div>
         </div>
       </div>
     </div>

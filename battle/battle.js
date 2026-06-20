@@ -8,8 +8,9 @@
 import { supabase } from '/lib/supabase.js';
 import { enforceSingleSession } from '/lib/single-session.js';
 import { UNITS, UNITS_BY_ID, idleSpriteUrl, deployCost, deployCostById } from '/lib/units.js';
-import { path } from '/src/data/path.js';
-import { towerLocations } from '/src/data/towerLocations.js';
+import { getMapByIndex, isLastMap } from '/src/data/maps.js';
+import { generateTowers } from '/src/runtime/towerPlacement.js';
+import { resetBuffs, addBuff, applyBuffsToUnit } from '/src/runtime/buffs.js';
 import { Archer } from '/src/classes/Archer.js';
 import { Knight } from '/src/classes/Knight.js';
 import { Orc } from '/src/classes/Orc.js';
@@ -17,7 +18,6 @@ import { Soldier } from '/src/classes/Soldier.js';
 import { Swordsman } from '/src/classes/Swordsman.js';
 import { Slime } from '/src/classes/Slime.js';
 import { Skeleton } from '/src/classes/Skeleton.js';
-import { MeleeUnit } from '/src/classes/MeleeUnit.js';
 import { Tower } from '/src/classes/Tower.js';
 import { Unit } from '/src/classes/Unit.js';
 import { sim } from '/src/runtime/sim.js';
@@ -27,8 +27,10 @@ import { initTowerMatchups, getTowerMatchupSummary } from '/src/runtime/towerMat
 import {
   resetLeaderboard,
   setLeaderboardNames,
+  setLeaderboardPoints,
   setCurrentWave,
   getLeaderboardRows,
+  creditTowerPoints,
   leaderboardState,
 } from '/src/runtime/leaderboard.js';
 
@@ -146,10 +148,23 @@ const towers = [];
 let attackUnits = [];
 let animationId = null;
 let mapLoaded = false;
+
+// Which map of the run we're on, and its derived data. Set for real from
+// siege.map_index during INIT; updated when advance_map bumps the index.
+// `activePath` is the road units march along on the current map — every
+// spawned unit gets it as its pathRef, so swapping it switches maps.
+let mapIndex = 0;
+let currentMap = getMapByIndex(0);
+let activePath = currentMap.path;
 let battleStarted = false;
 let towersDestroyedCount = 0;
 let totalTowers = 0;
 let unitsDeployedCount = 0;
+// Run-wide totals (across every map/wave), shown on the end screen. Unlike the
+// per-map towersDestroyedCount / per-wave unitsDeployedCount, these only reset
+// at the very start of a run.
+let runTowersDestroyed = 0;
+let runUnitsDeployed = 0;
 let explosions = [];
 // Single end-of-match guard (used for both victory and defeat) so the
 // spawn timeline, settle timer, and overlay flips all key off the same
@@ -346,10 +361,10 @@ const animateSprite = async (spriteEl, unitId, scaleMultiplier = 1.6) => {
 const loadProfile = async (userId) => {
   const { data } = await supabase
     .from('profiles')
-    .select('user_id, username, points')
+    .select('user_id, username, points, tower_points')
     .eq('user_id', userId)
     .maybeSingle();
-  return data || { user_id: userId, username: 'KNIGHT', points: 0 };
+  return data || { user_id: userId, username: 'KNIGHT', points: 0, tower_points: 0 };
 };
 
 const loadSiege = async (siegeId) => {
@@ -479,7 +494,7 @@ const renderLeaderboard = () => {
     <div class="game-leaderboard-row is-${row.side}">
       <span class="game-leaderboard-rank">#${row.rank}</span>
       <span class="game-leaderboard-name">${escapeHtml(row.name)}</span>
-      <span class="game-leaderboard-deaths">${row.unitDeaths}</span>
+      <span class="game-leaderboard-points">${row.points}</span>
     </div>
   `).join('');
 };
@@ -675,6 +690,60 @@ const myGoldNow = () => {
   return Number.isFinite(v) && v > 0 ? v : startingGold;
 };
 
+// Cheapest unit a side could deploy this run (Infinity if they picked none).
+const cheapestUnitCost = (side) => {
+  const types = siege?.[`${side}_units`] || [];
+  let min = Infinity;
+  for (const id of types) { const c = deployCostById(id); if (c < min) min = c; }
+  return min;
+};
+
+// If, at the start of a wave, NEITHER player can afford a single unit, the
+// siege is unwinnable (no one can mount an assault) → game over. Only judged
+// once gold has actually been seeded, so the wave-1 pre-seed race can't trip
+// a false defeat.
+const checkGoldStarvation = () => {
+  if (matchEnded) return;
+  const hg = siege?.host_gold;
+  const ag = siege?.ally_gold;
+  const allyPresent = !!siege?.ally_id;
+  if (!Number.isFinite(hg)) return;                 // host gold not seeded yet
+  if (allyPresent && !Number.isFinite(ag)) return;  // ally gold not seeded yet
+
+  const hostBroke = hg < cheapestUnitCost('host');
+  const allyBroke = !allyPresent || ag < cheapestUnitCost('ally');
+  if (hostBroke && allyBroke) {
+    showAlert('☠ THY COFFERS ARE BARE — THE SIEGE IS LOST', 'error');
+    showEndOverlay('defeat');
+  }
+};
+
+const sideGoldVal = (side) => {
+  const v = siege?.[`${side}_gold`];
+  return Number.isFinite(v) ? v : 0;
+};
+
+// A side can't take part in this wave when it has nothing queued AND can't
+// afford any unit — i.e. it's broke. Such a side doesn't need to "ready up"
+// for the wave to start (it has nothing to lock in).
+const sideCantParticipate = (side) => {
+  const q = siege?.[`${side}_queue`] || [];
+  return q.length === 0 && sideGoldVal(side) < cheapestUnitCost(side);
+};
+
+// The wave may begin once every side that CAN participate is ready. A broke
+// side is skipped, so a single solvent player can launch the wave alone.
+const canStartWave = () => {
+  const hostReady = !!siege?.host_queue_ready;
+  const allyReady = !!siege?.ally_queue_ready;
+  const allyPresent = !!siege?.ally_id;
+  if (!allyPresent) return hostReady;                       // solo siege
+  if (hostReady && allyReady) return true;
+  if (hostReady && !allyReady && sideCantParticipate('ally')) return true;
+  if (allyReady && !hostReady && sideCantParticipate('host')) return true;
+  return false;
+};
+
 // All queue mutations now go through migration 008's RPCs. The local
 // catalog still drives the UI's pre-flight checks (so we can disable
 // unaffordable cards before the round-trip), but the *authoritative*
@@ -722,15 +791,26 @@ readyBtn.addEventListener('click', toggleReady);
 // ── BATTLE RUNTIME ──
 const initialiseTowers = () => {
   towers.length = 0;
-  for (const location of towerLocations) {
-    towers.push(new Tower(location, gameCanvas));
+  // Seeded from siege id + map index so BOTH clients generate the identical
+  // set of towers (positions hugging the road sides, types from the map pool).
+  let spots = generateTowers({
+    seed: `${siege?.id ?? 'siege'}:${mapIndex}`,
+    path: currentMap.path,
+    types: currentMap.towerTypes,
+    count: 7,
+  });
+  // Defensive fallback to the map's fixed spots if generation ever comes up
+  // empty (e.g. a degenerate path).
+  if (!spots.length) spots = (currentMap.towers || []).map(p => ({ ...p, type: 25 }));
+  for (const s of spots) {
+    towers.push(new Tower({ x: s.x, y: s.y }, gameCanvas, s.type));
   }
   totalTowers = towers.length;
 };
 
 const pathStartDirection = () => {
-  const p0 = path[0];
-  const p1 = path[1] || path[0];
+  const p0 = activePath[0];
+  const p1 = activePath[1] || activePath[0];
   const dx = p1.x - p0.x;
   const dy = p1.y - p0.y;
   const len = Math.hypot(dx, dy) || 1;
@@ -794,7 +874,7 @@ const createUnitFromId = (unitId, position, laneOffset) => {
   // matchup system to look up this unit's damage multipliers vs towers.
   unit.unitType = id;
   unit.laneOffset = (typeof laneOffset === 'number') ? laneOffset : 0;
-  unit.pathRef = path;
+  unit.pathRef = activePath;
   return unit;
 };
 
@@ -834,15 +914,18 @@ const spawnWaveQueues = () => {
       setTimeout(() => {
         if (matchEnded) return;
         if (myAttempt !== waveAttemptId) return; // stale wave — drop
-        const pos = { x: path[0].x, y: path[0].y };
+        const pos = { x: activePath[0].x, y: activePath[0].y };
         const unit = createUnitFromId(unitId, pos, formationLaneOffset(laneOffset, i));
         unit.team = team;
         unit.ownerId = team;
+        applyBuffsToUnit(unit); // run-long reward buffs for this side/type
+
         const pathSpacing = formationPathSpacing(i);
         unit.position.x -= dir.x * pathSpacing;
         unit.position.y -= dir.y * pathSpacing;
         attackUnits.push(unit);
         unitsDeployedCount++;
+        runUnitsDeployed++;
       }, i * spawnGap);
     });
   };
@@ -892,14 +975,23 @@ const showEndOverlay = async (outcome) => {
   matchEnded = true;
   if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
 
+  // Drop any pending tower-reward rounds and unfreeze — the run is over.
+  rewardRounds.forEach(r => { if (r.waitTimer) clearTimeout(r.waitTimer); });
+  rewardRounds.length = 0;
+  remotePicks.clear();
+  rewardActive = false;
+  if (rewardOverlay) { rewardOverlay.classList.add('hidden'); rewardOverlay.setAttribute('aria-hidden', 'true'); }
+
   const overlay = outcome === 'victory' ? victoryOverlay : defeatOverlay;
   const statsOf = outcome === 'victory'
     ? { towers: statTowersEl, lives: statLivesEl, units: statUnitsEl }
     : { towers: statTowersDefeatEl, lives: statLivesDefeatEl, units: statUnitsDefeatEl };
 
-  if (statsOf.towers) statsOf.towers.textContent = `${towersDestroyedCount} / ${totalTowers}`;
+  // Run-wide totals: towers destroyed and units deployed across EVERY map of
+  // the run, not just the current map/wave.
+  if (statsOf.towers) statsOf.towers.textContent = String(runTowersDestroyed);
   if (statsOf.lives)  statsOf.lives.textContent = `${livesRemaining()} / ${livesMax()}`;
-  if (statsOf.units)  statsOf.units.textContent = String(unitsDeployedCount);
+  if (statsOf.units)  statsOf.units.textContent = String(runUnitsDeployed);
 
   overlay.classList.remove('hidden');
   overlay.setAttribute('aria-hidden', 'false');
@@ -1003,6 +1095,36 @@ const disbandAndLeave = async (btn) => {
 victoryLobbyBtn.addEventListener('click', () => disbandAndLeave(victoryLobbyBtn));
 if (defeatLobbyBtn) defeatLobbyBtn.addEventListener('click', () => disbandAndLeave(defeatLobbyBtn));
 
+// ── GAMEPLAY SPEED (x1 / x2 / x4) ──────────────
+// The top-right speed button cycles the shared sim.speed multiplier. Unit
+// movement scales by it per frame and every attack cooldown elapses that many
+// times faster, so the whole match fast-forwards. The chosen speed is
+// broadcast to the other client so BOTH sims fast-forward together and the
+// two battlefields stay in lockstep. Assigned once the realtime channel is up.
+let battleBroadcast = null;
+const speedBtn = document.getElementById('speedBtn');
+const SPEED_STEPS = [1, 2, 4];
+
+// Apply a speed locally (movement + cooldowns read sim.speed) and optionally
+// tell the other client. Broadcast is fire-and-forget — if the channel isn't
+// subscribed yet the local change still takes effect.
+const setGameSpeed = (speed, { broadcast = false } = {}) => {
+  if (!SPEED_STEPS.includes(speed)) return;
+  sim.speed = speed;
+  if (speedBtn) speedBtn.textContent = `x${speed}`;
+  if (broadcast && battleBroadcast) {
+    battleBroadcast.send({ type: 'broadcast', event: 'speed', payload: { speed } });
+  }
+};
+
+if (speedBtn) {
+  speedBtn.textContent = `x${sim.speed}`;
+  speedBtn.addEventListener('click', () => {
+    const next = (SPEED_STEPS.indexOf(sim.speed) + 1) % SPEED_STEPS.length;
+    setGameSpeed(SPEED_STEPS[next], { broadcast: true });
+  });
+}
+
 // ── SETTINGS MENU + ABANDON SIEGE ─────────────
 // The ⚙ button toggles a dropdown menu anchored beneath it. Today
 // the menu just hosts the Abandon Siege action; pause/speed/etc.
@@ -1090,6 +1212,146 @@ abandonConfirmBtn.addEventListener('click', async () => {
   await disbandAndLeave(abandonConfirmBtn);
 });
 
+// ── TOWER REWARD POPUP ──
+// Each fallen tower offers THIS player three cards: one gold (50–150) and two
+// run-long buffs to one of their chosen unit types. Picks are independent per
+// player. Gold goes through the award_reward_gold RPC (server clamps 50–150);
+// buff picks are applied locally AND broadcast so the other client applies the
+// same buff to this side's units (both clients simulate all units).
+const rewardOverlay = document.getElementById('rewardOverlay');
+const rewardCardsEl = document.getElementById('rewardCards');
+const mySideKey = () => (isHost ? 'host' : 'ally');
+const myUnitTypes = () => (siege?.[`${mySideKey()}_units`] || []);
+
+const BUFF_OPTIONS = [
+  { stat: 'damage', mult: 1.25, label: '+25% DAMAGE', icon: '⚔' },
+  { stat: 'damage', mult: 1.4,  label: '+40% DAMAGE', icon: '⚔' },
+  { stat: 'hp',     mult: 1.3,  label: '+30% HEALTH', icon: '❤' },
+  { stat: 'hp',     mult: 1.5,  label: '+50% HEALTH', icon: '❤' },
+  { stat: 'speed',  mult: 1.2,  label: '+20% SPEED',  icon: '✦' },
+];
+const pickRand = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const randGold = () => 50 + Math.floor(Math.random() * 101);
+
+// One gold card + two distinct buff cards (or extra gold if the player has no
+// unit types selected).
+const buildRewardCards = () => {
+  const cards = [{ kind: 'gold', amount: randGold() }];
+  const types = myUnitTypes();
+  const used = new Set();
+  for (let n = 0; n < 2; n++) {
+    if (!types.length) { cards.push({ kind: 'gold', amount: randGold() }); continue; }
+    let opt, unitType, key, tries = 0;
+    do { opt = pickRand(BUFF_OPTIONS); unitType = pickRand(types); key = unitType + opt.stat + opt.mult; tries++; }
+    while (used.has(key) && tries < 12);
+    used.add(key);
+    cards.push({ kind: 'buff', unitType, stat: opt.stat, mult: opt.mult, label: opt.label, icon: opt.icon });
+  }
+  return cards;
+};
+
+// LOCKSTEP: the battle stays frozen on BOTH clients until BOTH players have
+// chosen this round's reward. Each fallen tower is a "round" keyed by its
+// destruction sequence number (towerIndex), which pairs up across clients even
+// if towers die in a slightly different order — the reward is generic, so we
+// only need matching counts. Picks are exchanged over the realtime channel.
+let rewardActive = false;                 // sim frozen while true
+const rewardRounds = [];                  // queue of { id, localDone, remoteDone, waitTimer }
+const remotePicks = new Set();            // ally picks that arrived before we made the round
+const ALLY_WAIT_MS = 20000;               // fail-safe so a disconnected ally can't hang the run
+const isSoloSiege = () => !siege?.ally_id;
+
+// Replace the popup body with a "waiting for ally" state after the local pick.
+const renderWaitingForAlly = () => {
+  rewardCardsEl.innerHTML =
+    `<div class="reward-waiting">▌ AWAITING THINE ALLY'S CHOICE ▐</div>`;
+};
+
+const resolveFrontRound = () => {
+  const r = rewardRounds[0];
+  if (!r || !r.localDone || !(r.remoteDone || isSoloSiege())) return;
+  if (r.waitTimer) { clearTimeout(r.waitTimer); r.waitTimer = null; }
+  rewardRounds.shift();
+  rewardActive = false;
+  rewardOverlay.classList.add('hidden');
+  rewardOverlay.setAttribute('aria-hidden', 'true');
+  showNextReward();            // next queued round, or unfreeze if none
+};
+
+const chooseReward = (card) => {
+  const r = rewardRounds[0];
+  if (!r || r.localDone) return;            // already picked this round
+  r.localDone = true;
+
+  if (card.kind === 'gold') {
+    callBattleRpc('award_reward_gold', { p_siege: siege.id, p_amount: card.amount }, false, ['wrong_phase']);
+  } else {
+    const buff = { unitType: card.unitType, stat: card.stat, mult: card.mult, label: `${card.unitType} ${card.label}` };
+    addBuff(mySideKey(), buff);
+    if (battleBroadcast) {
+      battleBroadcast.send({ type: 'broadcast', event: 'buff', payload: { side: mySideKey(), buff } });
+    }
+    showAlert(`✦ ${card.unitType.toUpperCase()} ${card.label}`);
+  }
+
+  // Tell the ally we've chosen this round.
+  if (battleBroadcast) {
+    battleBroadcast.send({ type: 'broadcast', event: 'reward-picked', payload: { round: r.id, side: mySideKey() } });
+  }
+
+  if (r.remoteDone || isSoloSiege()) {
+    resolveFrontRound();
+  } else {
+    renderWaitingForAlly();
+    r.waitTimer = setTimeout(() => { r.remoteDone = true; resolveFrontRound(); }, ALLY_WAIT_MS);
+  }
+};
+
+// The ally finished choosing round `id` (or buffer it if we're not there yet).
+const onAllyRewardPick = (id) => {
+  const r = rewardRounds.find((rr) => rr.id === id);
+  if (r) { r.remoteDone = true; resolveFrontRound(); }
+  else remotePicks.add(id);
+};
+
+function showNextReward() {
+  if (!rewardOverlay || rewardActive || matchEnded) return;
+  const r = rewardRounds[0];
+  if (!r) return;
+  rewardActive = true;
+
+  const cards = buildRewardCards();
+  rewardCardsEl.innerHTML = '';
+  cards.forEach((card) => {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = `reward-card ${card.kind === 'gold' ? 'is-gold' : 'is-buff'}`;
+    el.innerHTML = card.kind === 'gold'
+      ? `<span class="reward-card-icon">◆</span>
+         <span class="reward-card-kind">GOLD</span>
+         <span class="reward-card-title">+${card.amount}</span>
+         <span class="reward-card-desc">BATTLE GOLD</span>`
+      : `<span class="reward-card-icon">${card.icon}</span>
+         <span class="reward-card-kind">BUFF · RUN-LONG</span>
+         <span class="reward-card-title">${escapeHtml(card.unitType.toUpperCase())}</span>
+         <span class="reward-card-desc">${card.label}</span>`;
+    el.addEventListener('click', () => chooseReward(card));
+    rewardCardsEl.appendChild(el);
+  });
+
+  rewardOverlay.classList.remove('hidden');
+  rewardOverlay.setAttribute('aria-hidden', 'false');
+}
+
+// Queue a reward round for a fallen tower (called once per destruction).
+const enqueueReward = (towerSeq) => {
+  if (!rewardOverlay) return;
+  const id = Number(towerSeq) || 0;
+  const remoteDone = remotePicks.delete(id) || isSoloSiege();
+  rewardRounds.push({ id, localDone: false, remoteDone, waitTimer: null });
+  showNextReward();
+};
+
 // ── BATTLE EVENT WIRING ──
 // All discrete combat outcomes go through battleEvents above. Local
 // listeners drive HUD + state writes; the sync layer can mirror.
@@ -1098,31 +1360,37 @@ abandonConfirmBtn.addEventListener('click', async () => {
 // reward. Host writes both gold columns so the row reflects the shared
 // payout (game-flow §10 — both players bank tower-kill gold).
 battleEvents.addEventListener('tower-destroyed', (e) => {
-  const { lastAttackerTeam, reward, x, y } = e.detail;
+  const { lastAttackerTeam, towerIndex, x, y } = e.detail;
 
   if (typeof x === 'number' && typeof y === 'number') {
     spawnExplosion(x, y);
   }
 
-  if (lastAttackerTeam) creditTowerKill(lastAttackerTeam);
+  if (lastAttackerTeam) {
+    creditTowerKill(lastAttackerTeam);
 
-  // Host-only: the server-side award_tower_kill RPC re-derives the
-  // reward amount from difficulty_settings so we don't have to (and
-  // a tampered client can't claim a tower was worth 999 gold). The
-  // `reward` field on the event is now informational only — kept on
-  // the event so contribution.js can still log the kill, but it's
-  // not what the server pays out on.
-  //
-  // wrong_phase is silenced: when the FINAL tower dies, this RPC
-  // races set_match_outcome (fired from the wave-completed handler
-  // in the same frame). If set_match_outcome lands first, phase
-  // flips to 'complete' and this call is rejected with wrong_phase
-  // — surfacing that as an alert would show "THE MOMENT HAS PASSED"
-  // right as the victory overlay animates in. Benign loss of 80 gold
-  // on the very last tower, match is over anyway.
-  if (isHost) {
-    callBattleRpc('award_tower_kill', { p_siege: siege.id }, true, ['wrong_phase']);
+    // Killing-blow side earns 10 board points this match...
+    creditTowerPoints(lastAttackerTeam);
+    renderLeaderboard();
+
+    // ...and the host persists those 10 points to that player's lifetime
+    // tower-kill score (profiles.tower_points) via the server-authoritative
+    // RPC, which maps the team to the right user. wrong_phase is silenced for
+    // the final-tower race with set_match_outcome.
+    if (isHost) {
+      callBattleRpc(
+        'award_tower_points',
+        { p_siege: siege.id, p_team: lastAttackerTeam },
+        false,
+        ['wrong_phase'],
+      );
+    }
   }
+
+  // Every fallen tower offers THIS player a reward choice (gold or a buff).
+  // Both clients queue their own popup — each player picks independently.
+  // Replaces the old auto gold-to-both award_tower_kill payout.
+  enqueueReward(typeof towerIndex === 'number' ? towerIndex : towersDestroyedCount);
 });
 
 // ── WAVE-FAILED SUMMARY POPUP ──
@@ -1169,7 +1437,7 @@ const showWaveSummary = (waveNum) => {
     sideSummaryHtml(leaderboardState.ally.label, siege.ally_queue, allyDmg);
   if (waveNextBtn) {
     waveNextBtn.disabled = false;
-    waveNextBtn.textContent = `⚔ ADVANCE TO WAVE ${waveNum + 1} ⚔`;
+    waveNextBtn.textContent = `⚔ ADVANCE TO NEXT WAVE ⚔`;
   }
   waveSummaryOverlay.classList.remove('hidden');
   waveSummaryOverlay.setAttribute('aria-hidden', 'false');
@@ -1192,10 +1460,18 @@ if (waveNextBtn) {
   });
 }
 
-// All towers destroyed = victory, regardless of which wave we're on.
-// Clearing the map early is the win condition; remaining waves are
+// All towers destroyed = this map is cleared, regardless of which wave we're
+// on. Clearing the map within the wave limit is the goal; remaining waves are
 // "you had room to spare," not unfinished work.
+//   • Not the last map → march to the next map (advance_map, idempotent —
+//     the realtime echo reloads the map + re-enters prep on both clients).
+//   • Last map → the whole run is won.
 battleEvents.addEventListener('wave-completed', async () => {
+  if (!isLastMap(mapIndex)) {
+    showAlert(`⚔ ${currentMap.name} CLEARED — MARCH ONWARD ⚔`);
+    await callBattleRpc('advance_map', { p_siege: siege.id }, false);
+    return;
+  }
   await showEndOverlay('victory');
 });
 
@@ -1256,9 +1532,9 @@ let lastFrameTime = performance.now();
 const nearestPathSegmentEnd = (x, y) => {
   let bestDistSq = Infinity;
   let bestEnd = 1;
-  for (let i = 0; i < path.length - 1; i++) {
-    const ax = path[i].x,     ay = path[i].y;
-    const bx = path[i + 1].x, by = path[i + 1].y;
+  for (let i = 0; i < activePath.length - 1; i++) {
+    const ax = activePath[i].x,     ay = activePath[i].y;
+    const bx = activePath[i + 1].x, by = activePath[i + 1].y;
     const dx = bx - ax, dy = by - ay;
     const lenSq = dx * dx + dy * dy;
     let t = lenSq > 0 ? ((x - ax) * dx + (y - ay) * dy) / lenSq : 0;
@@ -1291,7 +1567,7 @@ const promoteToSimmer = () => {
     unit.position.y = u.y;
     unit.health = Math.max(1, u.h);
     if (u.m && u.m > unit.maxHealth) unit.maxHealth = u.m;
-    unit.pathRef = path;
+    unit.pathRef = activePath;
     unit.pathIndex = nearestPathSegmentEnd(u.x, u.y);
     rebuilt.push(unit);
   }
@@ -1413,6 +1689,7 @@ const renderObservedState = () => {
   while (towersDestroyedCount < snap.td && towers.length > 0) {
     const dead = towers.shift();
     towersDestroyedCount++;
+    runTowersDestroyed++;
     if (dead?.centre) spawnExplosion(dead.centre.x, dead.centre.y);
   }
   updateWaveProgress();
@@ -1588,8 +1865,15 @@ const unitCanReachTower = (unit, tower) => {
   const dy = tower.centre.y - unit.centre.y;
   const distance = Math.hypot(dx, dy);
   const towerBuffer = Math.max(tower.width, tower.height) / 2;
-  const meleeAdjustment = unit instanceof MeleeUnit ? -8 : 0;
-  return distance <= unit.attackRadius + towerBuffer + meleeAdjustment;
+  // Target-ACQUISITION radius, deliberately wider than a unit's raw attack
+  // range. Once a unit commits to a tower it stops marching — melee units then
+  // close in to strike, ranged fire from where they stand. Short-range melee
+  // units (attackRadius ~80) would otherwise march straight past road-side
+  // towers whenever lane spread or a high sim-speed frame jump kept them just
+  // outside range for the brief pass. The floor guarantees a generous commit
+  // window for every unit type.
+  const engageRadius = Math.max(unit.attackRadius, 130);
+  return distance <= engageRadius + towerBuffer;
 };
 
 // ── TOWER INFORMATION PANEL ──
@@ -1616,14 +1900,15 @@ const renderTowerInfo = () => {
   }
   towerInfoEl.classList.add('has-info');
 
-  const { weakTo, resists } = getTowerMatchupSummary();
+  // Per-type matchup: each tower type has its own weaknesses/resistances.
+  const { weakTo, resists } = getTowerMatchupSummary(selectedTower.type);
   const destroyed = towerIsDestroyed(selectedTower);
   const hpText = destroyed
     ? 'DESTROYED'
     : `${Math.max(0, Math.round(selectedTower.health))} / ${selectedTower.maxHealth}`;
 
   towerInfoEl.innerHTML = `
-    <div class="tower-info-row"><span class="tower-info-key">TYPE</span><span class="tower-info-val">STONE TOWER</span></div>
+    <div class="tower-info-row"><span class="tower-info-key">TYPE</span><span class="tower-info-val">MK ${selectedTower.type} TOWER</span></div>
     <div class="tower-info-row"><span class="tower-info-key">HP</span><span class="tower-info-val" id="towerInfoHp">${hpText}</span></div>
     <div class="tower-info-row tower-info-weak"><span class="tower-info-key">WEAK TO</span><span class="tower-info-val">${weakTo.length ? weakTo.join(', ') : '—'}</span></div>
     <div class="tower-info-row tower-info-resist"><span class="tower-info-key">RESISTS</span><span class="tower-info-val">${resists.length ? resists.join(', ') : '—'}</span></div>
@@ -1675,6 +1960,18 @@ const animate = () => {
     return;
   }
 
+  // A reward popup is up — the battle is BLOCKED until this player picks.
+  // Re-render the current frame (entities frozen in place) without advancing
+  // the sim, so the battlefield stays visible behind the modal but nothing
+  // moves, attacks, or dies while choosing.
+  if (rewardActive) {
+    towers.forEach(t => t.render());
+    attackUnits.forEach(u => (u.isDead ? u.renderDeath() : u.render()));
+    updateAndRenderExplosions();
+    updateTowerInfoHp();
+    return;
+  }
+
   // Clear out any destroyed towers — anywhere in the array, not just the
   // front of the line. Units can now bring towers down out of order, so a
   // dead one may sit at any index. Each removal credits the killing side.
@@ -1682,6 +1979,7 @@ const animate = () => {
     if (!towers[i].isDead) continue;
     const dead = towers.splice(i, 1)[0];
     towersDestroyedCount++;
+    runTowersDestroyed++;
     updateWaveProgress();
     renderHeader();
     emit('tower-destroyed', {
@@ -1692,7 +1990,9 @@ const animate = () => {
       y: dead?.centre?.y ?? dead?.position?.y ?? 0,
     });
   }
-  if (towers.length === 0) checkWaveOutcome();
+  // Defer map-clear/victory while a reward popup is open, so the last tower's
+  // reward is chosen before the map advances or the run ends.
+  if (towers.length === 0 && !rewardActive) checkWaveOutcome();
 
   // Each unit locks onto the nearest tower it can actually reach — scanning
   // ALL towers, not just towers[0]. Previously a unit only ever checked the
@@ -1701,6 +2001,7 @@ const animate = () => {
   for (const unit of attackUnits) {
     if (!unit) continue;
 
+    const hadTarget = !!unit.target;
     let nearest = null;
     let nearestDistance = Infinity;
     for (const tower of towers) {
@@ -1716,6 +2017,14 @@ const animate = () => {
       }
     }
     unit.target = nearest;
+
+    // Just disengaged (the tower fell or moved out of range): the unit likely
+    // detoured off the road to reach it, so its pathIndex now points at a
+    // waypoint it already passed — resuming would march it BACKWARDS. Re-anchor
+    // to the nearest segment's forward waypoint so it continues onward.
+    if (hadTarget && !nearest) {
+      unit.pathIndex = nearestPathSegmentEnd(unit.centre.x, unit.centre.y);
+    }
   }
 
   
@@ -1736,7 +2045,7 @@ const animate = () => {
   // Continuously check whether the wave has resolved so failure feedback
   // is instant. The settle timer in spawnWaveQueues() is still kept as a
   // belt-and-braces fallback in case unitsDeployedCount somehow undercounts.
-  if (battleStarted) checkWaveOutcome();
+  if (battleStarted && !rewardActive) checkWaveOutcome();
 };
 
 // Kick off one wave of combat. Called for each wave in the multi-wave
@@ -1823,10 +2132,21 @@ const startWave = () => {
   // either phase='prep' (waits for echo → spawn) or phase='battle'
   // (observes), instead of re-spawning at path[0] and visually
   // restarting the wave for one player.
-  if (isHost) {
-    callBattleRpc('start_wave_battle', { p_siege: siege.id }, false);
+  const hostReady = !!siege.host_queue_ready;
+  const allyReady = !!siege.ally_queue_ready;
+  if (hostReady && allyReady) {
+    // Normal path: host commits the prep → battle transition. Ally waits.
+    if (isHost) callBattleRpc('start_wave_battle', { p_siege: siege.id }, false);
+  } else {
+    // Solo start: the other side is broke, so whichever solvent player IS
+    // ready launches the wave on their own (either player may, hence not
+    // host-only). The server verifies the other side has nothing queued.
+    const iAmReady = isHost ? hostReady : allyReady;
+    if (iAmReady) {
+      callBattleRpc('start_wave_solo', { p_siege: siege.id }, false,
+        ['not_ready', 'other_has_units', 'wrong_phase']);
+    }
   }
-  // Ally has nothing to do — just waits for the host's RPC to commit.
 };
 
 // Spawn the queues for the wave that just transitioned to phase='battle'
@@ -1850,10 +2170,16 @@ const beginWaveSpawn = () => {
     initialiseTowers();
   }
   updateWaveProgress();
-  // Per-wave contribution accumulates into the same totals across the
-  // whole match — only zero it once per match (first wave). After the
-  // first wave the totals just keep climbing.
-  if ((siege.current_wave ?? 1) === 1) resetContribution();
+  // Per-wave contribution accumulates into the same totals across the whole
+  // RUN (every wave of every map) — only zero it at the very start of the run
+  // (first map, first wave). advance_map resets current_wave to 1, so guarding
+  // on the wave alone would wipe earlier maps' contribution from the payout.
+  if (mapIndex === 0 && (siege.current_wave ?? 1) === 1) {
+    resetContribution();
+    resetBuffs();
+    runTowersDestroyed = 0;
+    runUnitsDeployed = 0;
+  }
 
   // Baseline for the wave-failed summary's per-wave tower-damage figure,
   // and clear any summary popup left over from the previous attempt.
@@ -1883,18 +2209,34 @@ const applySiegeUpdate = (fresh) => {
   //   arriving after we've optimistically flipped to 'prep' for the
   //   re-attempt). Outcome is a one-way door — once set, never unset.
   if (siege) {
-    const freshWave = fresh.current_wave ?? 1;
-    const liveWave = siege.current_wave ?? 1;
-    if (freshWave < liveWave) return;
-    if (freshWave === liveWave) {
-      const freshPhaseOrd = phaseOrder[fresh.phase] ?? 0;
-      const livePhaseOrd = phaseOrder[siege.phase] ?? 0;
-      if (freshPhaseOrd < livePhaseOrd) return;
+    // map_index outranks current_wave: advancing to a new map resets the
+    // wave counter to 1, so a higher map is ALWAYS newer even though its
+    // wave number is lower. Only fall through to the wave/phase ordering
+    // when both rows are on the same map.
+    const freshMap = fresh.map_index ?? 0;
+    const liveMap = siege.map_index ?? 0;
+    if (freshMap < liveMap) return;
+    if (freshMap === liveMap) {
+      const freshWave = fresh.current_wave ?? 1;
+      const liveWave = siege.current_wave ?? 1;
+      if (freshWave < liveWave) return;
+      if (freshWave === liveWave) {
+        const freshPhaseOrd = phaseOrder[fresh.phase] ?? 0;
+        const livePhaseOrd = phaseOrder[siege.phase] ?? 0;
+        if (freshPhaseOrd < livePhaseOrd) return;
+      }
     }
     if (siege.outcome && !fresh.outcome) return;
   }
   const prevPhase = siege?.phase;
   siege = fresh;
+
+  // Map advanced (we cleared the previous one). Swap in the new map's art,
+  // path and a fresh tower set before the prep-phase handling below resets
+  // the per-wave battle state.
+  if ((fresh.map_index ?? 0) !== mapIndex) {
+    loadMap(fresh.map_index ?? 0);
+  }
 
   // Phase flipped back to 'prep' — wave failed and the host bumped
   // current_wave. Drop the battle-running state so the queue UI re-enables
@@ -1917,6 +2259,8 @@ const applySiegeUpdate = (fresh) => {
     unitsDeployedCount = 0;
     hideWaveSummary();       // ← the other player advanced; dismiss our popup
     updateWaveProgress();
+    // No one can afford to deploy this wave → the siege is lost.
+    checkGoldStarvation();
   }
 
   // Server has just committed the prep → battle transition. Spawn the
@@ -1934,9 +2278,9 @@ const applySiegeUpdate = (fresh) => {
     showEndOverlay(siege.outcome);
     return;
   }
-  // Both sides ready — start (or re-start, between waves) the current wave.
-  const bothReady = !!siege.host_queue_ready && !!siege.ally_queue_ready;
-  if (bothReady && !battleStarted && !matchEnded) startWave();
+  // Every participating side is ready — start (or re-start) the current wave.
+  // A broke side that can't deploy is skipped, so one solvent player can begin.
+  if (canStartWave() && !battleStarted && !matchEnded) startWave();
 };
 
 // ── MAP LOAD ──
@@ -1951,8 +2295,23 @@ backgroundImage.onload = () => {
   // startWave() has the refresh-recovery guard inside it — if we land
   // here with phase='battle' (mid-wave reconnect), it'll suppress the
   // spawn and show the AWAITING ALLY banner instead. Safe to call
-  // unconditionally when both sides are ready.
-  if (siege && siege.host_queue_ready && siege.ally_queue_ready) startWave();
+  // whenever every participating side is ready.
+  if (siege && canStartWave()) startWave();
+};
+
+// Switch the battlefield to map `index`: new background art + road path, and
+// a fresh set of towers. Setting backgroundImage.src re-fires the onload
+// above, which re-runs initialiseTowers() against the now-current map (so
+// towers / totalTowers reset). Called when advance_map bumps map_index.
+const loadMap = (index) => {
+  mapIndex = index;
+  currentMap = getMapByIndex(index);
+  activePath = currentMap.path;
+  towersDestroyedCount = 0;
+  totalTowers = 0;
+  selectedTower = null;
+  mapLoaded = false;          // animate() pauses until the new art loads
+  backgroundImage.src = currentMap.background;
 };
 
 // ── INIT ──
@@ -1984,6 +2343,12 @@ if (!siege) {
   startingGold = goldForDifficulty(siege.difficulty);
   queueCap = queueCapForDifficulty(siege.difficulty);
 
+  // Which map of the run are we on? Both clients read map_index off the
+  // siege row and derive the same map (background + road path + tower pool).
+  mapIndex = siege.map_index ?? 0;
+  currentMap = getMapByIndex(mapIndex);
+  activePath = currentMap.path;
+
   // Roll this match's stone-tower weaknesses/resistances. Seeded from the
   // siege id so both clients derive the identical table with no DB write.
   initTowerMatchups(siege.id, UNITS.map(u => u.id));
@@ -2008,6 +2373,14 @@ if (!siege) {
   if (meProfile?.username) siege[isHost ? 'host_username' : 'ally_username'] = meProfile.username;
   if (themProfile?.username) siege[isHost ? 'ally_username' : 'host_username'] = themProfile.username;
 
+  // Seed the battle leaderboard from each side's PERSISTED tower-kill score so
+  // it survives a refresh (rather than resetting to 0). Map me/other → host/ally.
+  setLeaderboardPoints({
+    hostPoints: (isHost ? meProfile : themProfile)?.tower_points ?? 0,
+    allyPoints: (isHost ? themProfile : meProfile)?.tower_points ?? 0,
+  });
+  renderLeaderboard();
+
   // ── REFRESH-INTO-COMPLETED-MATCH GUARD ─────────────────
   // The match is already terminal on the row (the other player resolved
   // it while we were refreshing). Show the overlay immediately and skip
@@ -2017,17 +2390,20 @@ if (!siege) {
   // who was refreshing during".
   if (siege.outcome === 'victory' || siege.outcome === 'defeat') {
     // Pull final totals from the persisted contribution columns so the
-    // overlay shows real numbers instead of "0 / N".
+    // overlay shows real numbers instead of "0 / N". Contribution accumulates
+    // across the whole run, so it doubles as the run-wide towers-destroyed
+    // total for a player who refreshed straight into the end screen.
     towersDestroyedCount =
       (siege.host_contribution?.towers_destroyed ?? 0) +
       (siege.ally_contribution?.towers_destroyed ?? 0);
+    runTowersDestroyed = towersDestroyedCount;
     // Paint the map background once so the canvas behind the overlay
     // isn't blank. Doesn't matter that towers aren't drawn — the
     // overlay covers them.
     backgroundImage.onload = () => {
       gameCanvas.drawImage(backgroundImage, 0, 0);
     };
-    backgroundImage.src = siege.map_src || '/assets/maps/calista-map.png';
+    backgroundImage.src = currentMap.background;
     await showEndOverlay(siege.outcome);
   } else {
 
@@ -2050,7 +2426,7 @@ if (!siege) {
   render();
 
   // Map + tower init kicks off via backgroundImage.onload below.
-  backgroundImage.src = siege.map_src || '/assets/maps/calista-map.png';
+  backgroundImage.src = currentMap.background;
 
   supabase
     .channel(`game-${siege.id}`)
@@ -2083,7 +2459,7 @@ if (!siege) {
   // set_match_outcome. The snapshot is pure presentation catch-up.
   // A tampered client lying in their broadcast can't cheat — they'd
   // just paint wrong pixels on the observing client's canvas.
-  const battleBroadcast = supabase.channel(`battle-broadcast-${siege.id}`, {
+  battleBroadcast = supabase.channel(`battle-broadcast-${siege.id}`, {
     config: { broadcast: { self: false } },  // don't echo our own sends
   });
 
@@ -2101,6 +2477,25 @@ if (!siege) {
         latestSnapshot = msg.payload;
         latestSnapshotIsSeed = false;  // live data — promotion may use it
       }
+    })
+    .on('broadcast', { event: 'speed' }, (msg) => {
+      // The other player changed the gameplay speed — match it so both
+      // sims fast-forward in lockstep. broadcast:false so we don't echo
+      // it straight back to them.
+      const s = msg?.payload?.speed;
+      if (s) setGameSpeed(s, { broadcast: false });
+    })
+    .on('broadcast', { event: 'buff' }, (msg) => {
+      // The other player picked a reward buff for their side. Apply it here
+      // too so this client's sim of their units matches theirs.
+      const p = msg?.payload;
+      if (p && p.side && p.buff) addBuff(p.side, p.buff);
+    })
+    .on('broadcast', { event: 'reward-picked' }, (msg) => {
+      // The ally finished choosing this reward round — release the lockstep
+      // freeze once we've also chosen (see resolveFrontRound).
+      const round = msg?.payload?.round;
+      if (typeof round === 'number') onAllyRewardPick(round);
     })
     .subscribe((status) => {
       if (status !== 'SUBSCRIBED') return;

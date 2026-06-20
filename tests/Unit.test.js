@@ -44,7 +44,7 @@ describe("attack", () => {
 
   test("creates Projectile on attack", () => {
     const unit = new Unit();
-    unit.target = new Tower();
+    unit.target = new Tower({x:0, y:0}, null); // mock target
     unit.projectiles = []; //ensure empty array
     unit.attack();
     expect(unit.projectiles.length).toBe(1);
@@ -52,7 +52,7 @@ describe("attack", () => {
 
   test("updates lastAttackAt timestamp", async () => {
     const unit = new Unit();
-    unit.target = new Tower();
+    unit.target = new Tower({x:0, y:0}, null); // mock target
     const beforeAttack = unit.lastAttackAt;
     await new Promise((resolve) => setTimeout(resolve, 10)); // ensure time has passed
     unit.attack();

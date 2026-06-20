@@ -22,11 +22,10 @@ jobs:
         with:
           node-version: '22.12.0' # Change to match your local project version
           cache: 'npm'
-          cache-dependency-path: '**/package-lock.json'
 
       # Step 3: Install project dependencies
       - name: Install Dependencies
-        run: npm ci
+        run: npm i  #ideally would be ci but 
 
       # Step 4: Run Jest test suite
       - name: Run Jest Tests

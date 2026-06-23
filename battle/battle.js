@@ -41,7 +41,7 @@ blastImage.onload = () => {
   blastLoaded = true;
 };
 
-blastImage.src = "../assets/effects/blast.png";
+blastImage.src = "../assets/Effects/blast.png";
 
 // Tower-death explosion frames exported from the Animate source
 // (assets/Tower/PNG/54–61): a burst -> fireball -> smoke -> dissipate
@@ -201,12 +201,12 @@ let latestSnapshotIsSeed = false;
 
 
 
-const livesRemaining = () => {
+export const livesRemaining = () => {
   const current = siege?.current_wave ?? 1;
   const total = siege?.total_waves ?? 15;
   return Math.max(0, total - current + 1);
 };
-const livesMax = () => siege?.total_waves ?? 15;
+export const livesMax = () => siege?.total_waves ?? 15;
 
 // ── SIMULATION EVENT BUS ──
 // Single hook point for discrete combat events. Local listeners drive HUD
@@ -221,13 +221,13 @@ export const battleEvents = new EventTarget();
 const emit = (name, detail) => battleEvents.dispatchEvent(new CustomEvent(name, { detail }));
 
 // ── HELPERS ──
-const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => (
+export const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
 
-const queueCost = (queue) => queue.reduce((sum, id) => sum + deployCostById(id), 0);
+export const queueCost = (queue) => queue.reduce((sum, id) => sum + deployCostById(id), 0);
 
-const showAlert = (msg, type = 'info') => {
+export const showAlert = (msg, type = 'info') => {
   alertEl.textContent = msg;
   alertEl.style.display = 'block';
   alertEl.style.background = type === 'error' ? '#7b241c' : '#7a600c';
@@ -241,7 +241,7 @@ const smoothNavigate = (url) => {
   setTimeout(() => { window.location.href = url; }, 400);
 };
 
-const spawnExplosion = (x, y) => {
+export const spawnExplosion = (x, y) => {
   explosions.push({
     x,
     y,

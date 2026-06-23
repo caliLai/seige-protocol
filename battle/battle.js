@@ -179,6 +179,13 @@ let matchEnded = false;
 // (applySiegeUpdate's 'prep' transition).
 let observingMode = false;
 let latestSnapshot = null;
+// Towers-destroyed count the first time the current observing session sees a
+// snapshot. Towers already down at that point are "in the past" for this
+// client — their reward popups are FORFEIT, so we don't re-offer them on
+// reconnect (a player who d/c'd mid-popup doesn't get the reward back). Only
+// destructions AFTER we start observing enqueue a reward. null = not observing
+// / needs re-baselining; set in renderObservedState, cleared on exit.
+let observedRewardBaselineTd = null;
 // True while latestSnapshot came from a one-shot DB read (seed or
 // watchdog refetch) rather than a live broadcast / Postgres CDC push.
 // Promotion is intentionally NOT triggered off seed-only data within
@@ -802,9 +809,16 @@ const initialiseTowers = () => {
   // Defensive fallback to the map's fixed spots if generation ever comes up
   // empty (e.g. a degenerate path).
   if (!spots.length) spots = (currentMap.towers || []).map(p => ({ ...p, type: 25 }));
-  for (const s of spots) {
-    towers.push(new Tower({ x: s.x, y: s.y }, gameCanvas, s.type));
-  }
+  spots.forEach((s, i) => {
+    const tower = new Tower({ x: s.x, y: s.y }, gameCanvas, s.type);
+    // Stable identity for this tower within the map. Both clients seed the same
+    // tower set in the same order, so originalIndex pairs up across clients and
+    // survives destruction (towers can die out of order). The broadcast snapshot
+    // tags surviving towers with it so an observer removes the RIGHT towers
+    // rather than blindly shifting from the front of its array.
+    tower.originalIndex = i;
+    towers.push(tower);
+  });
   totalTowers = towers.length;
 };
 
@@ -976,7 +990,7 @@ const showEndOverlay = async (outcome) => {
   if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
 
   // Drop any pending tower-reward rounds and unfreeze — the run is over.
-  rewardRounds.forEach(r => { if (r.waitTimer) clearTimeout(r.waitTimer); });
+  if (rewardWaitTimer) { clearTimeout(rewardWaitTimer); rewardWaitTimer = null; }
   rewardRounds.length = 0;
   remotePicks.clear();
   rewardActive = false;
@@ -1250,32 +1264,79 @@ const buildRewardCards = () => {
   return cards;
 };
 
-// LOCKSTEP: the battle stays frozen on BOTH clients until BOTH players have
-// chosen this round's reward. Each fallen tower is a "round" keyed by its
-// destruction sequence number (towerIndex), which pairs up across clients even
-// if towers die in a slightly different order — the reward is generic, so we
-// only need matching counts. Picks are exchanged over the realtime channel.
-let rewardActive = false;                 // sim frozen while true
-const rewardRounds = [];                  // queue of { id, localDone, remoteDone, waitTimer }
-const remotePicks = new Set();            // ally picks that arrived before we made the round
-const ALLY_WAIT_MS = 20000;               // fail-safe so a disconnected ally can't hang the run
+// REWARD CHOICE — both sides pick, with a presence-gated wait.
+//
+// Each fallen tower opens a popup on BOTH clients; each player picks their own
+// reward independently. When both players are CONNECTED the round only resolves
+// once BOTH have picked — after you pick you see "AWAITING THINE ALLY'S CHOICE"
+// until they do. Picks are paired across clients by the tower's destruction
+// sequence number and exchanged over the `reward-picked` broadcast.
+//
+// The wait is ABANDONABLE so it can never deadlock (the bug that plagued the
+// old lockstep): if the other player goes offline (presence), or never had the
+// popup because they forfeited it on reconnect, we stop waiting and resolve.
+//   • presence flips offline while waiting → resolveFrontRound() runs.
+//   • a reconnecting peer broadcasts reward-picked for the rounds it FORFEITS
+//     (see renderObservedState), so a fast refresh that presence didn't catch
+//     still releases us.
+// Buff picks are also broadcast so the other client applies the same buff to
+// its sim of this side's units.
+let rewardActive = false;                 // local sim frozen while OUR popup is open
+const rewardRounds = [];                  // queue of { id, localDone, remoteDone }
+const remotePicks = new Set();            // ally picks that arrived before we queued the round
+
+// Whether the OTHER player is connected, per the presence channel. Drives the
+// abandon-the-wait fallback below (and surfaced in the debug HUD).
+let otherPlayerOnline = true;
+
 const isSoloSiege = () => !siege?.ally_id;
 
-// Replace the popup body with a "waiting for ally" state after the local pick.
+// Hard backstop on the "awaiting ally" wait. Presence and the forfeit-broadcast
+// normally release the wait within a moment, but if BOTH of those signals are
+// somehow missed (e.g. a fast refresh presence didn't catch AND a dropped
+// broadcast), this guarantees the round still resolves so the local sim can
+// never wedge — a stuck reward freeze otherwise blocks checkWaveOutcome and the
+// whole wave hangs with dead units on the field.
+const REWARD_WAIT_BACKSTOP_MS = 8000;
+let rewardWaitTimer = null;
+
+// Show the "waiting for ally" body after we've picked but they haven't.
 const renderWaitingForAlly = () => {
   rewardCardsEl.innerHTML =
     `<div class="reward-waiting">▌ AWAITING THINE ALLY'S CHOICE ▐</div>`;
 };
 
+// A round can resolve once WE'VE picked AND (the ally picked, OR we don't need
+// to wait for them: solo siege, or they're offline so they forfeit their pick).
+const frontRoundResolvable = (r) =>
+  r && r.localDone && (r.remoteDone || isSoloSiege() || !otherPlayerOnline);
+
+const clearRewardWaitTimer = () => {
+  if (rewardWaitTimer) { clearTimeout(rewardWaitTimer); rewardWaitTimer = null; }
+};
+
 const resolveFrontRound = () => {
   const r = rewardRounds[0];
-  if (!r || !r.localDone || !(r.remoteDone || isSoloSiege())) return;
-  if (r.waitTimer) { clearTimeout(r.waitTimer); r.waitTimer = null; }
+  if (!frontRoundResolvable(r)) return;
+  clearRewardWaitTimer();
   rewardRounds.shift();
   rewardActive = false;
   rewardOverlay.classList.add('hidden');
   rewardOverlay.setAttribute('aria-hidden', 'true');
   showNextReward();            // next queued round, or unfreeze if none
+};
+
+// Resolve the front round unconditionally (backstop timeout fired). Bypasses
+// frontRoundResolvable so a never-arriving ally pick can't freeze the match.
+const forceResolveFrontRound = () => {
+  const r = rewardRounds[0];
+  clearRewardWaitTimer();
+  if (!r) return;
+  rewardRounds.shift();
+  rewardActive = false;
+  rewardOverlay.classList.add('hidden');
+  rewardOverlay.setAttribute('aria-hidden', 'true');
+  showNextReward();
 };
 
 const chooseReward = (card) => {
@@ -1294,20 +1355,23 @@ const chooseReward = (card) => {
     showAlert(`✦ ${card.unitType.toUpperCase()} ${card.label}`);
   }
 
-  // Tell the ally we've chosen this round.
+  // Tell the other client we've chosen this round.
   if (battleBroadcast) {
-    battleBroadcast.send({ type: 'broadcast', event: 'reward-picked', payload: { round: r.id, side: mySideKey() } });
+    battleBroadcast.send({ type: 'broadcast', event: 'reward-picked', payload: { round: r.id } });
   }
 
-  if (r.remoteDone || isSoloSiege()) {
-    resolveFrontRound();
+  if (frontRoundResolvable(r)) {
+    resolveFrontRound();          // ally already picked / offline / solo
   } else {
-    renderWaitingForAlly();
-    r.waitTimer = setTimeout(() => { r.remoteDone = true; resolveFrontRound(); }, ALLY_WAIT_MS);
+    renderWaitingForAlly();       // both online, ally still choosing — wait
+    // Backstop so the wait can never wedge the sim (see REWARD_WAIT_BACKSTOP_MS).
+    clearRewardWaitTimer();
+    rewardWaitTimer = setTimeout(forceResolveFrontRound, REWARD_WAIT_BACKSTOP_MS);
   }
 };
 
-// The ally finished choosing round `id` (or buffer it if we're not there yet).
+// The other player finished choosing round `id` (or forfeited it on reconnect).
+// Buffer it if our matching round isn't queued yet.
 const onAllyRewardPick = (id) => {
   const r = rewardRounds.find((rr) => rr.id === id);
   if (r) { r.remoteDone = true; resolveFrontRound(); }
@@ -1344,11 +1408,13 @@ function showNextReward() {
 }
 
 // Queue a reward round for a fallen tower (called once per destruction).
+// remoteDone is pre-set if the ally already broadcast their pick for this
+// round before our local sim caught the destruction (a normal small race).
 const enqueueReward = (towerSeq) => {
   if (!rewardOverlay) return;
   const id = Number(towerSeq) || 0;
   const remoteDone = remotePicks.delete(id) || isSoloSiege();
-  rewardRounds.push({ id, localDone: false, remoteDone, waitTimer: null });
+  rewardRounds.push({ id, localDone: false, remoteDone });
   showNextReward();
 };
 
@@ -1405,6 +1471,13 @@ const waveSummaryTitleEl = document.getElementById('waveSummaryTitle');
 const waveSummaryGridEl = document.getElementById('waveSummaryGrid');
 const waveNextBtn = document.getElementById('waveNextBtn');
 
+// True while the WAVE n REPULSED summary is up on this client. Mirrored into the
+// broadcast snapshot (key `ws`) so a peer that refreshed mid-wave — and is thus
+// in observingMode, never running the local sim that fires wave-failed — shows
+// the SAME summary instead of dropping back to the bare queue UI. Cleared when
+// the wave advances (applySiegeUpdate's prep transition → hideWaveSummary).
+let waveSummaryShown = false;
+
 const countByType = (queue) => {
   const m = new Map();
   (queue || []).forEach((id) => m.set(id, (m.get(id) || 0) + 1));
@@ -1441,9 +1514,11 @@ const showWaveSummary = (waveNum) => {
   }
   waveSummaryOverlay.classList.remove('hidden');
   waveSummaryOverlay.setAttribute('aria-hidden', 'false');
+  waveSummaryShown = true;
 };
 
 const hideWaveSummary = () => {
+  waveSummaryShown = false;
   if (!waveSummaryOverlay) return;
   waveSummaryOverlay.classList.add('hidden');
   waveSummaryOverlay.setAttribute('aria-hidden', 'true');
@@ -1579,6 +1654,14 @@ const promoteToSimmer = () => {
   waveJudged = false;
   waveAttemptId++;
   observingMode = false;     // ← start broadcasting + simming again
+  observedRewardBaselineTd = null;  // re-baseline if we observe again later
+  // The units were already deployed on the (now-gone) peer this wave; we just
+  // reconstructed whatever survived. Mark the full queue as deployed so
+  // checkWaveOutcome's "all units spawned yet?" guard is satisfied — otherwise,
+  // when we promote into an empty field (all units already dead), it would
+  // refuse to judge wave-failed and the wave would hang. Both peers d/c'ing
+  // mid-wave with all units dead is exactly the case this rescues.
+  unitsDeployedCount = (siege?.host_queue?.length ?? 0) + (siege?.ally_queue?.length ?? 0);
   console.info('[battle] promoted to simmer; rebuilt %d units', rebuilt.length);
   return true;
 };
@@ -1636,14 +1719,15 @@ const startStuckWaveWatchdog = () => {
       : Number.POSITIVE_INFINITY;
     if (freshSnapAge < STUCK_SNAPSHOT_MAX_AGE) return;
 
-    // We can only safely take over if we have units to reconstruct.
-    // Without a snapshot we have no way to know what was on the field
-    // — and firing advance_wave here would bump the wave counter and
-    // wipe the queues, which the user perceives as "the wave restarted
-    // from scratch". So if there's nothing to promote from, keep
-    // waiting (the server-side watchdog from migration 012 handles
-    // the truly-abandoned case after 60s).
-    if (!latestSnapshot || !Array.isArray(latestSnapshot.units) || latestSnapshot.units.length === 0) {
+    // We need a snapshot to know the field state. Without one we can't tell
+    // what was deployed, so keep waiting (the migration-012 server watchdog
+    // handles the truly-abandoned case after 60s). An EMPTY units array is now
+    // allowed to promote, NOT skipped: when both peers d/c after all units have
+    // died, the last snapshot legitimately has zero units — promoting then lets
+    // the resumed sim judge wave-failed (or wave-completed) and surface the
+    // summary, instead of both clients hanging forever on an empty field. (Note
+    // promoteToSimmer never calls advance_wave; it just resumes the local sim.)
+    if (!latestSnapshot || !Array.isArray(latestSnapshot.units)) {
       return;
     }
 
@@ -1676,6 +1760,18 @@ const observedDisplayPos = new Map();
 const OBSERVED_LERP_PER_MS = 0.012; // per ms; ~92%/frame over a 200ms gap
 const observedKey = (u, i) => `${u.t}|${u.u}|${i}`;
 
+// Reward bookkeeping for a tower an observer just caught up to (sequence = the
+// running towersDestroyedCount - 1). Towers that fell WHILE we're watching open
+// a popup; towers already down before we started observing are forfeit, and we
+// broadcast reward-picked for them so a peer still waiting on us is released.
+const handleObservedTowerReward = (seq) => {
+  if (seq + 1 > observedRewardBaselineTd) {
+    enqueueReward(seq);
+  } else if (battleBroadcast) {
+    battleBroadcast.send({ type: 'broadcast', event: 'reward-picked', payload: { round: seq } });
+  }
+};
+
 const renderObservedState = () => {
   if (!latestSnapshot) {
     towers.forEach(t => t.updateFrame(null));
@@ -1683,16 +1779,61 @@ const renderObservedState = () => {
   }
   const snap = latestSnapshot;
 
-  // Catch up tower destructions. snap.td is the simming client's
-  // running towersDestroyedCount; we shift towers off our local
-  // array (and spawn explosions) until we match.
-  while (towersDestroyedCount < snap.td && towers.length > 0) {
-    const dead = towers.shift();
-    towersDestroyedCount++;
-    runTowersDestroyed++;
-    if (dead?.centre) spawnExplosion(dead.centre.x, dead.centre.y);
+  // First snapshot of this observing session establishes the forfeit baseline:
+  // everything already destroyed is in the past and earns no popup here.
+  if (observedRewardBaselineTd === null) {
+    observedRewardBaselineTd = snap.td ?? 0;
+  }
+
+  // Catch up tower destructions by reconciling against the EXACT set of towers
+  // still standing on the simmer (snap.towers carries each survivor's stable
+  // originalIndex). Removing by identity — rather than blindly shifting from the
+  // front — is what fixes "the destroyed tower for that popup still shows after
+  // a refresh": towers can fall out of order, so the front tower often isn't the
+  // one that actually died. Any local tower whose originalIndex isn't in the
+  // survivor set has been destroyed and must be removed here.
+  const survivorIdx = new Set(
+    (snap.towers || [])
+      .map((t) => t.i)
+      .filter((i) => Number.isFinite(i))
+  );
+  // Only reconcile by identity when the snapshot actually carries survivor data
+  // AND our towers are tagged; otherwise fall back to the count-based catch-up
+  // (legacy snapshots / untagged towers).
+  const canReconcileByIdentity =
+    survivorIdx.size > 0 || (snap.towers && snap.td >= totalTowers);
+  if (canReconcileByIdentity && towers.every((t) => Number.isFinite(t.originalIndex))) {
+    for (let i = towers.length - 1; i >= 0; i--) {
+      if (survivorIdx.has(towers[i].originalIndex)) continue;
+      const dead = towers.splice(i, 1)[0];
+      towersDestroyedCount++;
+      runTowersDestroyed++;
+      if (dead?.centre) spawnExplosion(dead.centre.x, dead.centre.y);
+      handleObservedTowerReward(towersDestroyedCount - 1);
+    }
+  } else {
+    // Legacy/positional fallback: shift from the front until the count matches.
+    while (towersDestroyedCount < snap.td && towers.length > 0) {
+      const dead = towers.shift();
+      towersDestroyedCount++;
+      runTowersDestroyed++;
+      if (dead?.centre) spawnExplosion(dead.centre.x, dead.centre.y);
+      handleObservedTowerReward(towersDestroyedCount - 1);
+    }
   }
   updateWaveProgress();
+
+  // Mirror the simming peer's WAVE-REPULSED summary. A client that refreshed
+  // mid-wave is in observingMode and never runs the local sim that fires
+  // wave-failed, so without this it would sit on the bare queue UI while the
+  // other player stares at the summary. snap.ws carries the wave number while
+  // the overlay is up; show/hide to match. Either player's "advance" click
+  // bumps the wave → phase='prep' echo → applySiegeUpdate hides it on both.
+  if (snap.ws && !waveSummaryShown && !matchEnded) {
+    showWaveSummary(snap.ws);
+  } else if (!snap.ws && waveSummaryShown) {
+    hideWaveSummary();
+  }
 
   // OBSERVED VICTORY DETECTION ─────────────────────────────────
   // When the snapshot reports all towers destroyed, the wave is won
@@ -1709,12 +1850,13 @@ const renderObservedState = () => {
     return;
   }
 
-  // Sync remaining towers' HP from the snapshot.
+  // Sync remaining towers' HP from the snapshot, matched by stable
+  // originalIndex (snap.towers[].i). Falls back to positional matching for
+  // legacy/untagged data.
+  const byOriginalIndex = new Map(towers.map((t) => [t.originalIndex, t]));
   for (const t of snap.towers || []) {
-    const idx = t.i - snap.td;
-    if (idx >= 0 && idx < towers.length) {
-      towers[idx].health = t.h;
-    }
+    const tower = byOriginalIndex.get(t.i) ?? towers[t.i - snap.td];
+    if (tower) tower.health = t.h;
   }
   towers.forEach(tower => tower.updateFrame(null));
 
@@ -1746,6 +1888,85 @@ const renderObservedState = () => {
     for (const k of observedDisplayPos.keys()) {
       if (!seenKeys.has(k)) observedDisplayPos.delete(k);
     }
+  }
+
+  // Projectiles (arrows). Drawn on top of units, extrapolated from each one's
+  // snapshot position by its velocity × elapsed-since-snapshot so arrows fly
+  // smoothly at the canvas refresh rate despite the ~5Hz snapshot cadence.
+  // (The live sim advances projectiles by `vx` per ~16.7ms frame, so we scale
+  // the elapsed time to frame-units to match its speed.)
+  // Clamp the extrapolation window so a stale seed/CDC snapshot doesn't fling
+  // arrows across the screen — a live broadcast (≤200ms old) replaces it next.
+  const projAgeMs = snap.ts ? Math.min(400, Date.now() - snap.ts) : 0;
+  const projElapsedFrames = projAgeMs / 16.7;
+  for (const p of snap.proj || []) {
+    drawObservedProjectile(
+      p,
+      p.x + (p.vx ?? 0) * projElapsedFrames,
+      p.y + (p.vy ?? 0) * projElapsedFrames,
+    );
+  }
+};
+
+// Lazy arrow-sprite cache for observed projectiles, keyed by firing unit type.
+// Mirrors the per-class projectile art the live sim uses; falls back to a small
+// coloured square (as the base Unit does) for kinds without a known sprite.
+const observedArrowMeta = new Map();
+const ARROW_SPRITES = {
+  Archer:            { src: '/assets/Archer/Arrow(projectile)/Arrow02(32x32).png', size: 22 },
+  'Skeleton Archer': { src: '/assets/Skeleton Archer/Arrow(projectile)/Arrow03(32x32).png', size: 20 },
+};
+const ensureObservedArrow = (kind) => {
+  if (observedArrowMeta.has(kind)) return observedArrowMeta.get(kind);
+  const def = ARROW_SPRITES[kind];
+  const meta = { img: null, loaded: false, size: def?.size ?? 10 };
+  if (def) {
+    meta.img = new Image();
+    meta.img.onload = () => { meta.loaded = true; };
+    meta.img.src = def.src;
+  }
+  observedArrowMeta.set(kind, meta);
+  return meta;
+};
+
+const drawObservedProjectile = (p, x, y) => {
+  // Tower shot — reconstruct the same type-derived style the live Tower uses
+  // (glow halo + spinning coloured core) so it reads identically. The style is
+  // fully determined by the tower type, which is all the snapshot carries.
+  if (p.tw !== undefined) {
+    const st = Tower.projectileStyleForType(p.tw);
+    const t = performance.now() / 1000;
+    gameCanvas.save();
+    gameCanvas.fillStyle = st.glow;
+    gameCanvas.beginPath();
+    gameCanvas.arc(x, y, st.size + 3 + Math.sin(t * 8) * 1.5, 0, Math.PI * 2);
+    gameCanvas.fill();
+    gameCanvas.restore();
+    gameCanvas.save();
+    gameCanvas.translate(x, y);
+    gameCanvas.rotate(Math.atan2(p.vy ?? 0, p.vx ?? 0) + t * st.spin);
+    gameCanvas.fillStyle = st.core;
+    gameCanvas.beginPath();
+    gameCanvas.arc(0, 0, st.size + Math.sin(t * 10) * 0.8, 0, Math.PI * 2);
+    gameCanvas.fill();
+    gameCanvas.restore();
+    return;
+  }
+
+  // Unit arrow.
+  const meta = ensureObservedArrow(p.k);
+  if (meta.img && meta.loaded) {
+    const angle = Math.atan2(p.vy ?? 0, p.vx ?? 0);
+    gameCanvas.save();
+    gameCanvas.translate(x, y);
+    gameCanvas.rotate(angle);
+    gameCanvas.drawImage(meta.img, -meta.size / 2, -meta.size / 2, meta.size, meta.size);
+    gameCanvas.restore();
+  } else {
+    // Fallback: a small square in the side's colour (matches the base Unit's
+    // red projectile, tinted by team so it still reads as host vs ally fire).
+    gameCanvas.fillStyle = p.t === 'ally' ? '#4da6ff' : '#ff2b2b';
+    gameCanvas.fillRect(x - 5, y - 5, 10, 10);
   }
 };
 
@@ -1840,8 +2061,12 @@ const drawObservedUnit = (u, x = u.x, y = u.y) => {
     gameCanvas.fillRect(x, y, OBSERVED_UNIT_WIDTH, OBSERVED_UNIT_HEIGHT);
   }
 
-  // HP bar — matches Unit.drawHealthBar exactly: 5px tall, full-unit-
-  // width, dark grey background, HP-ratio fill, black border.
+  // HP bar — matches Unit.drawHealthBar exactly: 5px tall, full-unit-width,
+  // dark grey background, HP-ratio fill, black border. Crucially the fill is
+  // TEAM-AWARE: ally units get blue shades, host units green/yellow/red — same
+  // palette as the live sim. Without this the observed (refreshed) client drew
+  // every bar with the host palette, so ally and host units became visually
+  // indistinguishable after a refresh.
   if (u.m > 0) {
     const barW = OBSERVED_UNIT_WIDTH;
     const barH = 5;
@@ -1850,10 +2075,11 @@ const drawObservedUnit = (u, x = u.x, y = u.y) => {
     gameCanvas.fillStyle = '#3a3a3a';
     gameCanvas.fillRect(bx, by, barW, barH);
     const ratio = Math.max(0, Math.min(1, u.h / u.m));
+    const isAlly = u.t === 'ally';
     gameCanvas.fillStyle =
-      ratio > 0.6 ? 'limegreen' :
-      ratio > 0.3 ? 'yellow'    :
-                    '#ff3b30';
+      ratio > 0.6 ? (isAlly ? '#4da6ff' : 'limegreen') :
+      ratio > 0.3 ? (isAlly ? '#3399ff' : 'yellow')    :
+                    (isAlly ? '#0066cc' : '#ff3b30');
     gameCanvas.fillRect(bx, by, barW * ratio, barH);
     gameCanvas.strokeStyle = 'black';
     gameCanvas.strokeRect(bx, by, barW, barH);
@@ -1940,8 +2166,51 @@ gameCanvasElement.addEventListener('click', (e) => {
   }
 });
 
+// ── DEBUG HUD ───────────────────────────────────────────────
+// Opt-in on-screen diagnostics for the multiplayer sync paths. Enable by
+// appending ?debug=1 (or #debug) to the battle URL on EITHER client. Reads
+// existing state only and renders into its own fixed-position element, so it
+// has zero effect on gameplay when disabled (and near-zero when enabled).
+// Compare the two clients' panels at the moment something desyncs/freezes to
+// see which side stopped simming, whether snapshots are flowing, etc.
+const DEBUG_HUD = /[?&#]debug(=1)?\b/.test(window.location.search + window.location.hash);
+let debugHudEl = null;
+if (DEBUG_HUD) {
+  debugHudEl = document.createElement('pre');
+  debugHudEl.id = 'syncDebugHud';
+  Object.assign(debugHudEl.style, {
+    position: 'fixed', top: '6px', left: '6px', zIndex: '99999',
+    margin: '0', padding: '6px 8px', font: '10px/1.35 monospace',
+    color: '#9effa0', background: 'rgba(0,0,0,0.78)',
+    border: '1px solid #2c5', borderRadius: '4px',
+    pointerEvents: 'none', whiteSpace: 'pre', maxWidth: '46vw',
+  });
+  document.body.appendChild(debugHudEl);
+}
+
+const updateDebugHud = () => {
+  if (!debugHudEl) return;
+  const snapAge = latestSnapshot?.ts ? `${Date.now() - latestSnapshot.ts}ms` : '—';
+  const aliveHost = attackUnits.filter(u => !u.isDead && u.team === 'host').length;
+  const aliveAlly = attackUnits.filter(u => !u.isDead && u.team === 'ally').length;
+  const front = rewardRounds[0];
+  debugHudEl.textContent = [
+    `── SYNC DEBUG (${isHost ? 'HOST' : 'ALLY'}) ──`,
+    `phase=${siege?.phase}  wave=${siege?.current_wave}/${siege?.total_waves}  map=${mapIndex}`,
+    `outcome=${siege?.outcome ?? 'null'}  matchEnded=${matchEnded}`,
+    `battleStarted=${battleStarted}  observing=${observingMode}  waveJudged=${waveJudged}`,
+    `mapLoaded=${mapLoaded}  allyOnline=${otherPlayerOnline}`,
+    `towers=${towers.length}  destroyed=${towersDestroyedCount}/${totalTowers}`,
+    `units alive: host=${aliveHost} ally=${aliveAlly}  (arr=${attackUnits.length})`,
+    `snapshot age=${snapAge}  seed=${latestSnapshotIsSeed}  units=${latestSnapshot?.units?.length ?? '—'}`,
+    `reward: active=${rewardActive}  rounds=${rewardRounds.length}  baseTd=${observedRewardBaselineTd ?? '—'}  wait=${rewardWaitTimer ? 'y' : 'n'}` +
+      (front ? `  front{id:${front.id},L:${front.localDone},R:${front.remoteDone}}` : ''),
+  ].join('\n');
+};
+
 const animate = () => {
   animationId = requestAnimationFrame(animate);
+  updateDebugHud();
   if (!mapLoaded) return;
 
   const now = performance.now();
@@ -2253,11 +2522,19 @@ const applySiegeUpdate = (fresh) => {
     battleStarted = false;
     waveJudged = false;
     observingMode = false;   // ← back to normal sim for the next wave
+    observedRewardBaselineTd = null;  // re-baseline if we observe again
     latestSnapshot = null;
     if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
     attackUnits = [];
     unitsDeployedCount = 0;
     hideWaveSummary();       // ← the other player advanced; dismiss our popup
+    // Defensive: a new wave is starting, so clear any dangling reward popup/wait
+    // (shouldn't normally survive into prep, but a refresh mid-popup could).
+    if (rewardWaitTimer) { clearTimeout(rewardWaitTimer); rewardWaitTimer = null; }
+    rewardRounds.length = 0;
+    remotePicks.clear();
+    rewardActive = false;
+    if (rewardOverlay) { rewardOverlay.classList.add('hidden'); rewardOverlay.setAttribute('aria-hidden', 'true'); }
     updateWaveProgress();
     // No one can afford to deploy this wave → the siege is lost.
     checkGoldStarvation();
@@ -2492,8 +2769,8 @@ if (!siege) {
       if (p && p.side && p.buff) addBuff(p.side, p.buff);
     })
     .on('broadcast', { event: 'reward-picked' }, (msg) => {
-      // The ally finished choosing this reward round — release the lockstep
-      // freeze once we've also chosen (see resolveFrontRound).
+      // The other player chose (or forfeited) this reward round — release our
+      // "awaiting ally" wait once we've also picked (see resolveFrontRound).
       const round = msg?.payload?.round;
       if (typeof round === 'number') onAllyRewardPick(round);
     })
@@ -2503,7 +2780,11 @@ if (!siege) {
       //   ts: send timestamp,
       //   units: [{x, y, t (team), u (unit type id), h (hp), m (maxHp)}],
       //   towers: [{i (original index), h, m}],
-      //   td: towersDestroyedCount (so observer can catch up shifts).
+      //   td: towersDestroyedCount (so observer can catch up shifts),
+      //   ws: wave number if the WAVE-REPULSED summary is up, else null,
+      //   proj: live projectiles — unit arrows {x,y,vx,vy,t,k} and tower shots
+      //         {x,y,vx,vy,tw}. The observer extrapolates each by its velocity
+      //         between snapshots so they fly smoothly at 60fps.
       //
       // The broadcast guard intentionally does NOT include matchEnded —
       // we keep broadcasting after the local sim ends so an observer
@@ -2533,11 +2814,49 @@ if (!siege) {
               a: (u.target && (u.target.health ?? 1) > 0) ? 1 : 0,
             })),
           towers: towers.map((t, i) => ({
-            i: towersDestroyedCount + i,  // original (pre-destruction) index
+            // Stable original index of this surviving tower (assigned in
+            // initialiseTowers). Lets observers reconcile EXACTLY which towers
+            // are still standing, even when towers are destroyed out of order.
+            // Falls back to a positional estimate for any tower predating the
+            // originalIndex tagging.
+            i: Number.isFinite(t.originalIndex) ? t.originalIndex : (towersDestroyedCount + i),
             h: Math.max(0, Math.round(t.health ?? 0)),
             m: Math.max(1, Math.round(t.maxHealth ?? 1)),
           })),
           td: towersDestroyedCount,
+          // Wave-failed summary state. When this side's sim repulsed the wave
+          // it shows WAVE n REPULSED and the row stays at phase='battle' until
+          // someone advances — so the snapshot keeps flowing and a refreshed
+          // (observing) peer can mirror the same overlay. null when not shown.
+          ws: waveSummaryShown ? (siege?.current_wave ?? 1) : null,
+          // Live projectiles so the observing client can render them too.
+          // Velocity is carried so the observer extrapolates smoothly between
+          // the ~5Hz snapshots instead of teleporting each shot.
+          //   • unit arrows:  { x, y, vx, vy, t (team), k (unit type → sprite) }
+          //   • tower shots:  { x, y, vx, vy, tw (tower type → derived style) }
+          // The style is deterministic from the tower type, so we only send the
+          // type and the observer reconstructs glow/colour/shape locally.
+          proj: [
+            ...attackUnits.flatMap(u =>
+              (u.projectiles || []).map(p => ({
+                x: Math.round(p.x),
+                y: Math.round(p.y),
+                vx: Math.round((p.vx ?? 0) * 100) / 100,
+                vy: Math.round((p.vy ?? 0) * 100) / 100,
+                t: u.team,
+                k: u.unitId || u.constructor?.name || 'Archer',
+              }))
+            ),
+            ...towers.flatMap(tw =>
+              (tw.projectiles || []).map(p => ({
+                x: Math.round(p.x),
+                y: Math.round(p.y),
+                vx: Math.round((p.vx ?? 0) * 100) / 100,
+                vy: Math.round((p.vy ?? 0) * 100) / 100,
+                tw: tw.type,
+              }))
+            ),
+          ],
         };
         lastBroadcastPayload = payload;
         battleBroadcast.send({ type: 'broadcast', event: 'snapshot', payload });
@@ -2611,6 +2930,16 @@ if (!siege) {
     otherReconnectingEl.classList.toggle('hidden', otherOnline);
     otherStatusEl.classList.toggle('hidden', otherOnline);
     otherPlayerEl?.classList.toggle('is-reconnecting', !otherOnline);
+
+    const wasOnline = otherPlayerOnline;
+    otherPlayerOnline = otherOnline;
+
+    // Abandon the reward wait if the ally just went offline: a round we're
+    // holding open "awaiting their choice" must not hang on a disconnected
+    // player. frontRoundResolvable() now returns true (otherPlayerOnline=false),
+    // so this releases us and the run continues. (This is the safety valve that
+    // keeps the wait from ever deadlocking — see the reward block header.)
+    if (wasOnline && !otherOnline) resolveFrontRound();
   };
 
   // Start in the "ally is reconnecting" state until their presence

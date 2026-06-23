@@ -1889,6 +1889,85 @@ const renderObservedState = () => {
       if (!seenKeys.has(k)) observedDisplayPos.delete(k);
     }
   }
+
+  // Projectiles (arrows). Drawn on top of units, extrapolated from each one's
+  // snapshot position by its velocity × elapsed-since-snapshot so arrows fly
+  // smoothly at the canvas refresh rate despite the ~5Hz snapshot cadence.
+  // (The live sim advances projectiles by `vx` per ~16.7ms frame, so we scale
+  // the elapsed time to frame-units to match its speed.)
+  // Clamp the extrapolation window so a stale seed/CDC snapshot doesn't fling
+  // arrows across the screen — a live broadcast (≤200ms old) replaces it next.
+  const projAgeMs = snap.ts ? Math.min(400, Date.now() - snap.ts) : 0;
+  const projElapsedFrames = projAgeMs / 16.7;
+  for (const p of snap.proj || []) {
+    drawObservedProjectile(
+      p,
+      p.x + (p.vx ?? 0) * projElapsedFrames,
+      p.y + (p.vy ?? 0) * projElapsedFrames,
+    );
+  }
+};
+
+// Lazy arrow-sprite cache for observed projectiles, keyed by firing unit type.
+// Mirrors the per-class projectile art the live sim uses; falls back to a small
+// coloured square (as the base Unit does) for kinds without a known sprite.
+const observedArrowMeta = new Map();
+const ARROW_SPRITES = {
+  Archer:            { src: '/assets/Archer/Arrow(projectile)/Arrow02(32x32).png', size: 22 },
+  'Skeleton Archer': { src: '/assets/Skeleton Archer/Arrow(projectile)/Arrow03(32x32).png', size: 20 },
+};
+const ensureObservedArrow = (kind) => {
+  if (observedArrowMeta.has(kind)) return observedArrowMeta.get(kind);
+  const def = ARROW_SPRITES[kind];
+  const meta = { img: null, loaded: false, size: def?.size ?? 10 };
+  if (def) {
+    meta.img = new Image();
+    meta.img.onload = () => { meta.loaded = true; };
+    meta.img.src = def.src;
+  }
+  observedArrowMeta.set(kind, meta);
+  return meta;
+};
+
+const drawObservedProjectile = (p, x, y) => {
+  // Tower shot — reconstruct the same type-derived style the live Tower uses
+  // (glow halo + spinning coloured core) so it reads identically. The style is
+  // fully determined by the tower type, which is all the snapshot carries.
+  if (p.tw !== undefined) {
+    const st = Tower.projectileStyleForType(p.tw);
+    const t = performance.now() / 1000;
+    gameCanvas.save();
+    gameCanvas.fillStyle = st.glow;
+    gameCanvas.beginPath();
+    gameCanvas.arc(x, y, st.size + 3 + Math.sin(t * 8) * 1.5, 0, Math.PI * 2);
+    gameCanvas.fill();
+    gameCanvas.restore();
+    gameCanvas.save();
+    gameCanvas.translate(x, y);
+    gameCanvas.rotate(Math.atan2(p.vy ?? 0, p.vx ?? 0) + t * st.spin);
+    gameCanvas.fillStyle = st.core;
+    gameCanvas.beginPath();
+    gameCanvas.arc(0, 0, st.size + Math.sin(t * 10) * 0.8, 0, Math.PI * 2);
+    gameCanvas.fill();
+    gameCanvas.restore();
+    return;
+  }
+
+  // Unit arrow.
+  const meta = ensureObservedArrow(p.k);
+  if (meta.img && meta.loaded) {
+    const angle = Math.atan2(p.vy ?? 0, p.vx ?? 0);
+    gameCanvas.save();
+    gameCanvas.translate(x, y);
+    gameCanvas.rotate(angle);
+    gameCanvas.drawImage(meta.img, -meta.size / 2, -meta.size / 2, meta.size, meta.size);
+    gameCanvas.restore();
+  } else {
+    // Fallback: a small square in the side's colour (matches the base Unit's
+    // red projectile, tinted by team so it still reads as host vs ally fire).
+    gameCanvas.fillStyle = p.t === 'ally' ? '#4da6ff' : '#ff2b2b';
+    gameCanvas.fillRect(x - 5, y - 5, 10, 10);
+  }
 };
 
 // Lazy-loaded sprite sheets for observed units. Each entry holds the
@@ -2702,7 +2781,10 @@ if (!siege) {
       //   units: [{x, y, t (team), u (unit type id), h (hp), m (maxHp)}],
       //   towers: [{i (original index), h, m}],
       //   td: towersDestroyedCount (so observer can catch up shifts),
-      //   ws: wave number if the WAVE-REPULSED summary is up, else null.
+      //   ws: wave number if the WAVE-REPULSED summary is up, else null,
+      //   proj: live projectiles — unit arrows {x,y,vx,vy,t,k} and tower shots
+      //         {x,y,vx,vy,tw}. The observer extrapolates each by its velocity
+      //         between snapshots so they fly smoothly at 60fps.
       //
       // The broadcast guard intentionally does NOT include matchEnded —
       // we keep broadcasting after the local sim ends so an observer
@@ -2747,6 +2829,34 @@ if (!siege) {
           // someone advances — so the snapshot keeps flowing and a refreshed
           // (observing) peer can mirror the same overlay. null when not shown.
           ws: waveSummaryShown ? (siege?.current_wave ?? 1) : null,
+          // Live projectiles so the observing client can render them too.
+          // Velocity is carried so the observer extrapolates smoothly between
+          // the ~5Hz snapshots instead of teleporting each shot.
+          //   • unit arrows:  { x, y, vx, vy, t (team), k (unit type → sprite) }
+          //   • tower shots:  { x, y, vx, vy, tw (tower type → derived style) }
+          // The style is deterministic from the tower type, so we only send the
+          // type and the observer reconstructs glow/colour/shape locally.
+          proj: [
+            ...attackUnits.flatMap(u =>
+              (u.projectiles || []).map(p => ({
+                x: Math.round(p.x),
+                y: Math.round(p.y),
+                vx: Math.round((p.vx ?? 0) * 100) / 100,
+                vy: Math.round((p.vy ?? 0) * 100) / 100,
+                t: u.team,
+                k: u.unitId || u.constructor?.name || 'Archer',
+              }))
+            ),
+            ...towers.flatMap(tw =>
+              (tw.projectiles || []).map(p => ({
+                x: Math.round(p.x),
+                y: Math.round(p.y),
+                vx: Math.round((p.vx ?? 0) * 100) / 100,
+                vy: Math.round((p.vy ?? 0) * 100) / 100,
+                tw: tw.type,
+              }))
+            ),
+          ],
         };
         lastBroadcastPayload = payload;
         battleBroadcast.send({ type: 'broadcast', event: 'snapshot', payload });

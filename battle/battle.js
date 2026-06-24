@@ -995,6 +995,11 @@ const showEndOverlay = async (outcome) => {
   remotePicks.clear();
   rewardActive = false;
   if (rewardOverlay) { rewardOverlay.classList.add('hidden'); rewardOverlay.setAttribute('aria-hidden', 'true'); }
+  // The run is over — dismiss any wave-summary / map-clear card and drop the
+  // pending advance gate so it can't fire an advance over the end screen.
+  hideWaveSummary();
+  hideMapClear();
+  closeAdvanceGate();
 
   const overlay = outcome === 'victory' ? victoryOverlay : defeatOverlay;
   const statsOf = outcome === 'victory'
@@ -1471,6 +1476,95 @@ const waveSummaryTitleEl = document.getElementById('waveSummaryTitle');
 const waveSummaryGridEl = document.getElementById('waveSummaryGrid');
 const waveNextBtn = document.getElementById('waveNextBtn');
 
+// Map-cleared summary popup — shown when every tower on a (non-final) map
+// falls. Same shape as the wave summary: a stats card whose Continue button
+// BOTH players must press before the run marches to the next map.
+const mapClearOverlay = document.getElementById('mapClearOverlay');
+const mapClearTitleEl = document.getElementById('mapClearTitle');
+const mapClearTowersEl = document.getElementById('mapClearTowers');
+const mapClearUnitsEl = document.getElementById('mapClearUnits');
+const mapClearLivesEl = document.getElementById('mapClearLives');
+const mapClearNextEl = document.getElementById('mapClearNext');
+const mapNextBtn = document.getElementById('mapNextBtn');
+
+// Mirrors waveSummaryShown for the map-clear card. Keeps showMapClearSummary
+// idempotent across the per-frame observer detection, the map-cleared
+// broadcast, and the local sim all racing to surface the same popup.
+let mapClearShown = false;
+
+// Survivor refund the CLEARING client computed and broadcast (see map-cleared).
+// Both clients call advance_map with the same figures so the first-wins race
+// can't apply a diverged tally. null = compute locally (we cleared it / no hint).
+let mapClearRefundHint = null;
+
+// ── BOTH-PLAYERS-CONFIRM ADVANCE GATE ──────────────────────────────
+// The wave-repulsed and map-cleared summaries each end with a Continue button
+// that BOTH players must press before the run advances. This mirrors the
+// reward-pick gating: each client presses, broadcasts an ack keyed to the
+// popup instance, and the advance RPC fires only once both acks are in. After
+// you press you see "AWAITING THINE ALLY" until they do.
+//
+// No deadlock: the wait releases without the ally when it's a solo siege or
+// the ally is offline (presence) — the same safety valve the reward wait uses.
+// A merely-slow but still-connected ally is waited on indefinitely on purpose,
+// which is the whole point of "both must press"; a stuck pair can always leave
+// via Abandon Siege.
+let advanceGate = null;                  // { key, btn, run, localAcked, remoteAcked }
+const pendingAdvanceAcks = new Set();    // remote acks that arrived before our popup
+
+const advanceGateResolvable = () =>
+  !!advanceGate && advanceGate.localAcked &&
+  (advanceGate.remoteAcked || isSoloSiege() || !otherPlayerOnline);
+
+const fireAdvanceGate = () => {
+  if (!advanceGate) return;
+  const run = advanceGate.run;
+  advanceGate = null;
+  run();                                  // idempotent advance RPC + hide popup
+};
+
+const maybeFireAdvanceGate = () => { if (advanceGateResolvable()) fireAdvanceGate(); };
+
+// Engage the gate for a freshly-shown popup. Idempotent on `key` so the
+// per-frame observer re-detection (or a duplicate broadcast) can't wipe an ack
+// already registered for the same popup instance.
+const openAdvanceGate = (key, btn, label, run) => {
+  if (advanceGate && advanceGate.key === key) return;
+  advanceGate = { key, btn, run, localAcked: false, remoteAcked: pendingAdvanceAcks.delete(key) };
+  if (btn) { btn.disabled = false; btn.textContent = label; }
+};
+
+// This player pressed Continue: record + broadcast our ack, then fire if the
+// ally is already in (or we needn't wait), else show the waiting state.
+const confirmAdvance = () => {
+  if (!advanceGate || advanceGate.localAcked) return;
+  advanceGate.localAcked = true;
+  if (battleBroadcast) {
+    battleBroadcast.send({ type: 'broadcast', event: 'advance-ack', payload: { key: advanceGate.key } });
+  }
+  if (advanceGateResolvable()) {
+    fireAdvanceGate();
+  } else if (advanceGate.btn) {
+    advanceGate.btn.disabled = true;
+    advanceGate.btn.textContent = '▌ AWAITING THINE ALLY ▐';
+  }
+};
+
+// The other player pressed Continue on their matching popup. Buffer it if our
+// own popup hasn't opened yet (a normal small race).
+const onRemoteAdvanceAck = (key) => {
+  if (advanceGate && advanceGate.key === key) {
+    advanceGate.remoteAcked = true;
+    maybeFireAdvanceGate();
+  } else {
+    pendingAdvanceAcks.add(key);
+  }
+};
+
+// Tear the gate down without advancing — the popup is being dismissed because
+// the row already advanced (the other player's click / a prep echo).
+const closeAdvanceGate = () => { advanceGate = null; };
+
 // True while the WAVE n REPULSED summary is up on this client. Mirrored into the
 // broadcast snapshot (key `ws`) so a peer that refreshed mid-wave — and is thus
 // in observingMode, never running the local sim that fires wave-failed — shows
@@ -1508,10 +1602,15 @@ const showWaveSummary = (waveNum) => {
   waveSummaryGridEl.innerHTML =
     sideSummaryHtml(leaderboardState.host.label, siege.host_queue, hostDmg) +
     sideSummaryHtml(leaderboardState.ally.label, siege.ally_queue, allyDmg);
-  if (waveNextBtn) {
-    waveNextBtn.disabled = false;
-    waveNextBtn.textContent = `⚔ ADVANCE TO NEXT WAVE ⚔`;
-  }
+  // Both players must press Advance before the wave actually bumps. Either
+  // client's single click no longer advances on its own — the gate fires the
+  // (idempotent) advance_wave RPC only once both have acked.
+  openAdvanceGate(
+    `wave:${waveNum}`,
+    waveNextBtn,
+    '⚔ ADVANCE TO NEXT WAVE ⚔',
+    () => { callBattleRpc('advance_wave', { p_siege: siege.id }, false); hideWaveSummary(); },
+  );
   waveSummaryOverlay.classList.remove('hidden');
   waveSummaryOverlay.setAttribute('aria-hidden', 'false');
   waveSummaryShown = true;
@@ -1525,14 +1624,86 @@ const hideWaveSummary = () => {
 };
 
 if (waveNextBtn) {
-  waveNextBtn.addEventListener('click', async () => {
-    waveNextBtn.disabled = true;
-    // advance_wave is idempotent on phase: whichever player clicks first
-    // bumps current_wave; the prep echo flips both clients (and hides the
-    // other player's popup via applySiegeUpdate).
-    await callBattleRpc('advance_wave', { p_siege: siege.id }, false);
-    hideWaveSummary();
-  });
+  // Register OUR confirmation; the gate fires advance_wave once the ally also
+  // confirms (or releases without them if they're offline / it's solo).
+  waveNextBtn.addEventListener('click', () => confirmAdvance());
+}
+
+// Clearing a map carries the team's SURVIVING units' worth onto the next map
+// so a run can't dead-end in a gold-starvation defeat. Only kicks in when BOTH
+// sides would be too broke to deploy on the next map (the same condition that
+// fires checkGoldStarvation's defeat); otherwise returns 0/0 and the next map
+// starts on carried-over gold as usual. Survivor value is the sum of each
+// side's still-living units' deploy cost — a surviving unit was deployable, so
+// its cost is at least the cheapest unit, guaranteeing the refunded side can
+// afford to field something. The amount rides on advance_map (applied exactly
+// once via its phase idempotency — see migration 019).
+const computeMapClearRefund = () => {
+  const zero = { host: 0, ally: 0 };
+  const allyPresent = !!siege?.ally_id;
+  const hostBroke = sideGoldVal('host') < cheapestUnitCost('host');
+  const allyBroke = !allyPresent || sideGoldVal('ally') < cheapestUnitCost('ally');
+  if (!(hostBroke && allyBroke)) return zero;   // someone can still pay — no refund
+
+  const value = { host: 0, ally: 0 };
+  if (observingMode && Array.isArray(latestSnapshot?.units)) {
+    // We're observing — derive survivors from the simming peer's snapshot.
+    for (const u of latestSnapshot.units) {
+      if (u.t === 'host' || u.t === 'ally') value[u.t] += deployCostById(u.u);
+    }
+  } else {
+    for (const u of attackUnits) {
+      if (u.isDead || (u.team !== 'host' && u.team !== 'ally')) continue;
+      value[u.team] += deployCostById(u.unitType);
+    }
+  }
+  return value;
+};
+
+// ── MAP-CLEARED SUMMARY POPUP ──
+// Every tower on a non-final map fell. Show the run tally + the next region,
+// gated behind the same both-players-confirm Continue button as the wave
+// summary. Whichever path detects the clear first — the local sim, the
+// map-cleared broadcast, or the observer's all-towers-gone detection — funnels
+// through here; idempotent via mapClearShown.
+const showMapClearSummary = () => {
+  if (!mapClearOverlay || matchEnded || mapClearShown) return;
+  mapClearShown = true;
+  if (mapClearTitleEl) mapClearTitleEl.textContent = `⚔ ${currentMap.name} CLEARED ⚔`;
+  if (mapClearTowersEl) mapClearTowersEl.textContent = `${totalTowers} / ${totalTowers}`;
+  if (mapClearUnitsEl) mapClearUnitsEl.textContent = String(runUnitsDeployed);
+  if (mapClearLivesEl) mapClearLivesEl.textContent = `${livesRemaining()} / ${livesMax()}`;
+  if (mapClearNextEl) mapClearNextEl.textContent = getMapByIndex(mapIndex + 1).name;
+  // Use the clearing client's broadcast figures when we have them (so both
+  // clients pass identical refunds); otherwise compute from our own survivors.
+  const refund = mapClearRefundHint || computeMapClearRefund();
+  openAdvanceGate(
+    `map:${mapIndex}`,
+    mapNextBtn,
+    '⚔ CONTINUE TO NEXT MAP ⚔',
+    () => {
+      callBattleRpc('advance_map', {
+        p_siege: siege.id,
+        p_host_refund: refund.host,
+        p_ally_refund: refund.ally,
+      }, false);
+      hideMapClear();
+    },
+  );
+  mapClearOverlay.classList.remove('hidden');
+  mapClearOverlay.setAttribute('aria-hidden', 'false');
+};
+
+const hideMapClear = () => {
+  mapClearShown = false;
+  mapClearRefundHint = null;
+  if (!mapClearOverlay) return;
+  mapClearOverlay.classList.add('hidden');
+  mapClearOverlay.setAttribute('aria-hidden', 'true');
+};
+
+if (mapNextBtn) {
+  mapNextBtn.addEventListener('click', () => confirmAdvance());
 }
 
 // All towers destroyed = this map is cleared, regardless of which wave we're
@@ -1543,9 +1714,28 @@ if (waveNextBtn) {
 //   • Last map → the whole run is won.
 battleEvents.addEventListener('wave-completed', async () => {
   if (!isLastMap(mapIndex)) {
+    // Survivor refund (only non-zero when both sides are broke) — compute it
+    // from OUR sim while the survivors are still on the field, and ship it in
+    // the map-cleared broadcast so the other client advances with the same
+    // figures (no diverged-tally race over the first-wins advance_map).
+    const refund = computeMapClearRefund();
+    mapClearRefundHint = refund;
+    // Tell the other client at once that this map is cleared. Map-clear is
+    // authoritative: it stops the peer's own sim from independently judging
+    // the SAME wave a failure (which, on the final wave, would write a defeat
+    // that races our advance — the "defeat instead of next-map popup" bug).
+    if (battleBroadcast) {
+      battleBroadcast.send({ type: 'broadcast', event: 'map-cleared', payload: { map: mapIndex, refund } });
+    }
     showAlert(`⚔ ${currentMap.name} CLEARED — MARCH ONWARD ⚔`);
-    await callBattleRpc('advance_map', { p_siege: siege.id }, false);
+    showMapClearSummary();   // both players confirm Continue → advance_map
     return;
+  }
+  // Final map cleared = the run is won. Suppress the peer's racing defeat
+  // before writing the victory outcome (set_match_outcome only guards on
+  // phase='complete', so a diverging final-wave failure could otherwise win).
+  if (battleBroadcast) {
+    battleBroadcast.send({ type: 'broadcast', event: 'run-won', payload: {} });
   }
   await showEndOverlay('victory');
 });
@@ -1846,8 +2036,13 @@ const renderObservedState = () => {
   // the final tower locally could hang waiting for the host's sim to
   // catch up. Guarded by !matchEnded so it only fires once per match.
   if (!matchEnded && towers.length === 0 && towersDestroyedCount >= totalTowers) {
-    showEndOverlay('victory');
-    return;
+    if (isLastMap(mapIndex)) {
+      showEndOverlay('victory');
+      return;
+    }
+    // Non-final map cleared (per the peer's snapshot) — mirror the map-clear
+    // summary instead of ending the run. Both players confirm → advance_map.
+    showMapClearSummary();
   }
 
   // Sync remaining towers' HP from the snapshot, matched by stable
@@ -2528,6 +2723,9 @@ const applySiegeUpdate = (fresh) => {
     attackUnits = [];
     unitsDeployedCount = 0;
     hideWaveSummary();       // ← the other player advanced; dismiss our popup
+    hideMapClear();          // ← likewise the map-clear card (advance_map echo)
+    closeAdvanceGate();      // ← drop any half-acked advance gate for the old wave/map
+    pendingAdvanceAcks.clear();
     // Defensive: a new wave is starting, so clear any dangling reward popup/wait
     // (shouldn't normally survive into prep, but a refresh mid-popup could).
     if (rewardWaitTimer) { clearTimeout(rewardWaitTimer); rewardWaitTimer = null; }
@@ -2774,6 +2972,34 @@ if (!siege) {
       const round = msg?.payload?.round;
       if (typeof round === 'number') onAllyRewardPick(round);
     })
+    .on('broadcast', { event: 'advance-ack' }, (msg) => {
+      // The other player pressed Continue on the wave-summary / map-clear
+      // popup. Both-confirm gate: advances once we've also pressed.
+      const key = msg?.payload?.key;
+      if (typeof key === 'string') onRemoteAdvanceAck(key);
+    })
+    .on('broadcast', { event: 'map-cleared' }, (msg) => {
+      // The other client cleared this map. Make it authoritative: stop our own
+      // sim from judging this wave (a final-wave failure would otherwise write
+      // a racing defeat) and mirror the map-clear summary so we can confirm.
+      if (matchEnded) return;
+      if ((msg?.payload?.map ?? -1) !== mapIndex) return;   // stale / different map
+      // Honour the clearing client's survivor-refund figures so both clients
+      // call advance_map with the same amounts.
+      if (msg.payload.refund) mapClearRefundHint = msg.payload.refund;
+      waveJudged = true;
+      if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
+      hideWaveSummary();
+      showMapClearSummary();
+    })
+    .on('broadcast', { event: 'run-won' }, () => {
+      // The other client won the final map. Don't let our local sim write a
+      // racing defeat — the victory outcome arrives via postgres_changes and
+      // shows the victory overlay on both clients.
+      if (matchEnded) return;
+      waveJudged = true;
+      if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
+    })
     .subscribe((status) => {
       if (status !== 'SUBSCRIBED') return;
       // 5Hz snapshot. Payload keys are 1-char to keep packet small:
@@ -2939,7 +3165,12 @@ if (!siege) {
     // player. frontRoundResolvable() now returns true (otherPlayerOnline=false),
     // so this releases us and the run continues. (This is the safety valve that
     // keeps the wait from ever deadlocking — see the reward block header.)
-    if (wasOnline && !otherOnline) resolveFrontRound();
+    if (wasOnline && !otherOnline) {
+      resolveFrontRound();
+      // Same safety valve for the wave/map advance wait: a dropped ally must
+      // not hold us on the summary screen forever.
+      maybeFireAdvanceGate();
+    }
   };
 
   // Start in the "ally is reconnecting" state until their presence

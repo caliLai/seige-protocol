@@ -307,8 +307,9 @@
 
     <!-- Wave-failed summary — all deployed units died, towers still stand.
          Shows what each side lost and the tower damage they dealt this wave,
-         with a manual "advance to next wave" button. Either player's click
-         fires advance_wave (idempotent) and flips both clients to prep. -->
+         with a manual "advance to next wave" button. BOTH players must press
+         it (the both-confirm gate in battle.js) before advance_wave fires and
+         flips both clients to prep. -->
     <div id="waveSummaryOverlay" class="game-victory-overlay game-wavesum-overlay hidden" role="dialog"
       aria-modal="true" aria-labelledby="waveSummaryTitle" aria-hidden="true">
       <div class="game-victory-card game-wavesum-card">
@@ -328,6 +329,39 @@
 
           <div class="game-victory-actions">
             <button type="button" id="waveNextBtn" class="px-btn setup-ready-btn">⚔ ADVANCE TO NEXT WAVE ⚔</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map-cleared summary — every tower on a (non-final) map fell. Shows the
+         run tally + the next region, with a "continue to next map" button that
+         BOTH players must press (the both-confirm gate in battle.js) before
+         advance_map fires and marches both clients onward. -->
+    <div id="mapClearOverlay" class="game-victory-overlay game-wavesum-overlay game-mapclear-overlay hidden"
+      role="dialog" aria-modal="true" aria-labelledby="mapClearTitle" aria-hidden="true">
+      <div class="game-victory-card game-wavesum-card game-mapclear-card">
+        <div class="game-victory-corner tl"></div>
+        <div class="game-victory-corner tr"></div>
+        <div class="game-victory-corner bl"></div>
+        <div class="game-victory-corner br"></div>
+        <div class="game-victory-content">
+          <div id="mapClearTitle" class="game-victory-title game-mapclear-title">⚔ REGION CLEARED ⚔</div>
+          <div class="game-victory-divider">
+            <div class="dash-line"></div><span class="divider-icon">⚜</span>
+            <div class="dash-line"></div>
+          </div>
+          <div class="game-victory-body">EVERY TOWER HATH FALLEN.<br />MARCH ONWARD TO THE NEXT REGION.</div>
+
+          <div class="game-victory-stats">
+            <div class="game-victory-stat"><span>TOWERS DESTROYED</span><span id="mapClearTowers">—</span></div>
+            <div class="game-victory-stat"><span>UNITS DEPLOYED</span><span id="mapClearUnits">—</span></div>
+            <div class="game-victory-stat"><span>LIVES REMAINING</span><span id="mapClearLives">—</span></div>
+            <div class="game-victory-stat"><span>NEXT REGION</span><span id="mapClearNext">—</span></div>
+          </div>
+
+          <div class="game-victory-actions">
+            <button type="button" id="mapNextBtn" class="px-btn setup-ready-btn">⚔ CONTINUE TO NEXT MAP ⚔</button>
           </div>
         </div>
       </div>

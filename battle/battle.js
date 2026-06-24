@@ -2403,6 +2403,40 @@ const updateDebugHud = () => {
   ].join('\n');
 };
 
+const drawDebugPath = () => {
+  if (!DEBUG_HUD || !Array.isArray(activePath) || activePath.length === 0) return;
+
+  gameCanvas.save();
+  gameCanvas.lineWidth = 4;
+  gameCanvas.strokeStyle = 'rgba(255, 230, 0, 0.85)';
+  gameCanvas.fillStyle = 'rgba(255, 230, 0, 0.95)';
+  gameCanvas.font = '12px monospace';
+  gameCanvas.textAlign = 'center';
+  gameCanvas.textBaseline = 'middle';
+
+  gameCanvas.beginPath();
+  activePath.forEach((point, index) => {
+    if (index === 0) {
+      gameCanvas.moveTo(point.x, point.y);
+    } else {
+      gameCanvas.lineTo(point.x, point.y);
+    }
+  });
+  gameCanvas.stroke();
+
+  activePath.forEach((point, index) => {
+    gameCanvas.beginPath();
+    gameCanvas.arc(point.x, point.y, 9, 0, Math.PI * 2);
+    gameCanvas.fill();
+
+    gameCanvas.fillStyle = '#111';
+    gameCanvas.fillText(String(index), point.x, point.y);
+    gameCanvas.fillStyle = 'rgba(255, 230, 0, 0.95)';
+  });
+
+  gameCanvas.restore();
+};
+
 const animate = () => {
   animationId = requestAnimationFrame(animate);
   updateDebugHud();
@@ -2413,6 +2447,7 @@ const animate = () => {
   lastFrameTime = now;
 
   gameCanvas.drawImage(backgroundImage, 0, 0);
+  drawDebugPath();
 
   // Observing mode skips the local sim entirely and renders the most
   // recent broadcast snapshot. Explosions still play locally so the

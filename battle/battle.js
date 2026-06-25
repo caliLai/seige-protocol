@@ -145,6 +145,16 @@ let myOther = { profile: null };
 
 // Battle runtime
 const towers = [];
+// Rolling feed of recent tower kills ({ s: destruction sequence, k: killing
+// team }), broadcast in each snapshot so the observing peer knows which side
+// landed each killing blow — needed for the host to persist lifetime
+// tower_points even on waves it observes rather than simulates. Capped to a
+// short tail; the observer only ever needs the kills from the last few frames.
+const recentTowerKills = [];
+// Monotonic id stamped onto each live projectile (lazily, in the snapshot
+// builder) so the observing peer can track shots across snapshots and simulate
+// their flight locally instead of redrawing stale position samples.
+let shotIdSeq = 0;
 let attackUnits = [];
 let animationId = null;
 let mapLoaded = false;
@@ -193,6 +203,14 @@ let observedRewardBaselineTd = null;
 // it can be near the spawn point, so promoting from it would visually
 // "rewind" the wave on the refreshing client.
 let latestSnapshotIsSeed = false;
+
+// A snapshot belongs to a specific map (stamped as `mi`). An observer that just
+// advanced must ignore any snapshot still describing the previous map, live or
+// DB-seeded — otherwise it reconciles the new map's fresh towers against the
+// old map's "all destroyed" state and falsely reports the new map cleared.
+// Strict equality also rejects legacy mi-less snapshots, which is the safe
+// direction (the observer just waits for the next properly-tagged broadcast).
+const snapshotIsForCurrentMap = (snap) => !!snap && snap.mi === mapIndex;
 
 // "Lives" in the HUD represents wave-attempts remaining — the team can
 // fail one wave per remaining attempt. Derived from current_wave /
@@ -562,16 +580,17 @@ const renderHeader = () => {
 
   // Gold is now persisted on the siege row (host_gold/ally_gold) so it
   // carries across waves and tower-kill rewards stick. Falls back to the
-  // pre-battle derivation while the wave is still being queued for the
-  // very first time (host hasn't seeded the columns yet).
+  // pre-battle derivation ONLY while the column is unseeded (null) — a finite
+  // 0 is a real "spent everything" balance and must show as 0, not snap back
+  // up to the starting amount.
   const myGold = siege[`${mySide}_gold`];
   const otherGold = siege[`${otherSide}_gold`];
   const mySpent = queueCost(siege[`${mySide}_queue`] || []);
   const otherSpent = queueCost(siege[`${otherSide}_queue`] || []);
-  selfGoldEl.textContent = String(Number.isFinite(myGold) && myGold > 0
+  selfGoldEl.textContent = String(Number.isFinite(myGold)
     ? myGold
     : Math.max(0, startingGold - mySpent));
-  otherGoldEl.textContent = String(Number.isFinite(otherGold) && otherGold > 0
+  otherGoldEl.textContent = String(Number.isFinite(otherGold)
     ? otherGold
     : Math.max(0, startingGold - otherSpent));
 
@@ -694,7 +713,10 @@ const callBattleRpc = async (name, args, applyShape, silentErrors = []) => {
 const myGoldNow = () => {
   const k = isHost ? 'host_gold' : 'ally_gold';
   const v = siege?.[k];
-  return Number.isFinite(v) && v > 0 ? v : startingGold;
+  // Fall back to startingGold ONLY when the column hasn't been seeded yet
+  // (null/undefined). A finite 0 is a real balance — a player who spent down
+  // to nothing — and must NOT round back up to the starting amount.
+  return Number.isFinite(v) ? v : startingGold;
 };
 
 // Cheapest unit a side could deploy this run (Infinity if they picked none).
@@ -1532,6 +1554,30 @@ const openAdvanceGate = (key, btn, label, run) => {
   if (advanceGate && advanceGate.key === key) return;
   advanceGate = { key, btn, run, localAcked: false, remoteAcked: pendingAdvanceAcks.delete(key) };
   if (btn) { btn.disabled = false; btn.textContent = label; }
+  startAdvancePoll();
+};
+
+// ── DROPPED-ECHO SAFETY NET ───────────────────────────────────
+// Advancing a wave/map normally reaches both clients via the sieges-row
+// postgres_changes echo. But Realtime delivery is best-effort: a dropped echo
+// would otherwise strand a client on the summary popup after the other player
+// advanced (seen most with a non-simming observer, who has no local sim that
+// would independently advance). While ANY advance summary is open we poll the
+// row directly and apply it, so the advance always lands — within a tick of the
+// echo when it arrives, within the poll interval when it doesn't.
+let advancePollTimer = null;
+const reconcileAdvanceFromRow = async () => {
+  if (!siege || matchEnded) return;
+  const { data, error } = await supabase
+    .from('sieges').select('*').eq('id', siege.id).maybeSingle();
+  if (!error && data) applySiegeUpdate(data);   // idempotent; prep echo closes the gate
+};
+const startAdvancePoll = () => {
+  if (advancePollTimer) return;
+  advancePollTimer = setInterval(reconcileAdvanceFromRow, 1500);
+};
+const stopAdvancePoll = () => {
+  if (advancePollTimer) { clearInterval(advancePollTimer); advancePollTimer = null; }
 };
 
 // This player pressed Continue: record + broadcast our ack, then fire if the
@@ -1563,7 +1609,7 @@ const onRemoteAdvanceAck = (key) => {
 
 // Tear the gate down without advancing — the popup is being dismissed because
 // the row already advanced (the other player's click / a prep echo).
-const closeAdvanceGate = () => { advanceGate = null; };
+const closeAdvanceGate = () => { advanceGate = null; stopAdvancePoll(); };
 
 // True while the WAVE n REPULSED summary is up on this client. Mirrored into the
 // broadcast snapshot (key `ws`) so a peer that refreshed mid-wave — and is thus
@@ -1609,7 +1655,10 @@ const showWaveSummary = (waveNum) => {
     `wave:${waveNum}`,
     waveNextBtn,
     '⚔ ADVANCE TO NEXT WAVE ⚔',
-    () => { callBattleRpc('advance_wave', { p_siege: siege.id }, false); hideWaveSummary(); },
+    // Leave the summary up until the advance actually lands (prep echo / poll
+    // hides it). Hiding it here would let an observing peer re-detect the same
+    // wave from its frozen snapshot and re-open the popup, undoing its ack.
+    () => { callBattleRpc('advance_wave', { p_siege: siege.id }, false); },
   );
   waveSummaryOverlay.classList.remove('hidden');
   waveSummaryOverlay.setAttribute('aria-hidden', 'false');
@@ -1687,7 +1736,10 @@ const showMapClearSummary = () => {
         p_host_refund: refund.host,
         p_ally_refund: refund.ally,
       }, false);
-      hideMapClear();
+      // Leave the card up until the advance actually lands (prep echo / poll
+      // hides it via applySiegeUpdate). Hiding it here would let an observing
+      // peer re-detect the cleared map from its frozen snapshot and re-open the
+      // popup, undoing its ack — the "stuck on cleared map" bug.
     },
   );
   mapClearOverlay.classList.remove('hidden');
@@ -1894,7 +1946,7 @@ const startStuckWaveWatchdog = () => {
       lastDbRefetchAt = Date.now();
       const { data } = await supabase.rpc('get_siege_snapshot', { p_siege: siege.id });
       if (!observingMode) return;
-      if (data && Array.isArray(data.units)) {
+      if (data && Array.isArray(data.units) && snapshotIsForCurrentMap(data)) {
         const dbTs = data.ts || 0;
         const curTs = latestSnapshot?.ts || 0;
         if (dbTs >= curTs) {
@@ -1956,8 +2008,26 @@ const observedKey = (u, i) => `${u.t}|${u.u}|${i}`;
 // broadcast reward-picked for them so a peer still waiting on us is released.
 const handleObservedTowerReward = (seq) => {
   if (seq + 1 > observedRewardBaselineTd) {
+    // A tower fell WHILE we're watching — open its reward popup.
     enqueueReward(seq);
+
+    // Lifetime tower_points are server-authoritative and host-only (the award
+    // RPC rejects non-host callers). On waves the host SIMULATES it persists
+    // from the 'tower-destroyed' event; on waves it OBSERVES (e.g. a solo wave
+    // the ally ran) it must persist here instead, using the killing team from
+    // the snapshot's kill feed. Scoped to kills during active observation (not
+    // the catch-up of towers already down before we started — those were
+    // persisted by whoever simulated them), so it can't double-credit. Phase is
+    // silenced since the final-tower kill races set_match_outcome.
+    if (isHost && siege?.phase === 'battle') {
+      const team = (latestSnapshot?.k || []).find((e) => e.s === seq)?.k;
+      if (team === 'host' || team === 'ally') {
+        callBattleRpc('award_tower_points', { p_siege: siege.id, p_team: team }, false, ['wrong_phase']);
+      }
+    }
   } else if (battleBroadcast) {
+    // Already down before we started observing — forfeit our reward pick and
+    // release any peer still waiting on us.
     battleBroadcast.send({ type: 'broadcast', event: 'reward-picked', payload: { round: seq } });
   }
 };
@@ -1968,6 +2038,20 @@ const renderObservedState = () => {
     return;
   }
   const snap = latestSnapshot;
+
+  // Mirror the simmer's authoritative scoreboard so both clients show the same
+  // leaderboard points and per-side tower damage. The observer never credits
+  // these locally (it runs no combat sim), so it adopts them wholesale.
+  if (snap.lb) {
+    setLeaderboardPoints({ hostPoints: snap.lb.h, allyPoints: snap.lb.a });
+    renderLeaderboard();
+  }
+  if (snap.c) {
+    contribution.host.damage_dealt = snap.c.hd;
+    contribution.host.towers_destroyed = snap.c.ht;
+    contribution.ally.damage_dealt = snap.c.ad;
+    contribution.ally.towers_destroyed = snap.c.at;
+  }
 
   // First snapshot of this observing session establishes the forfeit baseline:
   // everything already destroyed is in the past and earns no popup here.
@@ -2035,7 +2119,10 @@ const renderObservedState = () => {
   // doesn't pop up when both refresh" — without it, an ally who reached
   // the final tower locally could hang waiting for the host's sim to
   // catch up. Guarded by !matchEnded so it only fires once per match.
-  if (!matchEnded && towers.length === 0 && towersDestroyedCount >= totalTowers) {
+  // totalTowers > 0 guards the freshly-loaded-map window: right after loadMap
+  // (towers=[], totalTowers=0, td=0) the bare count check would read as "all
+  // cleared" before initialiseTowers has run. Only judge once towers exist.
+  if (!matchEnded && totalTowers > 0 && towers.length === 0 && towersDestroyedCount >= totalTowers) {
     if (isLastMap(mapIndex)) {
       showEndOverlay('victory');
       return;
@@ -2085,22 +2172,107 @@ const renderObservedState = () => {
     }
   }
 
-  // Projectiles (arrows). Drawn on top of units, extrapolated from each one's
-  // snapshot position by its velocity × elapsed-since-snapshot so arrows fly
-  // smoothly at the canvas refresh rate despite the ~5Hz snapshot cadence.
-  // (The live sim advances projectiles by `vx` per ~16.7ms frame, so we scale
-  // the elapsed time to frame-units to match its speed.)
-  // Clamp the extrapolation window so a stale seed/CDC snapshot doesn't fling
-  // arrows across the screen — a live broadcast (≤200ms old) replaces it next.
-  const projAgeMs = snap.ts ? Math.min(400, Date.now() - snap.ts) : 0;
-  const projElapsedFrames = projAgeMs / 16.7;
-  for (const p of snap.proj || []) {
-    drawObservedProjectile(
-      p,
-      p.x + (p.vx ?? 0) * projElapsedFrames,
-      p.y + (p.vy ?? 0) * projElapsedFrames,
-    );
+  // Projectiles. Rather than redraw each 5Hz position sample (which made shots
+  // teleport between ticks and sail straight through their targets because the
+  // observer never removed them on hit), we LOCALLY SIMULATE each shot: a
+  // snapshot only tells us a shot exists, its current position/velocity, and
+  // where its target is. The observer then flies it at the full frame rate —
+  // tower shots home toward the target like the live sim, arrows fly straight —
+  // and retires it the moment it reaches the target or the simmer drops it.
+  updateObservedShots(snap, dt);
+
+  // Tower impact bursts, replayed from the simmer's hit-effect feed so strikes
+  // visibly land ON units even when the projectile itself was never sampled
+  // mid-flight (close-range shots). Mirrors Tower.renderHitEffects: an orange
+  // circle that grows and fades over ~200ms. The broadcast age is advanced by
+  // time elapsed since the snapshot so the burst keeps animating between ticks.
+  const fxElapsed = snap.ts ? Math.max(0, Date.now() - snap.ts) : 0;
+  for (const f of snap.fx || []) {
+    drawObservedImpact(f.x, f.y, (f.a ?? 0) + fxElapsed);
   }
+};
+
+// ── OBSERVED PROJECTILE SIMULATION ───────────────────────────
+// Locally-advanced copies of the simmer's in-flight shots, keyed by the stable
+// id the snapshot assigns each projectile. Reconciled when a NEW snapshot
+// arrives (add fresh shots, refresh each one's target, drop shots the simmer
+// removed); advanced + drawn every frame in between for smooth 60fps motion.
+const observedShots = new Map();
+let lastShotSnapTs = null;
+const OBSERVED_SHOT_MAX_AGE_MS = 2500;  // safety net so a leaked shot can't linger
+
+const updateObservedShots = (snap, dtMs) => {
+  const now = performance.now();
+
+  // Reconcile against the authoritative shot set, but only when the snapshot
+  // actually changed — doing it every frame would fight the local advance.
+  if (snap.ts !== lastShotSnapTs) {
+    lastShotSnapTs = snap.ts;
+    const seen = new Set();
+    for (const s of snap.proj || []) {
+      seen.add(s.id);
+      const existing = observedShots.get(s.id);
+      if (!existing) {
+        observedShots.set(s.id, {
+          x: s.x, y: s.y,
+          vx: s.vx ?? 0, vy: s.vy ?? 0,
+          tx: s.tx, ty: s.ty,
+          homing: s.tw !== undefined,  // tower shots home; arrows fly straight
+          tw: s.tw, k: s.k, t: s.t,
+          bornAt: now,
+        });
+      } else {
+        // Refresh the target (it moves) and gently correct drift toward the
+        // authoritative sample without snapping.
+        existing.tx = s.tx; existing.ty = s.ty;
+        existing.x += (s.x - existing.x) * 0.5;
+        existing.y += (s.y - existing.y) * 0.5;
+        if (!existing.homing) { existing.vx = s.vx ?? existing.vx; existing.vy = s.vy ?? existing.vy; }
+      }
+    }
+    // A shot gone from the feed was removed on the simmer (hit something or its
+    // target died). Drop it — the fx feed already shows any impact burst.
+    for (const id of [...observedShots.keys()]) {
+      if (!seen.has(id)) observedShots.delete(id);
+    }
+  }
+
+  // Advance + draw every frame.
+  const frameScale = dtMs / 16.7;
+  for (const [id, shot] of observedShots) {
+    if (shot.homing && Number.isFinite(shot.tx)) {
+      const dx = shot.tx - shot.x, dy = shot.ty - shot.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const speed = Math.hypot(shot.vx, shot.vy) || 6;
+      shot.vx = (dx / d) * speed;
+      shot.vy = (dy / d) * speed;
+    }
+    shot.x += shot.vx * frameScale;
+    shot.y += shot.vy * frameScale;
+    drawObservedProjectile(shot, shot.x, shot.y);
+
+    // Retire on arrival (the live shot is removed on contact) or if it has
+    // somehow outlived any plausible flight time.
+    const reached = Number.isFinite(shot.tx) &&
+      Math.hypot(shot.tx - shot.x, shot.ty - shot.y) <= 8;
+    if (reached || now - shot.bornAt > OBSERVED_SHOT_MAX_AGE_MS) {
+      observedShots.delete(id);
+    }
+  }
+};
+
+// Orange impact burst matching Tower.renderHitEffects (radius 5→20, fade out
+// over 200ms). Used to replay broadcast tower hits on the observing client.
+const drawObservedImpact = (x, y, ageMs) => {
+  const progress = ageMs / 200;
+  if (progress >= 1) return;
+  gameCanvas.save();
+  gameCanvas.globalAlpha = 1 - progress;
+  gameCanvas.fillStyle = 'orange';
+  gameCanvas.beginPath();
+  gameCanvas.arc(x, y, 5 + progress * 15, 0, Math.PI * 2);
+  gameCanvas.fill();
+  gameCanvas.restore();
 };
 
 // Lazy arrow-sprite cache for observed projectiles, keyed by firing unit type.
@@ -2446,6 +2618,8 @@ const animate = () => {
     runTowersDestroyed++;
     updateWaveProgress();
     renderHeader();
+    recentTowerKills.push({ s: towersDestroyedCount - 1, k: dead?.lastAttackerTeam ?? null });
+    if (recentTowerKills.length > 8) recentTowerKills.shift();
     emit('tower-destroyed', {
       towerIndex: towersDestroyedCount - 1,
       lastAttackerTeam: dead?.lastAttackerTeam ?? null,
@@ -2512,6 +2686,76 @@ const animate = () => {
   if (battleStarted && !rewardActive) checkWaveOutcome();
 };
 
+// ── SINGLE-AUTHORITY NETCODE ─────────────────────────────────
+// To stop the two clients' independent sims from diverging ("the players
+// aren't matching"), only ONE client simulates combat per wave — the other
+// observes it via the snapshot broadcast. The simmer is the host whenever the
+// host is deploying this wave; only on a solo wave where the host has nothing
+// queued does the ally become the simmer. Both clients compute this from the
+// same siege row, so they always agree on who's authoritative.
+const iAmWaveSimmer = () => {
+  const hostUnits = (siege?.host_queue || []).length > 0;
+  const allyUnits = (siege?.ally_queue || []).length > 0;
+  return isHost ? (hostUnits || !allyUnits)
+                : (allyUnits && !hostUnits);
+};
+
+// Enter spectator mode for the current wave: render the simmer's broadcast
+// snapshots instead of running a local combat sim. Used by the non-simming
+// peer every wave AND by the refresh-into-active-wave recovery path.
+//   runStart — true on the very first wave of a run, to zero the run-wide
+//              tallies the observer mirrors/accumulates (end-screen totals).
+//   alertMsg — banner to flash, or null for none.
+const enterObserving = ({ runStart = false, alertMsg = '⚔ WAVE IN PROGRESS — AWAITING THINE ALLY' } = {}) => {
+  battleStarted = true;
+  waveJudged = true;
+  observingMode = true;  // ← render from broadcast snapshots, not local sim
+  observedShots.clear();
+  lastShotSnapTs = null;
+
+  if (runStart) {
+    resetContribution();
+    runTowersDestroyed = 0;
+    runUnitsDeployed = 0;
+  }
+  // Per-wave baseline so the mirrored WAVE-REPULSED summary shows this wave's
+  // tower damage, not the run cumulative. At wave start the mirrored
+  // contribution still holds the previous wave's final totals — the right
+  // baseline to diff against.
+  waveStartDamage = { host: contribution.host.damage_dealt, ally: contribution.ally.damage_dealt };
+
+  // Pre-warm sprite sheets for every unit type either side picked so the FIRST
+  // snapshot we receive renders with real sprites instead of flashing the box
+  // fallback for ~1 frame per new unit type.
+  const preload = new Set([
+    ...(siege.host_units || []),
+    ...(siege.ally_units || []),
+    ...(siege.host_queue || []),
+    ...(siege.ally_queue || []),
+  ]);
+  preload.forEach(id => { if (id) ensureObservedSprite(id); });
+
+  // Seed the observed state from the persisted DB snapshot. Without this we'd
+  // stare at an empty canvas for up to 200ms while waiting for the simmer's
+  // first broadcast — and if they happen to be disconnected, indefinitely.
+  // After this seed, the broadcast + postgres_changes paths keep it fresh.
+  supabase
+    .rpc('get_siege_snapshot', { p_siege: siege.id })
+    .then(({ data, error }) => {
+      if (error) { console.warn('snapshot seed failed', error); return; }
+      if (!observingMode) return;        // we may have left observing already
+      if (!data) return;                 // no DB row yet — fall through to broadcast
+      if (!snapshotIsForCurrentMap(data)) return;  // stale snapshot from the previous map
+      if (latestSnapshot && (latestSnapshot.ts || 0) >= (data.ts || 0)) return;
+      latestSnapshot = data;
+      latestSnapshotIsSeed = true;       // DB origin — gate promotion accordingly
+    });
+
+  renderWaveTrack(siege.current_wave || 1, siege.total_waves || 15);
+  startStuckWaveWatchdog();
+  if (alertMsg) showAlert(alertMsg, 'info');
+};
+
 // Kick off one wave of combat. Called for each wave in the multi-wave
 // loop, not just the first one — re-uses the same banner / spawn / settle
 // machinery between waves.
@@ -2552,38 +2796,7 @@ const startWave = () => {
   // the wave (gold updates as towers fall, phase flips to 'prep'
   // on fail, outcome set on win).
   if (siege?.phase === 'battle') {
-    battleStarted = true;
-    waveJudged = true;
-    observingMode = true;  // ← render from broadcast snapshots, not local sim
-    // Pre-warm sprite sheets for every unit type either side picked so
-    // the FIRST snapshot we receive renders with real sprites instead of
-    // flashing the box fallback for ~1 frame per new unit type.
-    const preload = new Set([
-      ...(siege.host_units || []),
-      ...(siege.ally_units || []),
-      ...(siege.host_queue || []),
-      ...(siege.ally_queue || []),
-    ]);
-    preload.forEach(id => { if (id) ensureObservedSprite(id); });
-
-    // Seed the observed state from the persisted DB snapshot. Without
-    // this we'd stare at an empty canvas for up to 200ms while waiting
-    // for the other peer's first broadcast — and if they happen to be
-    // disconnected, indefinitely. After this seed, the broadcast +
-    // postgres_changes paths keep latestSnapshot fresh.
-    supabase
-      .rpc('get_siege_snapshot', { p_siege: siege.id })
-      .then(({ data, error }) => {
-        if (error) { console.warn('snapshot seed failed', error); return; }
-        if (!observingMode) return;        // we may have left observing already
-        if (!data) return;                 // no DB row yet — fall through to broadcast
-        if (latestSnapshot && (latestSnapshot.ts || 0) >= (data.ts || 0)) return;
-        latestSnapshot = data;
-        latestSnapshotIsSeed = true;       // DB origin — gate promotion accordingly
-      });
-
-    startStuckWaveWatchdog();
-    showAlert('⚔ WAVE IN PROGRESS — AWAITING THINE ALLY', 'info');
+    enterObserving();
     return;
   }
 
@@ -2719,6 +2932,8 @@ const applySiegeUpdate = (fresh) => {
     observingMode = false;   // ← back to normal sim for the next wave
     observedRewardBaselineTd = null;  // re-baseline if we observe again
     latestSnapshot = null;
+    observedShots.clear();            // drop any in-flight observed projectiles
+    lastShotSnapTs = null;
     if (waveSettleTimer) { clearTimeout(waveSettleTimer); waveSettleTimer = null; }
     attackUnits = [];
     unitsDeployedCount = 0;
@@ -2738,13 +2953,20 @@ const applySiegeUpdate = (fresh) => {
     checkGoldStarvation();
   }
 
-  // Server has just committed the prep → battle transition. Spawn the
-  // queues NOW so both clients spawn off the same event instead of off
-  // their own lock-in moments (which previously raced the RPC commit
-  // and let a refresher re-spawn fresh while the other client's sim was
-  // already mid-flight).
+  // Server has just committed the prep → battle transition. The single
+  // simmer spawns + runs the wave; the other peer observes its snapshots so
+  // the two battlefields can't diverge. Both spawn/observe off the SAME
+  // committed event (not their own lock-in moments), so nobody re-spawns
+  // fresh while the simmer is already mid-flight.
   if (siege.phase === 'battle' && prevPhase === 'prep' && !battleStarted && !observingMode && !matchEnded) {
-    beginWaveSpawn();
+    if (iAmWaveSimmer()) {
+      beginWaveSpawn();
+    } else {
+      enterObserving({
+        runStart: mapIndex === 0 && (siege.current_wave ?? 1) === 1,
+        alertMsg: null,
+      });
+    }
   }
   render();
 
@@ -2946,9 +3168,11 @@ if (!siege) {
 
   battleBroadcast
     .on('broadcast', { event: 'snapshot' }, (msg) => {
-      // Only apply if we're actually observing — non-observing
-      // clients have their own authoritative local sim.
-      if (observingMode && msg?.payload) {
+      // Only apply if we're actually observing — non-observing clients have
+      // their own authoritative local sim. Reject snapshots describing a
+      // different map (a late echo from the map we just left), which would
+      // otherwise reconcile this map's towers against the old cleared state.
+      if (observingMode && msg?.payload && snapshotIsForCurrentMap(msg.payload)) {
         latestSnapshot = msg.payload;
         latestSnapshotIsSeed = false;  // live data — promotion may use it
       }
@@ -3022,6 +3246,10 @@ if (!siege) {
       setInterval(() => {
         if (!battleStarted || observingMode) return;
         if (siege?.outcome) return;
+        // performance.now() clock for hit-effect ages below (hitEffects.createdAt
+        // is set from the same clock); Date.now() for ts which the observer
+        // diffs against its own Date.now().
+        const nowPerf = performance.now();
         const payload = {
           ts: Date.now(),
           units: attackUnits
@@ -3033,11 +3261,13 @@ if (!siege) {
               u: u.unitId || u.constructor?.name || 'Soldier',  // sprite key
               h: Math.max(0, Math.round(u.health ?? 0)),
               m: Math.max(1, Math.round(u.maxHealth ?? 1)),
-              // a = 1 when the unit has a live attack target. Observed
-              // clients use this to swap to the Attack sprite sheet so
-              // refreshed players see units actually attacking towers
-              // instead of just standing in idle.
-              a: (u.target && (u.target.health ?? 1) > 0) ? 1 : 0,
+              // a = 1 only while the unit is ACTUALLY mid-attack (swinging /
+              // firing) — the same isAttacking flag each unit class uses to
+              // pick its own Attack sprite locally. Using "has a target"
+              // instead made observers swap to the attack pose the moment a
+              // unit ACQUIRED a tower (at the wide ~130px acquisition radius),
+              // so melee units appeared to attack while still marching in.
+              a: u.isAttacking ? 1 : 0,
             })),
           towers: towers.map((t, i) => ({
             // Stable original index of this surviving tower (assigned in
@@ -3050,39 +3280,91 @@ if (!siege) {
             m: Math.max(1, Math.round(t.maxHealth ?? 1)),
           })),
           td: towersDestroyedCount,
+          // Map this snapshot describes. Snapshots carry no implicit map, so an
+          // observer that just advanced to the next map must reject a snapshot
+          // (live OR DB-seeded) still describing the PREVIOUS, already-cleared
+          // map — otherwise it reconciles the new map's fresh towers against the
+          // old "all destroyed" state and falsely reports the new map cleared.
+          mi: mapIndex,
+          // Authoritative scoreboard from the sole simmer, mirrored by the
+          // observing peer so both clients show identical leaderboard points
+          // and per-side tower damage. The observer runs no combat sim, so it
+          // never tallies these locally — it adopts the simmer's values
+          // wholesale (single-authority netcode). towers_destroyed is carried
+          // too so an observer's set_match_outcome call (observed-victory race)
+          // ships the correct 60/40 contribution split.
+          lb: { h: leaderboardState.host.points, a: leaderboardState.ally.points },
+          c: {
+            hd: contribution.host.damage_dealt, ht: contribution.host.towers_destroyed,
+            ad: contribution.ally.damage_dealt, at: contribution.ally.towers_destroyed,
+          },
+          // Recent tower-kill feed ({ s: seq, k: killing team }) so the
+          // observing host can persist lifetime tower_points for kills it
+          // didn't simulate (e.g. a solo wave the ally ran).
+          k: recentTowerKills.slice(-8),
           // Wave-failed summary state. When this side's sim repulsed the wave
           // it shows WAVE n REPULSED and the row stays at phase='battle' until
           // someone advances — so the snapshot keeps flowing and a refreshed
           // (observing) peer can mirror the same overlay. null when not shown.
           ws: waveSummaryShown ? (siege?.current_wave ?? 1) : null,
-          // Live projectiles so the observing client can render them too.
-          // Velocity is carried so the observer extrapolates smoothly between
-          // the ~5Hz snapshots instead of teleporting each shot.
-          //   • unit arrows:  { x, y, vx, vy, t (team), k (unit type → sprite) }
-          //   • tower shots:  { x, y, vx, vy, tw (tower type → derived style) }
-          // The style is deterministic from the tower type, so we only send the
-          // type and the observer reconstructs glow/colour/shape locally.
+          // Live projectiles for the observer to LOCALLY SIMULATE (see
+          // updateObservedShots). Each carries a stable id so the observer can
+          // track it across snapshots, plus its target's position so tower
+          // shots can home and every shot retires when it arrives.
+          //   • unit arrows:  { id, x, y, vx, vy, tx, ty, t (team), k (sprite) }
+          //   • tower shots:  { id, x, y, vx, vy, tx, ty, tw (type → style) }
+          // The id is assigned lazily on the live projectile object so we don't
+          // have to touch the unit/tower classes. tx/ty are null once the
+          // target dies (the observer then flies the shot straight until the
+          // simmer drops it). Tower style is derived from tw on the observer.
           proj: [
             ...attackUnits.flatMap(u =>
-              (u.projectiles || []).map(p => ({
-                x: Math.round(p.x),
-                y: Math.round(p.y),
-                vx: Math.round((p.vx ?? 0) * 100) / 100,
-                vy: Math.round((p.vy ?? 0) * 100) / 100,
-                t: u.team,
-                k: u.unitId || u.constructor?.name || 'Archer',
-              }))
+              (u.projectiles || []).map(p => {
+                if (p._sid == null) p._sid = ++shotIdSeq;
+                const tgt = (p.target && !p.target.isDead) ? p.target.centre : null;
+                return {
+                  id: p._sid,
+                  x: Math.round(p.x),
+                  y: Math.round(p.y),
+                  vx: Math.round((p.vx ?? 0) * 100) / 100,
+                  vy: Math.round((p.vy ?? 0) * 100) / 100,
+                  tx: tgt ? Math.round(tgt.x) : null,
+                  ty: tgt ? Math.round(tgt.y) : null,
+                  t: u.team,
+                  k: u.unitId || u.constructor?.name || 'Archer',
+                };
+              })
             ),
             ...towers.flatMap(tw =>
-              (tw.projectiles || []).map(p => ({
-                x: Math.round(p.x),
-                y: Math.round(p.y),
-                vx: Math.round((p.vx ?? 0) * 100) / 100,
-                vy: Math.round((p.vy ?? 0) * 100) / 100,
-                tw: tw.type,
-              }))
+              (tw.projectiles || []).map(p => {
+                if (p._sid == null) p._sid = ++shotIdSeq;
+                const tgt = (p.target && !p.target.isDead) ? p.target.centre : null;
+                return {
+                  id: p._sid,
+                  x: Math.round(p.x),
+                  y: Math.round(p.y),
+                  vx: Math.round((p.vx ?? 0) * 100) / 100,
+                  vy: Math.round((p.vy ?? 0) * 100) / 100,
+                  tx: tgt ? Math.round(tgt.x) : null,
+                  ty: tgt ? Math.round(tgt.y) : null,
+                  tw: tw.type,
+                };
+              })
             ),
           ],
+          // Tower impact bursts ({ x, y, a: age-in-ms }). A tower shot at a
+          // unit standing right next to it lives barely a frame, so the ~5Hz
+          // proj feed almost never catches it mid-flight and the observer saw
+          // the tower stop attacking close units. Broadcasting the live hit
+          // effects directly makes the strike land ON the unit on the
+          // observer too — independent of whether the projectile was sampled.
+          fx: towers.flatMap(t =>
+            (t.hitEffects || []).map(e => ({
+              x: Math.round(e.x),
+              y: Math.round(e.y),
+              a: Math.max(0, Math.round(nowPerf - e.createdAt)),
+            }))
+          ),
         };
         lastBroadcastPayload = payload;
         battleBroadcast.send({ type: 'broadcast', event: 'snapshot', payload });
@@ -3118,7 +3400,7 @@ if (!siege) {
         (payload) => {
           if (!observingMode) return;
           const state = payload.new?.state;
-          if (state) {
+          if (state && snapshotIsForCurrentMap(state)) {
             latestSnapshot = state;
             // A CDC push of a row that the OTHER peer just wrote IS
             // fresh in the only sense that matters here (the peer is

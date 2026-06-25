@@ -4,6 +4,7 @@
 
 import { supabase } from '/lib/supabase.js';
 import { enforceSingleSession } from '/lib/single-session.js';
+import { availableUnits } from '/lib/units.js';
 
 // ── DOM REFS ──
 const backBtn = document.getElementById('backBtn');
@@ -124,12 +125,16 @@ const prefetchSiegeProfiles = async () => {
   return true;
 };
 
+// Total roster size = starter units (always available) + unlocked ones.
+// Counted via availableUnits() — the catalog is the single source of truth for
+// how many starters exist — rather than a hardcoded base, which had drifted to
+// 3 (there are 6 starters) and undercounted everyone's army.
 const unitCountFor = (userId) => {
   if (!userId) return null;
-  if (userId === user.id) return 3 + (currentProfile?.unlocked_units?.length ?? 0);
+  if (userId === user.id) return availableUnits(currentProfile?.unlocked_units).length;
   const p = profileCache.get(userId);
   if (!p) return null;
-  return 3 + (p.unlocked_units?.length ?? 0);
+  return availableUnits(p.unlocked_units).length;
 };
 
 // Returns the siege the current user is engaged with, host OR ally, or
@@ -317,7 +322,7 @@ const renderSlot = (slotEl, content) => {
   slotEl.classList.remove('player-slot-empty');
   if (content.me) {
     const username = (currentProfile?.username || 'KNIGHT').toUpperCase();
-    const totalUnits = 3 + (currentProfile?.unlocked_units?.length ?? 0);
+    const totalUnits = availableUnits(currentProfile?.unlocked_units).length;
     slotEl.innerHTML = `
       <div class="player-icon"><div class="player-avatar player-avatar-self"></div></div>
       <div class="player-meta">
